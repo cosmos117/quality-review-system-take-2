@@ -4,14 +4,14 @@ import 'package:get/get.dart';
 import '../../models/project.dart';
 import '../../controllers/projects_controller.dart';
 
-class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key});
+class AdminDashboardPage extends StatefulWidget {
+  const AdminDashboardPage({super.key});
 
   @override
-  State<DashboardPage> createState() => _DashboardPageState();
+  State<AdminDashboardPage> createState() => _AdminDashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _AdminDashboardPageState extends State<AdminDashboardPage> {
   late final ProjectsController _ctrl;
   int? _sortColumnIndex;
   bool _sortAscending = true;
@@ -253,58 +253,55 @@ class _DashboardPageState extends State<DashboardPage> {
     await showDialog<void>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Edit Project'),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  initialValue: title,
-                  decoration: const InputDecoration(labelText: 'Project Title *'),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter title' : null,
-                  onSaved: (v) => title = v!.trim(),
-                ),
-                TextFormField(
-                  readOnly: true,
-                  controller: TextEditingController(text: '${started.year}-${started.month.toString().padLeft(2,'0')}-${started.day.toString().padLeft(2,'0')}'),
-                  decoration: const InputDecoration(labelText: 'Started Date *'),
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: started,
-                      firstDate: DateTime(2000),
-                      lastDate: DateTime(2100),
-                    );
-                    if (picked != null) {
-                      started = picked;
-                      (context as Element).markNeedsBuild();
-                    }
-                  },
-                ),
-                DropdownButtonFormField<String>(
-                  initialValue: priority,
-                  items: ['High', 'Medium', 'Low'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-                  onChanged: (v) => priority = v ?? priority,
-                  decoration: const InputDecoration(labelText: 'Priority *'),
-                ),
-                DropdownButtonFormField<String>(
-                  initialValue: status,
-                  items: ['In Progress', 'Completed', 'Not Started'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-                  onChanged: (v) => status = v ?? status,
-                  decoration: const InputDecoration(labelText: 'Status *'),
-                ),
-                DropdownButtonFormField<String>(
-                  initialValue: executor,
-                  items: _teamNames().map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(),
-                  onChanged: (v) => executor = v,
-                  decoration: const InputDecoration(labelText: 'Executor (optional)'),
-                ),
-              ],
-            ),
-          ),
-          actions: [
+        return  Container(
+              width: 400,
+              height: 400,
+              color: Colors.black12,
+              child: Column(
+                children: [
+                  TextFormField(
+                    initialValue: title,
+                    decoration: const InputDecoration(labelText: 'Project Title *'),
+                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter title' : null,
+                    onSaved: (v) => title = v!.trim(),
+                  ),
+                  TextFormField(
+                    readOnly: true,
+                    controller: TextEditingController(text: '${started.year}-${started.month.toString().padLeft(2,'0')}-${started.day.toString().padLeft(2,'0')}'),
+                    decoration: const InputDecoration(labelText: 'Started Date *'),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: started,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) {
+                        started = picked;
+                        (context as Element).markNeedsBuild();
+                      }
+                    },
+                  ),
+                  DropdownButtonFormField<String>(
+                    initialValue: priority,
+                    items: ['High', 'Medium', 'Low'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                    onChanged: (v) => priority = v ?? priority,
+                    decoration: const InputDecoration(labelText: 'Priority *'),
+                  ),
+                  DropdownButtonFormField<String>(
+                    initialValue: status,
+                    items: ['In Progress', 'Completed', 'Not Started'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                    onChanged: (v) => status = v ?? status,
+                    decoration: const InputDecoration(labelText: 'Status *'),
+                  ),
+                  DropdownButtonFormField<String>(
+                    initialValue: executor,
+                    items: _teamNames().map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(),
+                    onChanged: (v) => executor = v,
+                    decoration: const InputDecoration(labelText: 'Executor (optional)'),
+                  ),
+                
+             
             TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
             ElevatedButton(
                 onPressed: () {
@@ -323,7 +320,8 @@ class _DashboardPageState extends State<DashboardPage> {
                 },
                 child: const Text('Save'),
               ),
-          ],
+                ]
+        )
         );
       },
     );

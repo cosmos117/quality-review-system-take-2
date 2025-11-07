@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-class Sidebar extends StatelessWidget {
+class EmployeeSidebar extends StatelessWidget {
   final void Function()? onCreate;
   final int selectedIndex;
   final void Function(int)? onItemSelected;
 
-  const Sidebar({
+  const EmployeeSidebar({
     super.key,
     this.onCreate,
     this.selectedIndex = 0,
@@ -46,7 +46,7 @@ class Sidebar extends StatelessWidget {
 
           // Nav items
           SidebarItem(icon: Icons.dashboard, label: "Dashboard", active: selectedIndex == 0, onTap: () => onItemSelected?.call(0)),
-          SidebarItem(icon: Icons.group, label: "Employees", active: selectedIndex == 1, onTap: () => onItemSelected?.call(1)),
+          SidebarItem(icon: Icons.group, label: "My Projects", active: selectedIndex == 1, onTap: () => onItemSelected?.call(1)),
           const Spacer(),
 
           const SizedBox(height: 16),

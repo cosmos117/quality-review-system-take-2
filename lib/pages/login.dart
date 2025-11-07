@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:quality_review/components/admin_sidebar.dart';
+import 'package:quality_review/pages/admin_pages/admin_main_layout.dart';
+import 'package:quality_review/pages/employee_pages/employee_dashboard.dart';
+import 'package:quality_review/pages/employee_pages/employee_main_layoutl.dart';
 import '../main.dart' show MainLayout;
 
 // ---------- Controller using GetX ----------
@@ -28,9 +32,9 @@ class LoginController extends GetxController {
 
     // ---- Simulated roles (replace with API later if needed) ----
     if (email == "admin@gmail.com" && password == "adminadmin") {
-      Get.off(() => const MainLayout());
-    } else if (email == "user@test.com" && password == "1234") {
-      //  Get.off(() => HomePage());
+      Get.off(() =>  AdminMainLayout());
+    } else if (email == "employee@gmail.com" && password == "employee") {
+      Get.off(() => EmployeeMainLayout());
     } else {
       Get.snackbar(
         "Login Failed",
