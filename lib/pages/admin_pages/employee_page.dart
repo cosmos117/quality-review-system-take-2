@@ -47,152 +47,67 @@ class _TeamPageState extends State<EmployeePage> {
     final formKey = GlobalKey<FormState>();
     String name = '';
     String email = '';
-  String role = 'Executor/Reviewer';
+    String role = 'Member';
     String password = '';
-  bool obscure = true;
-    await showGeneralDialog(
+
+    await showDialog<void>(
       context: context,
-      barrierDismissible: true,
-      barrierColor: Colors.black54,
-      barrierLabel: 'Add Employee Dialog',
-      transitionDuration: const Duration(milliseconds: 250),
-      pageBuilder: (_, __, ___) => const SizedBox.shrink(),
-      transitionBuilder: (context, animation, secondary, child) {
-        return ScaleTransition(
-          scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
-          child: Center(
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                width: 520,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 8)),
-                  ],
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Add Team Member'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  decoration: const InputDecoration(labelText: 'Full name *'),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter name' : null,
+                  onSaved: (v) => name = v!.trim(),
                 ),
-                child: Form(
-                  key: formKey,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Add Team Member', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                            IconButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              icon: const Icon(Icons.close),
-                              tooltip: 'Close dialog',
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          decoration: const InputDecoration(labelText: 'Full name *'),
-                          textInputAction: TextInputAction.next,
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) return 'Enter name';
-                            if (v.trim().length < 2) return 'Name too short';
-                            return null;
-                          },
-                          onSaved: (v) => name = v!.trim(),
-                          autofocus: true,
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          decoration: const InputDecoration(labelText: 'Email *'),
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.next,
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) return 'Enter email';
-                            final value = v.trim();
-                            final gmailPattern = RegExp(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$');
-                            if (!gmailPattern.hasMatch(value)) return 'Invalid email format';
-                            final exists = _ctrl.members.any((m) => m.email.toLowerCase() == value.toLowerCase());
-                            if (exists) return 'Email already in use';
-                            return null;
-                          },
-                          onSaved: (v) => email = v!.trim(),
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          initialValue: role,
-                          items: ['Team Leader', 'Executor/Reviewer']
-                              .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                              .toList(),
-                          onChanged: (v) => role = v ?? role,
-                          decoration: const InputDecoration(labelText: 'Role *'),
-                        ),
-                        const SizedBox(height: 12),
-                        StatefulBuilder(
-                          builder: (context, setInner) {
-                            return TextFormField(
-                              decoration: InputDecoration(
-                                labelText: 'Password *',
-                                suffixIcon: IconButton(
-                                  icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
-                                  onPressed: () => setInner(() => obscure = !obscure),
-                                  tooltip: obscure ? 'Show password' : 'Hide password',
-                                ),
-                              ),
-                              obscureText: obscure,
-                              textInputAction: TextInputAction.done,
-                              validator: (v) {
-                                if (v == null || v.isEmpty) return 'Enter password';
-                                if (v.length < 6) return 'Min 6 chars';
-                                if (!RegExp(r'[A-Za-z]').hasMatch(v) || !RegExp(r'\d').hasMatch(v)) {
-                                  return 'Include letter & number';
-                                }
-                                return null;
-                              },
-                              onSaved: (v) => password = v!.trim(),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('Cancel'),
-                            ),
-                            const SizedBox(width: 12),
-                            ElevatedButton(
-                              onPressed: () {
-                                if (formKey.currentState?.validate() ?? false) {
-                                  formKey.currentState?.save();
-                                  final newMember = TeamMember(
-                                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                                    name: name,
-                                    email: email,
-                                    role: role,
-                                    status: 'Active',
-                                    dateAdded: DateTime.now().toIso8601String().split('T').first,
-                                    lastActive: 'Never',
-                                    password: password,
-                                  );
-                                  _ctrl.addMember(newMember);
-                                  Navigator.of(context).pop();
-                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Member added')));
-                                }
-                              },
-                              child: const Text('Add Member'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                TextFormField(
+                  decoration: const InputDecoration(labelText: 'Email *'),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter email' : null,
+                  onSaved: (v) => email = v!.trim(),
                 ),
-              ),
+                DropdownButtonFormField<String>(
+                  initialValue: role,
+                  items: ['Team Leader', 'Member', 'Reviewer'].map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                  onChanged: (v) => role = v ?? role,
+                  decoration: const InputDecoration(labelText: 'Role *'),
+                ),
+                TextFormField(
+                  decoration: const InputDecoration(labelText: 'Password *'),
+                  obscureText: true,
+                  validator: (v) => (v == null || v.length < 4) ? 'Min 4 chars' : null,
+                  onSaved: (v) => password = v!.trim(),
+                ),
+              ],
             ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                if (formKey.currentState?.validate() ?? false) {
+                  formKey.currentState?.save();
+                  final newMember = TeamMember(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    name: name,
+                    email: email,
+                    role: role,
+                    status: 'Active', // retain existing model field but hidden in UI
+                    dateAdded: DateTime.now().toIso8601String().split('T').first,
+                    lastActive: 'Never',
+                    password: password,
+                  );
+                  _ctrl.addMember(newMember);
+                  Navigator.of(context).pop();
+                }
+              },
+              child: const Text('Add'),
+            )
+          ],
         );
       },
     );
@@ -202,216 +117,77 @@ class _TeamPageState extends State<EmployeePage> {
     final formKey = GlobalKey<FormState>();
     String name = m.name;
     String email = m.email;
-  String role = (m.role == 'Team Leader') ? 'Team Leader' : 'Executor/Reviewer';
+    String role = m.role;
     String password = m.password ?? '';
-  bool obscure = true;
 
-    await showGeneralDialog(
+    await showDialog<void>(
       context: context,
-      barrierDismissible: true,
-      barrierColor: Colors.black54,
-      barrierLabel: 'Edit Employee Dialog',
-      transitionDuration: const Duration(milliseconds: 250),
-      pageBuilder: (_, __, ___) => const SizedBox.shrink(),
-      transitionBuilder: (context, animation, secondary, child) {
-        return ScaleTransition(
-          scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
-          child: Center(
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                width: 520,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 8)),
-                  ],
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Edit Member'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  initialValue: name,
+                  decoration: const InputDecoration(labelText: 'Full name *'),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter name' : null,
+                  onSaved: (v) => name = v!.trim(),
                 ),
-                child: Form(
-                  key: formKey,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Edit Member', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                            IconButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              icon: const Icon(Icons.close),
-                              tooltip: 'Close dialog',
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          initialValue: name,
-                          decoration: const InputDecoration(labelText: 'Full name *'),
-                          textInputAction: TextInputAction.next,
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) return 'Enter name';
-                            if (v.trim().length < 2) return 'Name too short';
-                            return null;
-                          },
-                          onSaved: (v) => name = v!.trim(),
-                          autofocus: true,
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          initialValue: email,
-                          decoration: const InputDecoration(labelText: 'Email *'),
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.next,
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) return 'Enter email';
-                            final value = v.trim();
-                            final gmailPattern = RegExp(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$');
-                            if (!gmailPattern.hasMatch(value)) return 'Invalid email format';
-                            final exists = _ctrl.members.any((mm) => mm.id != m.id && mm.email.toLowerCase() == value.toLowerCase());
-                            if (exists) return 'Email already in use';
-                            return null;
-                          },
-                          onSaved: (v) => email = v!.trim(),
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          initialValue: role,
-                          items: ['Team Leader', 'Executor/Reviewer']
-                              .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                              .toList(),
-                          onChanged: (v) => role = v ?? role,
-                          decoration: const InputDecoration(labelText: 'Role *'),
-                        ),
-                        const SizedBox(height: 12),
-                        StatefulBuilder(
-                          builder: (context, setInner) {
-                            return TextFormField(
-                              initialValue: password,
-                              decoration: InputDecoration(
-                                labelText: 'Password *',
-                                suffixIcon: IconButton(
-                                  icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
-                                  onPressed: () => setInner(() => obscure = !obscure),
-                                  tooltip: obscure ? 'Show password' : 'Hide password',
-                                ),
-                              ),
-                              obscureText: obscure,
-                              textInputAction: TextInputAction.done,
-                              validator: (v) {
-                                if (v == null || v.isEmpty) return 'Enter password';
-                                if (v.length < 6) return 'Min 6 chars';
-                                if (!RegExp(r'[A-Za-z]').hasMatch(v) || !RegExp(r'\d').hasMatch(v)) {
-                                  return 'Include letter & number';
-                                }
-                                return null;
-                              },
-                              onSaved: (v) => password = v!.trim(),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('Cancel'),
-                            ),
-                            const SizedBox(width: 12),
-                            ElevatedButton(
-                              onPressed: () {
-                                if (formKey.currentState?.validate() ?? false) {
-                                  formKey.currentState?.save();
-                                  final updated = m.copyWith(name: name, email: email, role: role, password: password);
-                                  _ctrl.updateMember(m.id, updated);
-                                  Navigator.of(context).pop();
-                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Member updated')));
-                                }
-                              },
-                              child: const Text('Save Changes'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                TextFormField(
+                  initialValue: email,
+                  decoration: const InputDecoration(labelText: 'Email *'),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter email' : null,
+                  onSaved: (v) => email = v!.trim(),
                 ),
-              ),
+                DropdownButtonFormField<String>(
+                  initialValue: role,
+                  items: ['Team Leader', 'Member', 'Reviewer'].map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                  onChanged: (v) => role = v ?? role,
+                  decoration: const InputDecoration(labelText: 'Role *'),
+                ),
+                TextFormField(
+                  initialValue: password,
+                  decoration: const InputDecoration(labelText: 'Password *'),
+                  obscureText: true,
+                  validator: (v) => (v == null || v.length < 4) ? 'Min 4 chars' : null,
+                  onSaved: (v) => password = v!.trim(),
+                ),
+              ],
             ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                if (formKey.currentState?.validate() ?? false) {
+                  formKey.currentState?.save();
+                  final updated = m.copyWith(name: name, email: email, role: role, password: password);
+                  _ctrl.updateMember(m.id, updated);
+                  Navigator.of(context).pop();
+                }
+              },
+              child: const Text('Save'),
+            )
+          ],
         );
       },
     );
   }
 
   Future<void> _confirmDelete(TeamMember m) async {
-    final confirmed = await showGeneralDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
-      barrierDismissible: true,
-      barrierColor: Colors.black54,
-      barrierLabel: 'Delete Member Dialog',
-      transitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (_, __, ___) => const SizedBox.shrink(),
-      transitionBuilder: (context, animation, secondary, child) {
-        return ScaleTransition(
-          scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
-          child: Center(
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                width: 420,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 8)),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Delete Member', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                        IconButton(
-                          onPressed: () => Navigator.of(context).pop(false),
-                          icon: const Icon(Icons.close),
-                          tooltip: 'Close dialog',
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text('Are you sure you want to delete "${m.name}"?'),
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(false),
-                          child: const Text('Cancel'),
-                        ),
-                        const SizedBox(width: 12),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                          onPressed: () => Navigator.of(context).pop(true),
-                          child: const Text('Delete'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Member'),
+        content: Text('Delete "${m.name}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+        ],
+      ),
     );
     if (confirmed == true) _ctrl.deleteMember(m.id);
   }
@@ -488,7 +264,7 @@ class _TeamPageState extends State<EmployeePage> {
                               return DataRow(cells: [
                                 DataCell(Row(children: [CircleAvatar(radius: 18, child: Text(e.name[0])), const SizedBox(width: 12), Text(e.name)])),
                                 DataCell(Text(e.email)),
-                                DataCell(_roleChip(e.role == 'Team Leader' ? 'Team Leader' : 'Executor/Reviewer')),
+                                DataCell(_roleChip(e.role)),
                                 DataCell(Text(e.password != null && e.password!.isNotEmpty ? '••••••' : 'Not Set')),
                                 DataCell(Text(e.dateAdded)),
                                 DataCell(Text(e.lastActive)),
@@ -523,20 +299,9 @@ class _TeamPageState extends State<EmployeePage> {
                         const Text('Filter by Role', style: TextStyle(fontWeight: FontWeight.w600)),
                         const SizedBox(height: 8),
                         Obx(() => Column(children: [
-                          CheckboxListTile(
-                            value: _ctrl.selectedRoles.contains('Team Leader'),
-                            onChanged: (v) => v == true
-                                ? _ctrl.selectedRoles.add('Team Leader')
-                                : _ctrl.selectedRoles.remove('Team Leader'),
-                            title: const Text('Team Leader'),
-                          ),
-                          CheckboxListTile(
-                            value: _ctrl.selectedRoles.contains('Executor/Reviewer'),
-                            onChanged: (v) => v == true
-                                ? _ctrl.selectedRoles.add('Executor/Reviewer')
-                                : _ctrl.selectedRoles.remove('Executor/Reviewer'),
-                            title: const Text('Executor/Reviewer'),
-                          ),
+                          CheckboxListTile(value: _ctrl.selectedRoles.contains('Team Leader'), onChanged: (v) => v == true ? _ctrl.selectedRoles.add('Team Leader') : _ctrl.selectedRoles.remove('Team Leader'), title: const Text('Team Leader')),
+                          CheckboxListTile(value: _ctrl.selectedRoles.contains('Member'), onChanged: (v) => v == true ? _ctrl.selectedRoles.add('Member') : _ctrl.selectedRoles.remove('Member'), title: const Text('Member')),
+                          CheckboxListTile(value: _ctrl.selectedRoles.contains('Reviewer'), onChanged: (v) => v == true ? _ctrl.selectedRoles.add('Reviewer') : _ctrl.selectedRoles.remove('Reviewer'), title: const Text('Reviewer')),
                         ])),
                         const SizedBox(height: 12),
                         // Status filters removed.

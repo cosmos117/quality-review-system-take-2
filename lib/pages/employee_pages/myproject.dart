@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../models/project.dart';
 import '../../controllers/projects_controller.dart';
+import 'my_project_detail_page.dart';
 
 class Myproject extends StatefulWidget {
   const Myproject({super.key});
@@ -12,25 +13,27 @@ class Myproject extends StatefulWidget {
 
 class _MyprojectState extends State<Myproject> {
   late final ProjectsController _ctrl;
-  int? _sortColumnIndex;
-  bool _sortAscending = true;
+  // Sorting & hover state (dashboard parity)
+  String _sortKey = 'started';
+  bool _ascending = false; // newest first
+  int? _hoverIndex;
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _searchQuery = '';
 
-  // Mock data: Current logged-in user
+  // Mock current user
   final String currentUser = 'Emily Carter';
 
   @override
   void initState() {
     super.initState();
     _ctrl = Get.put(ProjectsController());
-
-    // Load all company projects (mock data)
     if (_ctrl.projects.isEmpty) {
       _ctrl.loadInitial([
         Project(
           id: 'p1',
           title: 'Implement New CRM System',
           description:
-              'Develop and implement a comprehensive Customer Relationship Management system to streamline sales and customer support processes.',
+              'Develop and implement a comprehensive CRM system to streamline sales & support.',
           started: DateTime(2024, 6, 1),
           priority: 'High',
           status: 'In Progress',
@@ -38,42 +41,10 @@ class _MyprojectState extends State<Myproject> {
           assignedEmployees: ['Emily Carter', 'David Lee', 'Sophia Clark'],
         ),
         Project(
-          id: 'p2',
-          title: 'Develop Marketing Strategy',
-          description:
-              'Create a comprehensive marketing strategy for Q3 2024 including social media, content marketing, and paid advertising campaigns.',
-          started: DateTime(2024, 5, 20),
-          priority: 'Medium',
-          status: 'Completed',
-          executor: 'David Lee',
-          assignedEmployees: ['David Lee', 'Liam Walker', 'Noah Clark'],
-        ),
-        Project(
-          id: 'p3',
-          title: 'Conduct Market Research',
-          description:
-              'Perform detailed market research to identify new opportunities and understand customer needs in emerging markets.',
-          started: DateTime(2024, 6, 10),
-          priority: 'Low',
-          status: 'Not Started',
-          assignedEmployees: ['Emily Carter', 'Olivia Harris'],
-        ),
-        Project(
-          id: 'p4',
-          title: 'Build Analytics Dashboard',
-          description:
-              'Design and develop a real-time analytics dashboard for tracking key business metrics and KPIs.',
-          started: DateTime(2024, 5, 5),
-          priority: 'High',
-          status: 'In Progress',
-          executor: 'Sophia Clark',
-          assignedEmployees: ['Sophia Clark', 'James Wright'],
-        ),
-        Project(
           id: 'p5',
           title: 'Mobile App Development',
           description:
-              'Develop a cross-platform mobile application for iOS and Android to enhance customer engagement.',
+              'Cross-platform mobile application for iOS & Android to enhance engagement.',
           started: DateTime(2024, 6, 15),
           priority: 'High',
           status: 'In Progress',
@@ -84,7 +55,7 @@ class _MyprojectState extends State<Myproject> {
           id: 'p6',
           title: 'Website Redesign',
           description:
-              'Complete redesign of the company website with modern UI/UX, improved performance, and better SEO.',
+              'Modern UI/UX redesign with better performance and SEO improvements.',
           started: DateTime(2024, 5, 10),
           priority: 'Medium',
           status: 'Completed',
@@ -95,11 +66,75 @@ class _MyprojectState extends State<Myproject> {
     }
   }
 
-  // Filter projects to show only those where current user is the executor
-  List<Project> get _myProjects {
-    return _ctrl.projects
-        .where((project) => project.executor == currentUser)
-        .toList();
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _openProjectDetails(Project project) {
+    Get.to(
+      () => MyProjectDetailPage(
+        project: project,
+        description: project.description,
+      ),
+    );
+  }
+
+  // Active projects for this user
+  List<Project> get _myProjects =>
+      _ctrl.projects.where((p) => p.executor == currentUser).toList();
+
+  List<Project> get _visibleProjects {
+    List<Project> list = _myProjects.toList();
+    if (_searchQuery.trim().isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      list = list.where((p) {
+        final exec = p.executor ?? '';
+        return p.title.toLowerCase().contains(q) ||
+            p.status.toLowerCase().contains(q) ||
+            p.priority.toLowerCase().contains(q) ||
+            exec.toLowerCase().contains(q);
+      }).toList();
+    }
+    int cmp(Project a, Project b) {
+      int res = 0;
+      switch (_sortKey) {
+        case 'title':
+          res = a.title.toLowerCase().compareTo(b.title.toLowerCase());
+          break;
+        case 'started':
+          res = a.started.compareTo(b.started);
+          break;
+        case 'priority':
+          const order = {'High': 0, 'Medium': 1, 'Low': 2};
+          res = (order[a.priority] ?? 9).compareTo(order[b.priority] ?? 9);
+          break;
+        case 'status':
+          res = a.status.toLowerCase().compareTo(b.status.toLowerCase());
+          break;
+        case 'executor':
+          res = (a.executor ?? '').toLowerCase().compareTo(
+            (b.executor ?? '').toLowerCase(),
+          );
+          break;
+      }
+      return _ascending ? res : -res;
+    }
+
+    list.sort(cmp);
+    return list;
+  }
+
+  void _toggleSort(String key) {
+    setState(() {
+      if (_sortKey == key) {
+        _ascending = !_ascending;
+      } else {
+        _sortKey = key;
+        _ascending = true;
+      }
+    });
   }
 
   Widget _priorityChip(String p) {
@@ -126,6 +161,34 @@ class _MyprojectState extends State<Myproject> {
                 'My Projects',
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
+              const SizedBox(height: 12),
+              // Search bar (same style as dashboard)
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: _searchCtrl,
+                  decoration: const InputDecoration(
+                    hintText: 'Search by title, status, priority, executor...',
+                    prefixIcon: Icon(Icons.search),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 14,
+                    ),
+                  ),
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                ),
+              ),
               const SizedBox(height: 16),
               Container(
                 decoration: BoxDecoration(
@@ -141,89 +204,219 @@ class _MyprojectState extends State<Myproject> {
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Obx(() {
-                      final projects = _myProjects;
-
-                      if (projects.isEmpty) {
-                        return Padding(
-                          padding: const EdgeInsets.all(32.0),
-                          child: Center(
-                            child: Text(
-                              'No projects assigned to you',
-                              style: Theme.of(context).textTheme.bodyLarge
-                                  ?.copyWith(color: Colors.grey[500]),
-                            ),
+                  child: Obx(() {
+                    final projects = _visibleProjects;
+                    if (projects.isEmpty) {
+                      return Padding(
+                        padding: const EdgeInsets.all(32.0),
+                        child: Center(
+                          child: Text(
+                            'No projects assigned to you',
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(color: Colors.grey[500]),
                           ),
-                        );
-                      }
-
-                      return DataTable(
-                        sortAscending: _sortAscending,
-                        sortColumnIndex: _sortColumnIndex,
-                        columnSpacing: 90,
-                        columns: [
-                          DataColumn(
-                            label: const Text('Project Title'),
-                            onSort: (colIndex, asc) {
-                              setState(() {
-                                _sortColumnIndex = colIndex;
-                                _sortAscending = asc;
-                                _ctrl.projects.sort(
-                                  (a, b) => asc
-                                      ? a.title.compareTo(b.title)
-                                      : b.title.compareTo(a.title),
-                                );
-                              });
-                            },
-                          ),
-                          DataColumn(
-                            label: const Text('Started Date'),
-                            onSort: (colIndex, asc) {
-                              setState(() {
-                                _sortColumnIndex = colIndex;
-                                _sortAscending = asc;
-                                _ctrl.projects.sort(
-                                  (a, b) => asc
-                                      ? a.started.compareTo(b.started)
-                                      : b.started.compareTo(a.started),
-                                );
-                              });
-                            },
-                          ),
-                          const DataColumn(label: Text('Priority')),
-                          const DataColumn(label: Text('Status')),
-                        ],
-                        rows: projects.map((proj) {
-                          return DataRow(
-                            cells: [
-                              DataCell(
-                                Container(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 300,
-                                  ),
-                                  child: Text(proj.title),
-                                ),
-                              ),
-                              DataCell(
-                                Text(
-                                  '${proj.started.year}-${proj.started.month.toString().padLeft(2, '0')}-${proj.started.day.toString().padLeft(2, '0')}',
-                                ),
-                              ),
-                              DataCell(_priorityChip(proj.priority)),
-                              DataCell(Text(proj.status)),
-                            ],
-                          );
-                        }).toList(),
+                        ),
                       );
-                    }),
-                  ),
+                    }
+                    return Column(
+                      children: [
+                        // Header row (sortable)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 16,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(6),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 4,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: _HeaderCell(
+                                  label: 'Project Title',
+                                  active: _sortKey == 'title',
+                                  ascending: _ascending,
+                                  onTap: () => _toggleSort('title'),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: _HeaderCell(
+                                  label: 'Started',
+                                  active: _sortKey == 'started',
+                                  ascending: _ascending,
+                                  onTap: () => _toggleSort('started'),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 1,
+                                child: _HeaderCell(
+                                  label: 'Priority',
+                                  active: _sortKey == 'priority',
+                                  ascending: _ascending,
+                                  onTap: () => _toggleSort('priority'),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 1,
+                                child: _HeaderCell(
+                                  label: 'Status',
+                                  active: _sortKey == 'status',
+                                  ascending: _ascending,
+                                  onTap: () => _toggleSort('status'),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: _HeaderCell(
+                                  label: 'Executor',
+                                  active: _sortKey == 'executor',
+                                  ascending: _ascending,
+                                  onTap: () => _toggleSort('executor'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: projects.length,
+                          itemBuilder: (context, index) {
+                            final proj = projects[index];
+                            final hovered = _hoverIndex == index;
+                            return MouseRegion(
+                              onEnter: (_) =>
+                                  setState(() => _hoverIndex = index),
+                              onExit: (_) => setState(() => _hoverIndex = null),
+                              child: GestureDetector(
+                                onTap: () => _openProjectDetails(proj),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 150),
+                                  curve: Curves.easeOut,
+                                  margin: const EdgeInsets.only(bottom: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                    horizontal: 16,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: hovered
+                                        ? const Color(0xFFF7F9FC)
+                                        : Colors.white,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: hovered
+                                          ? Colors.blue.shade200
+                                          : Colors.black12,
+                                    ),
+                                    boxShadow: hovered
+                                        ? const [
+                                            BoxShadow(
+                                              color: Colors.black12,
+                                              blurRadius: 6,
+                                              offset: Offset(0, 2),
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        flex: 3,
+                                        child: Text(
+                                          proj.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          // Keep title default color (remove blue styling)
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          '${proj.started.year}-${proj.started.month.toString().padLeft(2, '0')}-${proj.started.day.toString().padLeft(2, '0')}',
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 1,
+                                        child: _priorityChip(proj.priority),
+                                      ),
+                                      Expanded(
+                                        flex: 1,
+                                        child: Text(proj.status),
+                                      ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(proj.executor ?? '--'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    );
+                  }),
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _HeaderCell extends StatelessWidget {
+  final String label;
+  final bool active;
+  final bool ascending;
+  final VoidCallback onTap;
+  const _HeaderCell({
+    required this.label,
+    required this.active,
+    required this.ascending,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = active
+        ? (ascending
+              ? Icons.arrow_upward_rounded
+              : Icons.arrow_downward_rounded)
+        : Icons.unfold_more_rounded;
+    final color = active ? Colors.blueGrey[800] : Colors.blueGrey[600];
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: color,
+                fontSize: 13,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Icon(icon, size: 16, color: color),
+        ],
       ),
     );
   }
