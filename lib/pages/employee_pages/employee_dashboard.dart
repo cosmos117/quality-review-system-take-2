@@ -9,10 +9,10 @@ class EmployeeDashboard extends StatefulWidget {
   const EmployeeDashboard({super.key});
 
   @override
-  State<EmployeeDashboard> createState() => _EmployeeDashboardPageState();
+  State<EmployeeDashboard> createState() => _AdminDashboardPageState();
 }
 
-class _EmployeeDashboardPageState extends State<EmployeeDashboard> {
+class _AdminDashboardPageState extends State<EmployeeDashboard> {
   late final ProjectsController _ctrl;
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
@@ -261,13 +261,7 @@ class _EmployeeDashboardPageState extends State<EmployeeDashboard> {
                               onTap: () => _toggleSort('executor'),
                             ),
                           ),
-                          const Expanded(
-                            flex: 2,
-                            child: Text(
-                              'Actions',
-                              style: TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                          ),
+                          // Actions column removed (moved to details page)
                         ],
                       ),
                     ),
@@ -281,7 +275,9 @@ class _EmployeeDashboardPageState extends State<EmployeeDashboard> {
                         final executor =
                             (proj.status == 'In Progress' ||
                                 proj.status == 'Completed')
-                            ? (proj.executor ?? '--')
+                            ? ((proj.executor?.trim().isNotEmpty ?? false)
+                                  ? proj.executor!.trim()
+                                  : '--')
                             : '--';
                         final hovered = _hoverIndex == index;
                         return MouseRegion(
@@ -291,7 +287,7 @@ class _EmployeeDashboardPageState extends State<EmployeeDashboard> {
                             onTap: () => Get.to(
                               () => EmployeeProjectDetailPage(
                                 project: proj,
-                                description: _descriptions[proj.id],
+                                description: proj.description,
                               ),
                             ),
                             child: AnimatedContainer(
@@ -342,30 +338,12 @@ class _EmployeeDashboardPageState extends State<EmployeeDashboard> {
                                     flex: 1,
                                     child: _priorityChip(proj.priority),
                                   ),
-                                  Expanded(flex: 1, child: Text(proj.status)),
-                                  Expanded(flex: 2, child: Text(executor)),
                                   Expanded(
-                                    flex: 2,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.edit),
-                                          tooltip: 'Edit',
-                                          onPressed: () =>
-                                              _showEditDialog(proj),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(
-                                            Icons.delete_outline,
-                                          ),
-                                          tooltip: 'Delete',
-                                          onPressed: () =>
-                                              _showDeleteDialog(proj),
-                                        ),
-                                      ],
-                                    ),
+                                    flex: 1,
+                                    child: Text((proj.status).toString()),
                                   ),
+                                  Expanded(flex: 2, child: Text(executor)),
+                                  // Edit/Delete removed from dashboard; now only in details page.
                                 ],
                               ),
                             ),
@@ -383,146 +361,7 @@ class _EmployeeDashboardPageState extends State<EmployeeDashboard> {
     );
   }
 
-  Future<void> _showEditDialog(Project project) async {
-    await showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierColor: Colors.black54,
-      barrierLabel: 'Edit Project Dialog',
-      transitionDuration: const Duration(milliseconds: 250),
-      pageBuilder: (_, __, ___) => const SizedBox.shrink(),
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        return ScaleTransition(
-          scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
-          child: Center(
-            child: _ProjectFormDialog(
-              title: 'Edit Project',
-              executors: _executors,
-              titleValidator: (t) {
-                final exists = _ctrl.projects.any(
-                  (p) =>
-                      p.id != project.id &&
-                      p.title.toLowerCase() == t.toLowerCase(),
-                );
-                return exists
-                    ? 'A project with this title already exists'
-                    : null;
-              },
-              width: 760,
-              initial: ProjectFormData(
-                title: project.title,
-                started: project.started,
-                priority: project.priority,
-                status: project.status,
-                executor: project.executor ?? '',
-                description: _descriptions[project.id] ?? '',
-              ),
-              onSubmit: (data) {
-                final updated = project.copyWith(
-                  title: data.title,
-                  started: data.started,
-                  priority: data.priority,
-                  status: data.status,
-                  executor: (data.executor?.isEmpty ?? true)
-                      ? null
-                      : data.executor,
-                );
-                _ctrl.updateProject(project.id, updated);
-                _descriptions[project.id] = data.description;
-              },
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _showDeleteDialog(Project project) async {
-    await showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierColor: Colors.black54,
-      barrierLabel: 'Delete Project Dialog',
-      transitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (_, __, ___) => const SizedBox.shrink(),
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        return ScaleTransition(
-          scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
-          child: Center(
-            child: Container(
-              width: 420,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 16,
-                    offset: Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Delete Project',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Are you sure you want to delete "${project.title}"? This action cannot be undone.',
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Cancel'),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent,
-                        ),
-                        onPressed: () {
-                          _ctrl.deleteProject(project.id);
-                          _descriptions.remove(project.id);
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Project deleted')),
-                          );
-                        },
-                        child: const Text('Delete'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // Temporary in-memory descriptions store (until Project model updated globally).
-  final Map<String, String> _descriptions = {};
+  // Description now lives on Project model; no temp store needed.
 }
 
 class ProjectFormData {
@@ -544,7 +383,6 @@ class ProjectFormData {
 
 class _ProjectFormDialog extends StatefulWidget {
   final String title;
-  final ProjectFormData? initial;
   final void Function(ProjectFormData data) onSubmit;
   final List<String>? executors;
   final String? Function(String)? titleValidator;
@@ -553,7 +391,6 @@ class _ProjectFormDialog extends StatefulWidget {
   final bool showExecutor;
   const _ProjectFormDialog({
     required this.title,
-    this.initial,
     required this.onSubmit,
     this.executors,
     this.titleValidator,
@@ -573,16 +410,14 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
   @override
   void initState() {
     super.initState();
-    data =
-        widget.initial ??
-        ProjectFormData(
-          title: '',
-          started: DateTime.now(),
-          priority: 'Medium',
-          status: 'Not Started',
-          executor: '',
-          description: '',
-        );
+    data = ProjectFormData(
+      title: '',
+      started: DateTime.now(),
+      priority: 'Medium',
+      status: 'Not Started',
+      executor: '',
+      description: '',
+    );
   }
 
   String _dateString(DateTime d) =>
@@ -594,6 +429,7 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
       color: Colors.transparent,
       child: Container(
         width: widget.width ?? 520,
+        height: 600,
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -629,8 +465,11 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                 const SizedBox(height: 12),
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final wide = constraints.maxWidth > 600;
+                    // Always single column layout. Place Description at the top.
                     final List<Widget> fields = [
+                      // Large description area at top
+                      // Description
+
                       // Title
                       TextFormField(
                         initialValue: data.title,
@@ -640,9 +479,8 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                         validator: (v) {
                           if (v == null || v.trim().isEmpty)
                             return 'Enter title';
-                          if (widget.titleValidator != null) {
+                          if (widget.titleValidator != null)
                             return widget.titleValidator!(v.trim());
-                          }
                           return null;
                         },
                         onSaved: (v) => data.title = v!.trim(),
@@ -684,22 +522,9 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                           labelText: 'Priority *',
                         ),
                       ),
-                      // Description
-                      TextFormField(
-                        initialValue: data.description,
-                        maxLines: 3,
-                        decoration: const InputDecoration(
-                          labelText: 'Description *',
-                        ),
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Enter description'
-                            : null,
-                        onSaved: (v) => data.description = v!.trim(),
-                      ),
                     ];
                     if (widget.showStatus) {
-                      fields.insert(
-                        3,
+                      fields.add(
                         DropdownButtonFormField<String>(
                           initialValue: data.status,
                           items: ['In Progress', 'Completed', 'Not Started']
@@ -717,8 +542,7 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                       );
                     }
                     if (widget.showExecutor) {
-                      fields.insert(
-                        widget.showStatus ? 4 : 3,
+                      fields.add(
                         DropdownButtonFormField<String>(
                           initialValue: (data.executor?.isEmpty ?? true)
                               ? null
@@ -751,27 +575,43 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                         ),
                       );
                     }
-                    if (!wide) {
-                      return Column(
-                        children: [
-                          for (int i = 0; i < fields.length; i++) ...[
-                            fields[i],
-                            if (i != fields.length - 1)
-                              const SizedBox(height: 12),
-                          ],
-                        ],
-                      );
-                    }
-                    // Two-column grid for wide layout
-                    final half = (constraints.maxWidth - 24) / 2;
-                    return Wrap(
-                      spacing: 24,
-                      runSpacing: 16,
+
+                    return Column(
                       children: [
-                        for (final f in fields) SizedBox(width: half, child: f),
+                        for (int i = 0; i < fields.length; i++) ...[
+                          fields[i],
+                          if (i != fields.length - 1)
+                            const SizedBox(height: 12),
+                        ],
                       ],
                     );
                   },
+                ),
+                const SizedBox(height: 12),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: 6),
+                    child: Text(
+                      'Description *',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+                TextFormField(
+                  initialValue: data.description,
+                  minLines: 10,
+                  maxLines: 16,
+                  textAlignVertical: TextAlignVertical.top,
+                  decoration: const InputDecoration(
+                    hintText: 'Enter description...',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.all(12),
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Enter description'
+                      : null,
+                  onSaved: (v) => data.description = v!.trim(),
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -790,7 +630,7 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                           Navigator.of(context).pop();
                         }
                       },
-                      child: Text(widget.initial == null ? 'Create' : 'Save'),
+                      child: const Text('Create'),
                     ),
                   ],
                 ),
