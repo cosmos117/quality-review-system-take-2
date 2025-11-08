@@ -514,6 +514,10 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                   builder: (context, constraints) {
                     final wide = constraints.maxWidth > 600;
                     final List<Widget> fields = [
+                      // Large description area at top
+                      // Description
+                      
+                      
                       // Title
                       TextFormField(
                         initialValue: data.title,
@@ -599,6 +603,30 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                     );
                   },
                 ),
+                const SizedBox(height: 12),
+                const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: EdgeInsets.only(bottom: 6),
+                          child: Text(
+                            'Description *',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                      TextFormField(
+                        initialValue: data.description,
+                        minLines: 10,
+                        maxLines: 16,
+                        textAlignVertical: TextAlignVertical.top,
+                        decoration: const InputDecoration(
+                          hintText: 'Enter description...',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.all(12),
+                        ),
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter description' : null,
+                        onSaved: (v) => data.description = v!.trim(),
+                      ),
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
