@@ -1,11 +1,13 @@
-// No additional imports required
-
+import 'dart:async';
 import '../config/api_config.dart';
 import '../models/project.dart';
 import 'http_client.dart';
 
 class ProjectService {
   final SimpleHttp http;
+  Timer? _pollTimer;
+  final _projectsController = StreamController<List<Project>>.broadcast();
+
   ProjectService(this.http);
 
   Project _fromApi(Map<String, dynamic> j) {
@@ -20,15 +22,27 @@ class ProjectService {
     };
     final startedStr = (j['start_date'] ?? j['started']).toString();
     final started = DateTime.tryParse(startedStr) ?? DateTime.now();
+
+    // Handle populated created_by field
+    String? creatorId;
+    String? creatorName;
+    final createdBy = j['created_by'];
+    if (createdBy is Map<String, dynamic>) {
+      creatorId = (createdBy['_id'] ?? createdBy['id']).toString();
+      creatorName = createdBy['name']?.toString();
+    } else if (createdBy != null) {
+      creatorId = createdBy.toString();
+    }
+
     return Project(
       id: id,
       title: title.isEmpty ? 'Untitled' : title,
-      description: null,
+      description: null, // Can add if needed
       started: started,
       priority: 'Medium', // not in backend model; default
       status: status,
-      executor: null, // not in backend model
-      assignedEmployees: null,
+      executor: creatorName ?? creatorId, // Use creator name or ID
+      assignedEmployees: null, // Fetched separately via ProjectMembership
     );
   }
 
@@ -42,7 +56,7 @@ class ProjectService {
       'project_name': p.title,
       'status': status,
       'start_date': p.started.toIso8601String(),
-      if (p.executor != null) 'created_by': p.executor, // executor mapping placeholder
+      if (p.executor != null) 'created_by': p.executor,
     };
   }
 
@@ -66,7 +80,43 @@ class ProjectService {
   }
 
   Future<void> delete(String id) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/projects/$id');
+    final uri = Uri.parse('\${ApiConfig.baseUrl}/projects/\$id');
     await http.delete(uri);
+  }
+
+  Stream<List<Project>> getProjectsStream({
+    Duration interval = const Duration(seconds: 3),
+  }) {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(interval, (_) async {
+      try {
+        final projects = await getAll();
+        if (!_projectsController.isClosed) {
+          _projectsController.add(projects);
+        }
+      } catch (e) {
+        if (!_projectsController.isClosed) {
+          _projectsController.addError(e);
+        }
+      }
+    });
+    // Immediately fetch initial data
+    getAll()
+        .then((projects) {
+          if (!_projectsController.isClosed) {
+            _projectsController.add(projects);
+          }
+        })
+        .catchError((e) {
+          if (!_projectsController.isClosed) {
+            _projectsController.addError(e);
+          }
+        });
+    return _projectsController.stream;
+  }
+
+  void dispose() {
+    _pollTimer?.cancel();
+    _projectsController.close();
   }
 }

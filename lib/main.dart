@@ -19,8 +19,8 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.grey[50],
         useMaterial3: false,
       ),
-  initialBinding: AppBindings(),
-  home: LoginPage(),
+      initialBinding: AppBindings(),
+      home: LoginPage(),
     );
   }
 }

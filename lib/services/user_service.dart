@@ -1,29 +1,32 @@
+import 'dart:async';
 import '../config/api_config.dart';
 import '../models/team_member.dart';
 import 'http_client.dart';
 
 class UserService {
   final SimpleHttp http;
+  Timer? _pollTimer;
+  final _usersController = StreamController<List<TeamMember>>.broadcast();
+
   UserService(this.http);
 
   TeamMember _fromApi(Map<String, dynamic> j) {
     final id = (j['_id'] ?? j['id']).toString();
     final name = (j['name'] ?? j['fullName'] ?? '').toString();
     final email = (j['email'] ?? '').toString();
-    // Map backend role fields to two canonical roles
-    final roleRaw = (j['role'] ?? j['userRole'] ?? '').toString().toLowerCase();
-    final role = roleRaw.contains('leader') ? 'Team Leader' : 'Executor/Reviewer';
-    final status = ((j['status'] ?? 'Active').toString().toLowerCase() == 'inactive') ? 'Inactive' : 'Active';
+    // Backend role is either 'user' or 'admin'
+    final roleRaw = (j['role'] ?? '').toString().toLowerCase();
+    final role = roleRaw == 'admin' ? 'Admin' : 'User';
     final createdAt = (j['createdAt'] ?? j['dateAdded'] ?? '').toString();
-    final lastActive = (j['lastActive'] ?? '').toString();
+    final updatedAt = (j['updatedAt'] ?? j['lastActive'] ?? '').toString();
     return TeamMember(
       id: id,
       name: name.isEmpty ? 'Unnamed' : name,
       email: email,
       role: role,
-      status: status,
+      status: 'Active', // Backend doesn't have status field yet
       dateAdded: createdAt,
-      lastActive: lastActive.isEmpty ? createdAt : lastActive,
+      lastActive: updatedAt.isEmpty ? createdAt : updatedAt,
     );
   }
 
@@ -31,9 +34,8 @@ class UserService {
     return {
       'name': m.name,
       'email': m.email,
-      'role': m.role == 'Team Leader' ? 'team_leader' : 'executor',
+      'role': m.role.toLowerCase() == 'admin' ? 'admin' : 'user',
       if (m.password != null && m.password!.isNotEmpty) 'password': m.password,
-      'status': m.status.toLowerCase(),
     };
   }
 
@@ -45,7 +47,7 @@ class UserService {
   }
 
   Future<TeamMember> create(TeamMember m) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/users');
+    final uri = Uri.parse('${ApiConfig.baseUrl}/users/register');
     final json = await http.postJson(uri, _toApi(m));
     return _fromApi(json['data'] as Map<String, dynamic>);
   }
@@ -57,7 +59,43 @@ class UserService {
   }
 
   Future<void> delete(String id) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/users/$id');
+    final uri = Uri.parse('\${ApiConfig.baseUrl}/users/\$id');
     await http.delete(uri);
+  }
+
+  Stream<List<TeamMember>> getUsersStream({
+    Duration interval = const Duration(seconds: 3),
+  }) {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(interval, (_) async {
+      try {
+        final users = await getAll();
+        if (!_usersController.isClosed) {
+          _usersController.add(users);
+        }
+      } catch (e) {
+        if (!_usersController.isClosed) {
+          _usersController.addError(e);
+        }
+      }
+    });
+    // Immediately fetch initial data
+    getAll()
+        .then((users) {
+          if (!_usersController.isClosed) {
+            _usersController.add(users);
+          }
+        })
+        .catchError((e) {
+          if (!_usersController.isClosed) {
+            _usersController.addError(e);
+          }
+        });
+    return _usersController.stream;
+  }
+
+  void dispose() {
+    _pollTimer?.cancel();
+    _usersController.close();
   }
 }

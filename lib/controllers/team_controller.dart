@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:get/get.dart';
 import '../models/team_member.dart';
 import '../services/user_service.dart';
@@ -7,21 +8,40 @@ class TeamController extends GetxController {
   final RxBool isLoading = false.obs;
   final RxString errorMessage = ''.obs;
   late final UserService _service;
+  StreamSubscription? _usersSubscription;
 
   @override
   void onInit() {
     super.onInit();
     _service = Get.find<UserService>();
-    fetchFromBackend(() => _service.getAll());
+    _startRealtimeSync();
+  }
+
+  void _startRealtimeSync() {
+    isLoading.value = true;
+    _usersSubscription = _service.getUsersStream().listen(
+      (usersList) {
+        members.assignAll(usersList.map(_normalize));
+        isLoading.value = false;
+        errorMessage.value = '';
+      },
+      onError: (e) {
+        errorMessage.value = e.toString();
+        isLoading.value = false;
+      },
+    );
+  }
+
+  @override
+  void onClose() {
+    _usersSubscription?.cancel();
+    super.onClose();
   }
 
   TeamMember _normalize(TeamMember m) {
     final name = m.name.trim();
     final email = m.email.trim();
-    // Map any legacy roles to the two canonical roles
-    final role = (m.role.trim().toLowerCase() == 'team leader')
-        ? 'Team Leader'
-        : 'Executor/Reviewer';
+    final role = m.role.trim();
     return m.copyWith(name: name, email: email, role: role);
   }
 
@@ -36,12 +56,13 @@ class TeamController extends GetxController {
   }
 
   void deleteMember(String id) => members.removeWhere((e) => e.id == id);
-  
+
   // Backend-powered CRUD helpers
   Future<void> createMember(TeamMember m) async {
     try {
-      final created = await _service.create(m);
-      addMember(created);
+      await _service.create(m);
+      // Immediately refresh the list
+      await refreshMembers();
     } catch (e) {
       errorMessage.value = e.toString();
       rethrow;
@@ -50,8 +71,9 @@ class TeamController extends GetxController {
 
   Future<void> saveMember(TeamMember m) async {
     try {
-      final saved = await _service.update(m);
-      updateMember(saved.id, saved);
+      await _service.update(m);
+      // Immediately refresh the list
+      await refreshMembers();
     } catch (e) {
       errorMessage.value = e.toString();
       rethrow;
@@ -61,10 +83,20 @@ class TeamController extends GetxController {
   Future<void> removeMember(String id) async {
     try {
       await _service.delete(id);
-      deleteMember(id);
+      // Immediately refresh the list
+      await refreshMembers();
     } catch (e) {
       errorMessage.value = e.toString();
       rethrow;
+    }
+  }
+
+  Future<void> refreshMembers() async {
+    try {
+      final users = await _service.getAll();
+      members.assignAll(users.map(_normalize));
+    } catch (e) {
+      errorMessage.value = e.toString();
     }
   }
 
@@ -94,7 +126,9 @@ class TeamController extends GetxController {
     return idx == -1 ? null : members[idx];
   }
 
-  Future<void> fetchFromBackend(Future<List<TeamMember>> Function() loader) async {
+  Future<void> fetchFromBackend(
+    Future<List<TeamMember>> Function() loader,
+  ) async {
     isLoading.value = true;
     errorMessage.value = '';
     try {

@@ -26,7 +26,7 @@ class EmployeePage extends StatelessWidget {
     final formKey = GlobalKey<FormState>();
     String name = '';
     String email = '';
-    String role = 'Executor/Reviewer';
+    String role = 'User';
     String password = '';
     bool obscure = true;
     await showAdminDialog(
@@ -57,9 +57,13 @@ class EmployeePage extends StatelessWidget {
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Enter email';
                 final value = v.trim();
-                final pattern = RegExp(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$');
+                final pattern = RegExp(
+                  r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$',
+                );
                 if (!pattern.hasMatch(value)) return 'Invalid email format';
-                final exists = ctrl.members.any((m) => m.email.toLowerCase() == value.toLowerCase());
+                final exists = ctrl.members.any(
+                  (m) => m.email.toLowerCase() == value.toLowerCase(),
+                );
                 if (exists) return 'Email already in use';
                 return null;
               },
@@ -68,42 +72,52 @@ class EmployeePage extends StatelessWidget {
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               value: role,
-              items: const ['Team Leader', 'Executor/Reviewer']
-                  .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                  .toList(),
+              items: const [
+                'Admin',
+                'User',
+              ].map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
               onChanged: (v) => role = v ?? role,
               decoration: const InputDecoration(labelText: 'Role *'),
             ),
             const SizedBox(height: 12),
-            StatefulBuilder(builder: (context, setInner) {
-              return TextFormField(
-                decoration: InputDecoration(
-                  labelText: 'Password *',
-                  suffixIcon: IconButton(
-                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setInner(() => obscure = !obscure),
-                    tooltip: obscure ? 'Show password' : 'Hide password',
+            StatefulBuilder(
+              builder: (context, setInner) {
+                return TextFormField(
+                  decoration: InputDecoration(
+                    labelText: 'Password *',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        obscure ? Icons.visibility_off : Icons.visibility,
+                      ),
+                      onPressed: () => setInner(() => obscure = !obscure),
+                      tooltip: obscure ? 'Show password' : 'Hide password',
+                    ),
                   ),
-                ),
-                obscureText: obscure,
-                textInputAction: TextInputAction.done,
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Enter password';
-                  if (v.length < 6) return 'Min 6 chars';
-                  if (!RegExp(r'[A-Za-z]').hasMatch(v) || !RegExp(r'\d').hasMatch(v)) return 'Include letter & number';
-                  return null;
-                },
-                onSaved: (v) => password = v!.trim(),
-              );
-            }),
+                  obscureText: obscure,
+                  textInputAction: TextInputAction.done,
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Enter password';
+                    if (v.length < 6) return 'Min 6 chars';
+                    if (!RegExp(r'[A-Za-z]').hasMatch(v) ||
+                        !RegExp(r'\d').hasMatch(v))
+                      return 'Include letter & number';
+                    return null;
+                  },
+                  onSaved: (v) => password = v!.trim(),
+                );
+              },
+            ),
             const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
                 const SizedBox(width: 12),
                 ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
                     if (formKey.currentState?.validate() ?? false) {
                       formKey.currentState?.save();
                       final newMember = TeamMember(
@@ -112,13 +126,33 @@ class EmployeePage extends StatelessWidget {
                         email: email,
                         role: role,
                         status: 'Active',
-                        dateAdded: DateTime.now().toIso8601String().split('T').first,
+                        dateAdded: DateTime.now()
+                            .toIso8601String()
+                            .split('T')
+                            .first,
                         lastActive: 'Never',
                         password: password,
                       );
-                      ctrl.createMember(newMember);
                       Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Member added')));
+                      try {
+                        await ctrl.createMember(newMember);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Member created successfully'),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error: ${e.toString()}'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
                     }
                   },
                   child: const Text('Add Member'),
@@ -131,13 +165,15 @@ class EmployeePage extends StatelessWidget {
     );
   }
 
-  Future<void> _showEditDialog(BuildContext context, TeamController ctrl, TeamMember m) async {
+  Future<void> _showEditDialog(
+    BuildContext context,
+    TeamController ctrl,
+    TeamMember m,
+  ) async {
     final formKey = GlobalKey<FormState>();
     String name = m.name;
     String email = m.email;
-    String role = (m.role == 'Team Leader')
-        ? 'Team Leader'
-        : 'Executor/Reviewer';
+    String role = (m.role == 'Admin') ? 'Admin' : 'User';
     String password = m.password ?? '';
     bool obscure = true;
     await showAdminDialog(
@@ -170,9 +206,15 @@ class EmployeePage extends StatelessWidget {
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Enter email';
                 final value = v.trim();
-                final pattern = RegExp(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$');
+                final pattern = RegExp(
+                  r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$',
+                );
                 if (!pattern.hasMatch(value)) return 'Invalid email format';
-                final exists = ctrl.members.any((mm) => mm.id != m.id && mm.email.toLowerCase() == value.toLowerCase());
+                final exists = ctrl.members.any(
+                  (mm) =>
+                      mm.id != m.id &&
+                      mm.email.toLowerCase() == value.toLowerCase(),
+                );
                 if (exists) return 'Email already in use';
                 return null;
               },
@@ -181,49 +223,66 @@ class EmployeePage extends StatelessWidget {
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               value: role,
-              items: const ['Team Leader', 'Executor/Reviewer']
-                  .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                  .toList(),
+              items: const [
+                'Admin',
+                'User',
+              ].map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
               onChanged: (v) => role = v ?? role,
               decoration: const InputDecoration(labelText: 'Role *'),
             ),
             const SizedBox(height: 12),
-            StatefulBuilder(builder: (context, setInner) {
-              return TextFormField(
-                initialValue: password,
-                decoration: InputDecoration(
-                  labelText: 'Password *',
-                  suffixIcon: IconButton(
-                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setInner(() => obscure = !obscure),
-                    tooltip: obscure ? 'Show password' : 'Hide password',
+            StatefulBuilder(
+              builder: (context, setInner) {
+                return TextFormField(
+                  initialValue: password,
+                  decoration: InputDecoration(
+                    labelText: 'Password *',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        obscure ? Icons.visibility_off : Icons.visibility,
+                      ),
+                      onPressed: () => setInner(() => obscure = !obscure),
+                      tooltip: obscure ? 'Show password' : 'Hide password',
+                    ),
                   ),
-                ),
-                obscureText: obscure,
-                textInputAction: TextInputAction.done,
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Enter password';
-                  if (v.length < 6) return 'Min 6 chars';
-                  if (!RegExp(r'[A-Za-z]').hasMatch(v) || !RegExp(r'\d').hasMatch(v)) return 'Include letter & number';
-                  return null;
-                },
-                onSaved: (v) => password = v!.trim(),
-              );
-            }),
+                  obscureText: obscure,
+                  textInputAction: TextInputAction.done,
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Enter password';
+                    if (v.length < 6) return 'Min 6 chars';
+                    if (!RegExp(r'[A-Za-z]').hasMatch(v) ||
+                        !RegExp(r'\d').hasMatch(v))
+                      return 'Include letter & number';
+                    return null;
+                  },
+                  onSaved: (v) => password = v!.trim(),
+                );
+              },
+            ),
             const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
                 const SizedBox(width: 12),
                 ElevatedButton(
                   onPressed: () {
                     if (formKey.currentState?.validate() ?? false) {
                       formKey.currentState?.save();
-                      final updated = m.copyWith(name: name, email: email, role: role, password: password);
+                      final updated = m.copyWith(
+                        name: name,
+                        email: email,
+                        role: role,
+                        password: password,
+                      );
                       ctrl.saveMember(updated);
                       Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Member updated')));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Member updated')),
+                      );
                     }
                   },
                   child: const Text('Save Changes'),
@@ -236,7 +295,11 @@ class EmployeePage extends StatelessWidget {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, TeamController ctrl, TeamMember m) async {
+  Future<void> _confirmDelete(
+    BuildContext context,
+    TeamController ctrl,
+    TeamMember m,
+  ) async {
     final confirmed = await showAdminDialog<bool>(
       context,
       title: 'Delete Member',
@@ -249,10 +312,15 @@ class EmployeePage extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
               const SizedBox(width: 12),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.redAccent,
+                ),
                 onPressed: () => Navigator.of(context).pop(true),
                 child: const Text('Delete'),
               ),
@@ -269,7 +337,7 @@ class EmployeePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ctrl = Get.find<TeamController>();
-  _ensureSeed(ctrl);
+    _ensureSeed(ctrl);
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Row(
@@ -324,7 +392,11 @@ class EmployeePage extends StatelessWidget {
                                 label: const Text('User'),
                                 onSort: (colIndex, asc) {
                                   final sorted = ctrl.members.toList()
-                                    ..sort((a, b) => asc ? a.name.compareTo(b.name) : b.name.compareTo(a.name));
+                                    ..sort(
+                                      (a, b) => asc
+                                          ? a.name.compareTo(b.name)
+                                          : b.name.compareTo(a.name),
+                                    );
                                   ctrl.members.assignAll(sorted);
                                 },
                               ),
@@ -335,7 +407,11 @@ class EmployeePage extends StatelessWidget {
                                 label: const Text('Date Added'),
                                 onSort: (colIndex, asc) {
                                   final sorted = ctrl.members.toList()
-                                    ..sort((a, b) => asc ? a.dateAdded.compareTo(b.dateAdded) : b.dateAdded.compareTo(a.dateAdded));
+                                    ..sort(
+                                      (a, b) => asc
+                                          ? a.dateAdded.compareTo(b.dateAdded)
+                                          : b.dateAdded.compareTo(a.dateAdded),
+                                    );
                                   ctrl.members.assignAll(sorted);
                                 },
                               ),
@@ -356,16 +432,12 @@ class EmployeePage extends StatelessWidget {
                                         Text(e.name),
                                       ],
                                     ),
-            onTap: () => Get.to(() => EmployeeProjectsPage(member: e)),
-                                  ),
-                                  DataCell(Text(e.email)),
-                                  DataCell(
-                                    _roleChip(
-                                      e.role == 'Team Leader'
-                                          ? 'Team Leader'
-                                          : 'Executor/Reviewer',
+                                    onTap: () => Get.to(
+                                      () => EmployeeProjectsPage(member: e),
                                     ),
                                   ),
+                                  DataCell(Text(e.email)),
+                                  DataCell(_roleChip(e.role)),
                                   DataCell(
                                     Text(
                                       e.password != null &&
@@ -380,14 +452,16 @@ class EmployeePage extends StatelessWidget {
                                     Row(
                                       children: [
                                         IconButton(
-              onPressed: () => _showEditDialog(context, ctrl, e),
+                                          onPressed: () =>
+                                              _showEditDialog(context, ctrl, e),
                                           icon: const Icon(
                                             Icons.edit,
                                             size: 20,
                                           ),
                                         ),
                                         IconButton(
-              onPressed: () => _confirmDelete(context, ctrl, e),
+                                          onPressed: () =>
+                                              _confirmDelete(context, ctrl, e),
                                           icon: const Icon(
                                             Icons.delete_outline,
                                             size: 20,
@@ -438,26 +512,18 @@ class EmployeePage extends StatelessWidget {
                           () => Column(
                             children: [
                               CheckboxListTile(
-                                value: ctrl.selectedRoles.contains(
-                                  'Team Leader',
-                                ),
+                                value: ctrl.selectedRoles.contains('Admin'),
                                 onChanged: (v) => v == true
-                                    ? ctrl.selectedRoles.add('Team Leader')
-                                    : ctrl.selectedRoles.remove('Team Leader'),
-                                title: const Text('Team Leader'),
+                                    ? ctrl.selectedRoles.add('Admin')
+                                    : ctrl.selectedRoles.remove('Admin'),
+                                title: const Text('Admin'),
                               ),
                               CheckboxListTile(
-                                value: ctrl.selectedRoles.contains(
-                                  'Executor/Reviewer',
-                                ),
+                                value: ctrl.selectedRoles.contains('User'),
                                 onChanged: (v) => v == true
-                                    ? ctrl.selectedRoles.add(
-                                        'Executor/Reviewer',
-                                      )
-                                    : ctrl.selectedRoles.remove(
-                                        'Executor/Reviewer',
-                                      ),
-                                title: const Text('Executor/Reviewer'),
+                                    ? ctrl.selectedRoles.add('User')
+                                    : ctrl.selectedRoles.remove('User'),
+                                title: const Text('User'),
                               ),
                             ],
                           ),

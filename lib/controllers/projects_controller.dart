@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:get/get.dart';
 import '../models/project.dart';
 import '../services/project_service.dart';
@@ -9,25 +10,62 @@ class ProjectsController extends GetxController {
 
   List<Project> get all => projects;
   late final ProjectService _service;
+  StreamSubscription? _projectsSubscription;
 
   @override
   void onInit() {
     super.onInit();
     _service = Get.find<ProjectService>();
-    // Load from backend on startup
-    fetchFromBackend(() => _service.getAll());
+    _startRealtimeSync();
+  }
+
+  void _startRealtimeSync() {
+    isLoading.value = true;
+    _projectsSubscription = _service.getProjectsStream().listen(
+      (projectsList) {
+        projects.assignAll(projectsList.map(_normalize));
+        isLoading.value = false;
+        errorMessage.value = '';
+      },
+      onError: (e) {
+        errorMessage.value = e.toString();
+        isLoading.value = false;
+      },
+    );
+  }
+
+  @override
+  void onClose() {
+    _projectsSubscription?.cancel();
+    super.onClose();
   }
 
   // Find projects where a given employee name is executor
-  List<Project> byExecutor(String name) =>
-    projects.where((p) => (p.executor?.trim().toLowerCase() ?? '') == name.trim().toLowerCase()).toList();
+  List<Project> byExecutor(String name) => projects
+      .where(
+        (p) =>
+            (p.executor?.trim().toLowerCase() ?? '') ==
+            name.trim().toLowerCase(),
+      )
+      .toList();
 
   Project _normalize(Project p) {
-    final allowedPriorities = {'Low','Medium','High'};
-    final allowedStatuses = {'Pending','In Progress','Completed','Not Started'};
-    String priority = allowedPriorities.contains(p.priority) ? p.priority : 'Medium';
-    String status = allowedStatuses.contains(p.status) ? p.status : 'Not Started';
-    final exec = (p.executor?.trim().isNotEmpty ?? false) ? p.executor!.trim() : null;
+    final allowedPriorities = {'Low', 'Medium', 'High'};
+    final allowedStatuses = {
+      'Pending',
+      'In Progress',
+      'Completed',
+      'Not Started',
+    };
+    String priority = allowedPriorities.contains(p.priority)
+        ? p.priority
+        : 'Medium';
+    String status = allowedStatuses.contains(p.status)
+        ? p.status
+        : 'Not Started';
+    final exec = (p.executor?.trim().isNotEmpty ?? false)
+        ? p.executor!.trim()
+        : null;
     final assigned = (p.assignedEmployees ?? [])
         .where((e) => e.trim().isNotEmpty)
         .map((e) => e.trim())
@@ -38,22 +76,27 @@ class ProjectsController extends GetxController {
       executor: exec,
       assignedEmployees: assigned.isEmpty ? null : assigned,
       title: p.title.trim().isEmpty ? 'Untitled' : p.title.trim(),
-      description: (p.description?.trim().isNotEmpty ?? false) ? p.description!.trim() : null,
+      description: (p.description?.trim().isNotEmpty ?? false)
+          ? p.description!.trim()
+          : null,
     );
   }
 
   // Find projects assigned to given employee id in assignedEmployees
   List<Project> byAssigneeId(String employeeId) => projects
-    .where((p) => (p.assignedEmployees ?? const [])
-      .any((e) => e.trim() == employeeId.trim()))
-    .toList();
+      .where(
+        (p) => (p.assignedEmployees ?? const []).any(
+          (e) => e.trim() == employeeId.trim(),
+        ),
+      )
+      .toList();
 
   void loadInitial(List<Project> initial) {
     projects.assignAll(initial.map(_normalize));
   }
 
   void addProject(Project p) {
-  // optimistic update; backend create can be added later
+    // optimistic update; backend create can be added later
     projects.add(_normalize(p));
   }
 
