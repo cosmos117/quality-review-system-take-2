@@ -23,44 +23,8 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
   @override
   void initState() {
     super.initState();
-    _ctrl = Get.put(ProjectsController());
-
-    if (_ctrl.projects.isEmpty) {
-      _ctrl.loadInitial([
-        Project(
-          id: 'p1',
-          title: 'Implement New CRM System',
-          started: DateTime(2024, 6, 1),
-          priority: 'High',
-          status: 'In Progress',
-          executor: 'Emily Carter',
-        ),
-        Project(
-          id: 'p2',
-          title: 'Develop Marketing Strategy',
-          started: DateTime(2024, 5, 20),
-          priority: 'Medium',
-          status: 'Completed',
-          executor: 'David Lee',
-        ),
-        Project(
-          id: 'p3',
-          title: 'Conduct Market Research',
-          started: DateTime(2024, 6, 10),
-          priority: 'Low',
-          status: 'Not Started',
-          executor: null,
-        ),
-        Project(
-          id: 'p4',
-          title: 'Build Analytics Dashboard',
-          started: DateTime(2024, 5, 5),
-          priority: 'High',
-          status: 'In Progress',
-          executor: 'Sophia Clark',
-        ),
-      ]);
-    }
+    _ctrl = Get.find<ProjectsController>();
+    // Projects are automatically loaded via real-time stream in ProjectsController
   }
 
   @override

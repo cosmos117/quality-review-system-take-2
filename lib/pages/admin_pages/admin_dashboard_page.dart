@@ -44,11 +44,14 @@ class AdminDashboardPage extends StatelessWidget {
           res = a.status.toLowerCase().compareTo(b.status.toLowerCase());
           break;
         case 'executor':
-          res = (a.executor ?? '').toLowerCase().compareTo((b.executor ?? '').toLowerCase());
+          res = (a.executor ?? '').toLowerCase().compareTo(
+            (b.executor ?? '').toLowerCase(),
+          );
           break;
       }
       return ascending ? res : -res;
     }
+
     list.sort(cmp);
     return list;
   }
@@ -57,21 +60,21 @@ class AdminDashboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-  final projCtrl = Get.find<ProjectsController>();
-  final ui = Get.find<AdminDashboardUIController>();
-  _ensureSeed(projCtrl);
+    final projCtrl = Get.find<ProjectsController>();
+    final ui = Get.find<AdminDashboardUIController>();
+    _ensureSeed(projCtrl);
 
     List<String> _executors() => const [
-    'Emma Carter',
-    'Liam Walker',
-    'Olivia Harris',
-    'Noah Clark',
-    'Ava Lewis',
-    'William Hall',
-    'Sophia Young',
-    'James Wright',
-    'Isabella King',
-  ];
+      'Emma Carter',
+      'Liam Walker',
+      'Olivia Harris',
+      'Noah Clark',
+      'Ava Lewis',
+      'William Hall',
+      'Sophia Young',
+      'James Wright',
+      'Isabella King',
+    ];
 
     Future<void> _showCreateDialog() async {
       await showAdminDialog(
@@ -82,41 +85,59 @@ class AdminDashboardPage extends StatelessWidget {
           title: 'Create New Project',
           executors: _executors(),
           titleValidator: (t) {
-            final exists = projCtrl.projects.any((p) => p.title.toLowerCase() == t.toLowerCase());
+            final exists = projCtrl.projects.any(
+              (p) => p.title.toLowerCase() == t.toLowerCase(),
+            );
             return exists ? 'A project with this title already exists' : null;
           },
           width: 1000,
           showStatus: false,
           showExecutor: false,
           onSubmit: (data) async {
-            final newProject = Project(
-              id: '',
-              title: data.title,
-              description: data.description,
-              started: data.started,
-              priority: data.priority,
-              status: 'Not Started',
-              executor: null,
-            );
-            await projCtrl.createProjectRemote(newProject);
+            try {
+              final newProject = Project(
+                id: '',
+                title: data.title,
+                description: data.description,
+                started: data.started,
+                priority: data.priority,
+                status: 'Not Started',
+                executor: null,
+              );
+              await projCtrl.createProjectRemote(newProject);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Project created successfully')),
+                );
+              }
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error: ${e.toString()}'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
           },
         ),
       );
     }
 
-  // ...
+    // ...
 
-  Widget _priorityChip(String p) {
-    Color bg = const Color(0xFFEFF3F7);
-    if (p == 'High') bg = const Color(0xFFFBEFEF);
-    if (p == 'Low') bg = const Color(0xFFF5F7FA);
-    return Chip(
-      label: Text(p, style: const TextStyle(fontSize: 12)),
-      backgroundColor: bg,
-    );
-  }
+    Widget _priorityChip(String p) {
+      Color bg = const Color(0xFFEFF3F7);
+      if (p == 'High') bg = const Color(0xFFFBEFEF);
+      if (p == 'Low') bg = const Color(0xFFF5F7FA);
+      return Chip(
+        label: Text(p, style: const TextStyle(fontSize: 12)),
+        backgroundColor: bg,
+      );
+    }
 
-  return Scaffold(
+    return Scaffold(
       backgroundColor: Colors.grey[50],
       body: SingleChildScrollView(
         child: Padding(
@@ -191,7 +212,10 @@ class AdminDashboardPage extends StatelessWidget {
                       border: Border.all(color: const Color(0xFFFFC8C8)),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text('Error: $err', style: const TextStyle(color: Colors.redAccent)),
+                    child: Text(
+                      'Error: $err',
+                      style: const TextStyle(color: Colors.redAccent),
+                    ),
                   );
                 }
                 return const SizedBox.shrink();
@@ -203,7 +227,12 @@ class AdminDashboardPage extends StatelessWidget {
                 final search = ui.searchQuery.value;
                 final sortKey = ui.sortKey.value;
                 final asc = ui.ascending.value;
-                final projects = _visibleProjects(rxProjects, search, sortKey, asc);
+                final projects = _visibleProjects(
+                  rxProjects,
+                  search,
+                  sortKey,
+                  asc,
+                );
                 return Column(
                   children: [
                     // Header row
@@ -223,51 +252,51 @@ class AdminDashboardPage extends StatelessWidget {
                           ),
                         ],
                       ),
-          child: Row(
+                      child: Row(
                         children: [
-              Expanded(
+                          Expanded(
                             flex: 3,
                             child: _HeaderCell(
                               label: 'Project Title',
-            active: sortKey == 'title',
-            ascending: asc,
-                onTap: () => ui.toggleSort('title'),
+                              active: sortKey == 'title',
+                              ascending: asc,
+                              onTap: () => ui.toggleSort('title'),
                             ),
                           ),
-              Expanded(
+                          Expanded(
                             flex: 2,
                             child: _HeaderCell(
                               label: 'Started',
                               active: sortKey == 'started',
                               ascending: asc,
-                onTap: () => ui.toggleSort('started'),
+                              onTap: () => ui.toggleSort('started'),
                             ),
                           ),
-              Expanded(
+                          Expanded(
                             flex: 1,
                             child: _HeaderCell(
                               label: 'Priority',
                               active: sortKey == 'priority',
                               ascending: asc,
-                onTap: () => ui.toggleSort('priority'),
+                              onTap: () => ui.toggleSort('priority'),
                             ),
                           ),
-              Expanded(
+                          Expanded(
                             flex: 1,
                             child: _HeaderCell(
                               label: 'Status',
                               active: sortKey == 'status',
                               ascending: asc,
-                onTap: () => ui.toggleSort('status'),
+                              onTap: () => ui.toggleSort('status'),
                             ),
                           ),
-              Expanded(
+                          Expanded(
                             flex: 2,
                             child: _HeaderCell(
                               label: 'Executor',
                               active: sortKey == 'executor',
                               ascending: asc,
-                onTap: () => ui.toggleSort('executor'),
+                              onTap: () => ui.toggleSort('executor'),
                             ),
                           ),
                           // Actions column removed (moved to details page)
@@ -275,19 +304,23 @@ class AdminDashboardPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-          ListView.builder(
+                    ListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: projects.length,
                       itemBuilder: (context, index) {
                         final proj = projects[index];
-            final executor = (proj.status == 'In Progress' || proj.status == 'Completed')
-              ? ((proj.executor?.trim().isNotEmpty ?? false) ? proj.executor!.trim() : '--')
-              : '--';
+                        final executor =
+                            (proj.status == 'In Progress' ||
+                                proj.status == 'Completed')
+                            ? ((proj.executor?.trim().isNotEmpty ?? false)
+                                  ? proj.executor!.trim()
+                                  : '--')
+                            : '--';
                         final hovered = ui.hoverIndex.value == index;
                         return MouseRegion(
-              onEnter: (_) => ui.setHover(index),
-              onExit: (_) => ui.clearHover(),
+                          onEnter: (_) => ui.setHover(index),
+                          onExit: (_) => ui.clearHover(),
                           child: GestureDetector(
                             onTap: () => Get.to(
                               () => AdminProjectDetailsPage(
@@ -474,15 +507,18 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                     final List<Widget> fields = [
                       // Large description area at top
                       // Description
-                      
-                      
+
                       // Title
                       TextFormField(
                         initialValue: data.title,
-                        decoration: const InputDecoration(labelText: 'Project Title *'),
+                        decoration: const InputDecoration(
+                          labelText: 'Project Title *',
+                        ),
                         validator: (v) {
-                          if (v == null || v.trim().isEmpty) return 'Enter title';
-                          if (widget.titleValidator != null) return widget.titleValidator!(v.trim());
+                          if (v == null || v.trim().isEmpty)
+                            return 'Enter title';
+                          if (widget.titleValidator != null)
+                            return widget.titleValidator!(v.trim());
                           return null;
                         },
                         onSaved: (v) => data.title = v!.trim(),
@@ -496,12 +532,17 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                             firstDate: DateTime(2000),
                             lastDate: DateTime(2100),
                           );
-                          if (picked != null) setState(() => data.started = picked);
+                          if (picked != null)
+                            setState(() => data.started = picked);
                         },
                         child: AbsorbPointer(
                           child: TextFormField(
-                            decoration: const InputDecoration(labelText: 'Started Date *'),
-                            controller: TextEditingController(text: _dateString(data.started)),
+                            decoration: const InputDecoration(
+                              labelText: 'Started Date *',
+                            ),
+                            controller: TextEditingController(
+                              text: _dateString(data.started),
+                            ),
                           ),
                         ),
                       ),
@@ -509,10 +550,15 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                       DropdownButtonFormField<String>(
                         initialValue: data.priority,
                         items: ['High', 'Medium', 'Low']
-                            .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                            .map(
+                              (p) => DropdownMenuItem(value: p, child: Text(p)),
+                            )
                             .toList(),
-                        onChanged: (v) => setState(() => data.priority = v ?? data.priority),
-                        decoration: const InputDecoration(labelText: 'Priority *'),
+                        onChanged: (v) =>
+                            setState(() => data.priority = v ?? data.priority),
+                        decoration: const InputDecoration(
+                          labelText: 'Priority *',
+                        ),
                       ),
                     ];
                     if (widget.showStatus) {
@@ -520,70 +566,91 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                         DropdownButtonFormField<String>(
                           initialValue: data.status,
                           items: ['In Progress', 'Completed', 'Not Started']
-                              .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                              .map(
+                                (p) =>
+                                    DropdownMenuItem(value: p, child: Text(p)),
+                              )
                               .toList(),
-                          onChanged: (v) => setState(() => data.status = v ?? data.status),
-                          decoration: const InputDecoration(labelText: 'Status *'),
+                          onChanged: (v) =>
+                              setState(() => data.status = v ?? data.status),
+                          decoration: const InputDecoration(
+                            labelText: 'Status *',
+                          ),
                         ),
                       );
                     }
                     if (widget.showExecutor) {
                       fields.add(
                         DropdownButtonFormField<String>(
-                          initialValue: (data.executor?.isEmpty ?? true) ? null : data.executor,
-                          items: (widget.executors ?? const [
-                                'Emma Carter',
-                                'Liam Walker',
-                                'Olivia Harris',
-                                'Noah Clark',
-                                'Ava Lewis',
-                                'William Hall',
-                                'Sophia Young',
-                                'James Wright',
-                                'Isabella King',
-                              ])
-                              .map((n) => DropdownMenuItem(value: n, child: Text(n)))
-                              .toList(),
-                          onChanged: (v) => setState(() => data.executor = v ?? ''),
-                          decoration: const InputDecoration(labelText: 'Executor (optional)'),
+                          initialValue: (data.executor?.isEmpty ?? true)
+                              ? null
+                              : data.executor,
+                          items:
+                              (widget.executors ??
+                                      const [
+                                        'Emma Carter',
+                                        'Liam Walker',
+                                        'Olivia Harris',
+                                        'Noah Clark',
+                                        'Ava Lewis',
+                                        'William Hall',
+                                        'Sophia Young',
+                                        'James Wright',
+                                        'Isabella King',
+                                      ])
+                                  .map(
+                                    (n) => DropdownMenuItem(
+                                      value: n,
+                                      child: Text(n),
+                                    ),
+                                  )
+                                  .toList(),
+                          onChanged: (v) =>
+                              setState(() => data.executor = v ?? ''),
+                          decoration: const InputDecoration(
+                            labelText: 'Executor (optional)',
+                          ),
                         ),
                       );
-                    } 
-                    
+                    }
+
                     return Column(
                       children: [
                         for (int i = 0; i < fields.length; i++) ...[
                           fields[i],
-                          if (i != fields.length - 1) const SizedBox(height: 12),
-                        ]
+                          if (i != fields.length - 1)
+                            const SizedBox(height: 12),
+                        ],
                       ],
                     );
                   },
                 ),
                 const SizedBox(height: 12),
                 const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: EdgeInsets.only(bottom: 6),
-                          child: Text(
-                            'Description *',
-                            style: TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ),
-                      TextFormField(
-                        initialValue: data.description,
-                        minLines: 10,
-                        maxLines: 16,
-                        textAlignVertical: TextAlignVertical.top,
-                        decoration: const InputDecoration(
-                          hintText: 'Enter description...',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.all(12),
-                        ),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter description' : null,
-                        onSaved: (v) => data.description = v!.trim(),
-                      ),
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: 6),
+                    child: Text(
+                      'Description *',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+                TextFormField(
+                  initialValue: data.description,
+                  minLines: 10,
+                  maxLines: 16,
+                  textAlignVertical: TextAlignVertical.top,
+                  decoration: const InputDecoration(
+                    hintText: 'Enter description...',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.all(12),
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Enter description'
+                      : null,
+                  onSaved: (v) => data.description = v!.trim(),
+                ),
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,

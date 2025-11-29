@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:get/get.dart';
 import '../models/project.dart';
 import '../services/project_service.dart';
+import 'auth_controller.dart';
 
 class ProjectsController extends GetxController {
   final RxList<Project> projects = <Project>[].obs;
@@ -134,8 +135,13 @@ class ProjectsController extends GetxController {
 
   Future<Project> createProjectRemote(Project p) async {
     try {
-      final created = await _service.create(p);
-      addProject(created);
+      final authCtrl = Get.find<AuthController>();
+      final userId = authCtrl.currentUser.value?.id;
+      if (userId == null) {
+        throw Exception('User not logged in');
+      }
+      final created = await _service.create(p, userId: userId);
+      await refreshProjects();
       return created;
     } catch (e) {
       errorMessage.value = e.toString();
@@ -146,11 +152,30 @@ class ProjectsController extends GetxController {
   Future<Project> saveProjectRemote(Project p) async {
     try {
       final saved = await _service.update(p);
-      updateProject(saved.id, saved);
+      await refreshProjects();
       return saved;
     } catch (e) {
       errorMessage.value = e.toString();
       rethrow;
+    }
+  }
+
+  Future<void> removeProjectRemoteAndRefresh(String id) async {
+    try {
+      await _service.delete(id);
+      await refreshProjects();
+    } catch (e) {
+      errorMessage.value = e.toString();
+      rethrow;
+    }
+  }
+
+  Future<void> refreshProjects() async {
+    try {
+      final projectsList = await _service.getAll();
+      projects.assignAll(projectsList.map(_normalize));
+    } catch (e) {
+      errorMessage.value = e.toString();
     }
   }
 }

@@ -43,7 +43,7 @@ class EmployeePage extends StatelessWidget {
               textInputAction: TextInputAction.next,
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Enter name';
-                if (v.trim().length < 2) return 'Name too short';
+                if (v.trim().isEmpty) return 'Name can\'t be empty';
                 return null;
               },
               onSaved: (v) => name = v!.trim(),
@@ -98,9 +98,7 @@ class EmployeePage extends StatelessWidget {
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Enter password';
                     if (v.length < 6) return 'Min 6 chars';
-                    if (!RegExp(r'[A-Za-z]').hasMatch(v) ||
-                        !RegExp(r'\d').hasMatch(v))
-                      return 'Include letter & number';
+                    if (!RegExp(r'[A-Za-z]').hasMatch(v)) return 'Include letter & number';
                     return null;
                   },
                   onSaved: (v) => password = v!.trim(),

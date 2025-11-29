@@ -46,7 +46,7 @@ class ProjectService {
     );
   }
 
-  Map<String, dynamic> _toApi(Project p) {
+  Map<String, dynamic> _toApi(Project p, {String? userId}) {
     String status = switch (p.status) {
       'In Progress' => 'in_progress',
       'Completed' => 'completed',
@@ -56,7 +56,7 @@ class ProjectService {
       'project_name': p.title,
       'status': status,
       'start_date': p.started.toIso8601String(),
-      if (p.executor != null) 'created_by': p.executor,
+      if (userId != null) 'created_by': userId,
     };
   }
 
@@ -67,9 +67,9 @@ class ProjectService {
     return data.map((e) => _fromApi(e as Map<String, dynamic>)).toList();
   }
 
-  Future<Project> create(Project p) async {
+  Future<Project> create(Project p, {required String userId}) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/projects');
-    final json = await http.postJson(uri, _toApi(p));
+    final json = await http.postJson(uri, _toApi(p, userId: userId));
     return _fromApi(json['data'] as Map<String, dynamic>);
   }
 
