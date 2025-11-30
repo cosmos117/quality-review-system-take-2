@@ -20,6 +20,19 @@ class EmployeePage extends StatelessWidget {
     );
   }
 
+  String _formatDateTime(String dateTimeStr) {
+    try {
+      final dt = DateTime.parse(dateTimeStr).toLocal();
+      final date =
+          '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+      final time =
+          '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      return '$date $time';
+    } catch (e) {
+      return dateTimeStr;
+    }
+  }
+
   // Status no longer used in admin view; password added instead.
 
   Future<void> _showAddDialog(BuildContext context, TeamController ctrl) async {
@@ -268,7 +281,7 @@ class EmployeePage extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
                     if (formKey.currentState?.validate() ?? false) {
                       formKey.currentState?.save();
                       final updated = m.copyWith(
@@ -277,11 +290,31 @@ class EmployeePage extends StatelessWidget {
                         role: role,
                         password: password,
                       );
-                      ctrl.saveMember(updated);
                       Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Member updated')),
-                      );
+                      try {
+                        await ctrl.saveMember(updated);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                '${updated.name} has been updated successfully',
+                              ),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Failed to update member: ${e.toString()}',
+                              ),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
                     }
                   },
                   child: const Text('Save Changes'),
@@ -302,11 +335,14 @@ class EmployeePage extends StatelessWidget {
     final confirmed = await showAdminDialog<bool>(
       context,
       title: 'Delete Member',
-      width: 420,
+      width: 480,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Are you sure you want to delete "${m.name}"?'),
+          Text(
+            'Are you sure you want to delete "${m.name}"? This action cannot be undone.',
+          ),
           const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -321,7 +357,7 @@ class EmployeePage extends StatelessWidget {
                   backgroundColor: Colors.redAccent,
                 ),
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Delete'),
+                child: const Text('Delete Member'),
               ),
             ],
           ),
@@ -329,7 +365,26 @@ class EmployeePage extends StatelessWidget {
       ),
     );
     if (confirmed == true) {
-      await ctrl.removeMember(m.id);
+      try {
+        await ctrl.removeMember(m.id);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${m.name} has been deleted successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete member: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -439,7 +494,7 @@ class EmployeePage extends StatelessWidget {
                               const DataColumn(label: Text('Role')),
                               // Password column removed per requirement
                               DataColumn(
-                                label: const Text('Date Added'),
+                                label: const Text('Added on Date/Time'),
                                 onSort: (colIndex, asc) {
                                   final sorted = ctrl.members.toList()
                                     ..sort(
@@ -473,7 +528,7 @@ class EmployeePage extends StatelessWidget {
                                   ),
                                   DataCell(Text(e.email)),
                                   DataCell(_roleChip(e.role)),
-                                  DataCell(Text(e.dateAdded)),
+                                  DataCell(Text(_formatDateTime(e.dateAdded))),
                                   DataCell(
                                     Row(
                                       children: [

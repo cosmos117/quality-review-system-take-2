@@ -59,7 +59,7 @@ class UserService {
   }
 
   Future<void> delete(String id) async {
-    final uri = Uri.parse('\${ApiConfig.baseUrl}/users/\$id');
+    final uri = Uri.parse('${ApiConfig.baseUrl}/users/$id');
     await http.delete(uri);
   }
 
