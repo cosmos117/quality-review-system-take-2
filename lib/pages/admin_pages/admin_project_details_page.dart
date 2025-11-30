@@ -102,6 +102,15 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            if (details.project.projectNo != null &&
+                                details.project.projectNo!.isNotEmpty)
+                              _row('Project No.', details.project.projectNo!),
+                            if (details.project.internalOrderNo != null &&
+                                details.project.internalOrderNo!.isNotEmpty)
+                              _row(
+                                'Project / Internal Order No.',
+                                details.project.internalOrderNo!,
+                              ),
                             _row('Title', details.project.title),
                             _row(
                               'Started',
@@ -129,21 +138,14 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
-                        child: Builder(
-                          builder: (context) {
-                            final desc =
-                                (widget.descriptionOverride ??
-                                        details.project.description)
-                                    ?.trim() ??
-                                '';
-                            return Text(
-                              desc.isNotEmpty
-                                  ? desc
-                                  : 'No description provided.',
-                              style: const TextStyle(height: 1.4),
-                            );
-                          },
-                        ),
+                        child: Obx(() {
+                          final desc = (details.project.description ?? '')
+                              .trim();
+                          return Text(
+                            desc.isNotEmpty ? desc : 'No description provided.',
+                            style: const TextStyle(height: 1.4),
+                          );
+                        }),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -200,18 +202,31 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
                     Row(
                       children: [
                         ElevatedButton.icon(
-                          onPressed: () {
-                            final updated = details.project.copyWith(
-                              assignedEmployees: details.selectedMemberIds
-                                  .toList(),
-                            );
-                            _projectsCtrl.updateProject(updated.id, updated);
-                            details.updateMeta();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Assignments saved'),
-                              ),
-                            );
+                          onPressed: () async {
+                            final ids = details.selectedMemberIds.toList();
+                            try {
+                              await _projectsCtrl.setProjectAssignments(
+                                details.project.id,
+                                ids,
+                              );
+                              details.updateMeta();
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Assignments saved'),
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Failed: ${e.toString()}'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
                           },
                           icon: const Icon(Icons.save),
                           label: const Text('Save Assignments'),
@@ -268,19 +283,6 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
         .toSet()
         .toList();
     names.sort();
-    if (names.isEmpty) {
-      return const [
-        'Emma Carter',
-        'Liam Walker',
-        'Olivia Harris',
-        'Noah Clark',
-        'Ava Lewis',
-        'William Hall',
-        'Sophia Young',
-        'James Wright',
-        'Isabella King',
-      ];
-    }
     return names;
   }
 
@@ -290,6 +292,8 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
   ) async {
     final formKey = GlobalKey<FormState>();
     final current = detailsCtrl.project;
+    String? projectNo = current.projectNo;
+    String? internalOrderNo = current.internalOrderNo;
     String title = current.title;
     DateTime started = current.started;
     String priority = current.priority;
@@ -316,6 +320,20 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            TextFormField(
+              initialValue: projectNo,
+              decoration: const InputDecoration(labelText: 'Project No.'),
+              onSaved: (v) => projectNo = v?.trim(),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              initialValue: internalOrderNo,
+              decoration: const InputDecoration(
+                labelText: 'Project / Internal Order No.',
+              ),
+              onSaved: (v) => internalOrderNo = v?.trim(),
+            ),
+            const SizedBox(height: 12),
             TextFormField(
               initialValue: title,
               decoration: const InputDecoration(labelText: 'Project Title *'),
@@ -346,7 +364,7 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: priority,
+              initialValue: priority,
               items: const [
                 'High',
                 'Medium',
@@ -357,7 +375,7 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: status,
+              initialValue: status,
               items: const [
                 'In Progress',
                 'Completed',
@@ -368,7 +386,7 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: executor,
+              initialValue: executor,
               items: executorNames
                   .map((n) => DropdownMenuItem(value: n, child: Text(n)))
                   .toList(),
@@ -416,6 +434,8 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
                     if (formKey.currentState?.validate() ?? false) {
                       formKey.currentState?.save();
                       final updated = current.copyWith(
+                        projectNo: projectNo,
+                        internalOrderNo: internalOrderNo,
                         title: title,
                         started: started,
                         priority: priority,

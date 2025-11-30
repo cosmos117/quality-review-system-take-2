@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../models/project.dart';
 import '../../controllers/projects_controller.dart';
+import '../../controllers/auth_controller.dart';
 import 'my_project_detail_page.dart';
 
 class Myproject extends StatefulWidget {
@@ -20,50 +21,13 @@ class _MyprojectState extends State<Myproject> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
 
-  // Mock current user
-  final String currentUser = 'Emily Carter';
+  // Removed legacy fallback user; rely solely on AuthController.
 
   @override
   void initState() {
     super.initState();
     _ctrl = Get.put(ProjectsController());
-    if (_ctrl.projects.isEmpty) {
-      _ctrl.loadInitial([
-        Project(
-          id: 'p1',
-          title: 'Implement New CRM System',
-          description:
-              'Develop and implement a comprehensive CRM system to streamline sales & support.',
-          started: DateTime(2024, 6, 1),
-          priority: 'High',
-          status: 'In Progress',
-          executor: 'Emily Carter',
-          assignedEmployees: ['Emily Carter', 'David Lee', 'Sophia Clark'],
-        ),
-        Project(
-          id: 'p5',
-          title: 'Mobile App Development',
-          description:
-              'Cross-platform mobile application for iOS & Android to enhance engagement.',
-          started: DateTime(2024, 6, 15),
-          priority: 'High',
-          status: 'In Progress',
-          executor: 'Emily Carter',
-          assignedEmployees: ['Emily Carter', 'William Hall', 'Isabella King'],
-        ),
-        Project(
-          id: 'p6',
-          title: 'Website Redesign',
-          description:
-              'Modern UI/UX redesign with better performance and SEO improvements.',
-          started: DateTime(2024, 5, 10),
-          priority: 'Medium',
-          status: 'Completed',
-          executor: 'Emily Carter',
-          assignedEmployees: ['Emily Carter', 'Ava Lewis'],
-        ),
-      ]);
-    }
+    // No mock preload; data comes from backend stream via ProjectsController.
   }
 
   @override
@@ -81,9 +45,27 @@ class _MyprojectState extends State<Myproject> {
     );
   }
 
-  // Active projects for this user
-  List<Project> get _myProjects =>
-      _ctrl.projects.where((p) => p.executor == currentUser).toList();
+  // Active / assigned projects for authenticated user only
+  List<Project> get _myProjects {
+    final auth = Get.isRegistered<AuthController>()
+        ? Get.find<AuthController>()
+        : null;
+    final userId = auth?.currentUser.value?.id;
+    final userName = auth?.currentUser.value?.name;
+    if (userId == null && userName == null) return const [];
+    return _ctrl.projects.where((p) {
+      final assigned = p.assignedEmployees ?? const [];
+      final matchId =
+          userId != null && assigned.any((e) => e.trim() == userId.trim());
+      final matchName =
+          userName != null &&
+          ((p.executor?.trim() == userName.trim()) ||
+              assigned.any(
+                (e) => e.trim().toLowerCase() == userName.trim().toLowerCase(),
+              ));
+      return matchId || matchName;
+    }).toList();
+  }
 
   List<Project> get _visibleProjects {
     List<Project> list = _myProjects.toList();

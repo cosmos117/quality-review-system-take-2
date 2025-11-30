@@ -12,6 +12,8 @@ class ProjectService {
 
   Project _fromApi(Map<String, dynamic> j) {
     final id = (j['_id'] ?? j['id']).toString();
+    final projectNo = j['project_no']?.toString();
+    final internalOrderNo = j['internal_order_no']?.toString();
     final title = (j['project_name'] ?? '').toString();
     final statusRaw = (j['status'] ?? '').toString();
     final status = switch (statusRaw) {
@@ -47,6 +49,8 @@ class ProjectService {
 
     return Project(
       id: id,
+      projectNo: projectNo,
+      internalOrderNo: internalOrderNo,
       title: title.isEmpty ? 'Untitled' : title,
       description: description,
       started: started,
@@ -69,6 +73,8 @@ class ProjectService {
       _ => 'medium',
     };
     return {
+      if (p.projectNo != null) 'project_no': p.projectNo,
+      if (p.internalOrderNo != null) 'internal_order_no': p.internalOrderNo,
       'project_name': p.title,
       if (p.description != null) 'description': p.description,
       'status': status,

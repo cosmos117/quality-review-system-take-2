@@ -6,6 +6,7 @@ import '../../controllers/projects_controller.dart';
 import '../../controllers/admin_dashboard_ui_controller.dart';
 import '../../components/admin_dialog.dart';
 import 'admin_project_details_page.dart';
+import '../../controllers/team_controller.dart';
 
 class AdminDashboardPage extends StatelessWidget {
   const AdminDashboardPage({super.key});
@@ -20,7 +21,6 @@ class AdminDashboardPage extends StatelessWidget {
     if (search.trim().isNotEmpty) {
       final q = search.toLowerCase();
       list = list.where((p) {
-        final exec = p.executor ?? '';
         // Removed executor from search filter per requirement
         return p.title.toLowerCase().contains(q) ||
             p.status.toLowerCase().contains(q) ||
@@ -60,25 +60,26 @@ class AdminDashboardPage extends StatelessWidget {
     final ui = Get.find<AdminDashboardUIController>();
     _ensureSeed(projCtrl);
 
-    List<String> _executors() => const [
-      'Emma Carter',
-      'Liam Walker',
-      'Olivia Harris',
-      'Noah Clark',
-      'Ava Lewis',
-      'William Hall',
-      'Sophia Young',
-      'James Wright',
-      'Isabella King',
-    ];
+    final teamCtrl = Get.isRegistered<TeamController>()
+        ? Get.find<TeamController>()
+        : null;
+    List<String> executors() =>
+        teamCtrl == null
+              ? const []
+              : teamCtrl.members
+                    .map((m) => m.name.trim())
+                    .where((n) => n.isNotEmpty)
+                    .toSet()
+                    .toList()
+          ..sort();
 
-    Future<void> _showCreateDialog() async {
+    Future<void> showCreateDialog() async {
       await showAdminDialog(
         context,
         title: 'Create New Project',
         width: 1000,
         child: _ProjectFormDialog(
-          executors: _executors(),
+          executors: executors(),
           titleValidator: (t) {
             final exists = projCtrl.projects.any(
               (p) => p.title.toLowerCase() == t.toLowerCase(),
@@ -92,6 +93,8 @@ class AdminDashboardPage extends StatelessWidget {
             try {
               final newProject = Project(
                 id: '',
+                projectNo: data.projectNo,
+                internalOrderNo: data.internalOrderNo,
                 title: data.title,
                 description: data.description,
                 started: data.started,
@@ -122,7 +125,7 @@ class AdminDashboardPage extends StatelessWidget {
 
     // ...
 
-    Widget _priorityChip(String p) {
+    Widget priorityChip(String p) {
       Color bg = const Color(0xFFEFF3F7);
       if (p == 'High') bg = const Color(0xFFFBEFEF);
       if (p == 'Low') bg = const Color(0xFFF5F7FA);
@@ -148,7 +151,7 @@ class AdminDashboardPage extends StatelessWidget {
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
                   ElevatedButton.icon(
-                    onPressed: _showCreateDialog,
+                    onPressed: showCreateDialog,
                     icon: const Icon(Icons.add),
                     label: const Text('Create New Project'),
                     style: ElevatedButton.styleFrom(
@@ -355,7 +358,7 @@ class AdminDashboardPage extends StatelessWidget {
                                   ),
                                   Expanded(
                                     flex: 1,
-                                    child: _priorityChip(proj.priority),
+                                    child: priorityChip(proj.priority),
                                   ),
                                   Expanded(
                                     flex: 1,
@@ -384,6 +387,8 @@ class AdminDashboardPage extends StatelessWidget {
 }
 
 class ProjectFormData {
+  String? projectNo;
+  String? internalOrderNo;
   String title;
   DateTime started;
   String priority;
@@ -391,6 +396,8 @@ class ProjectFormData {
   String? executor;
   String description;
   ProjectFormData({
+    this.projectNo,
+    this.internalOrderNo,
     required this.title,
     required this.started,
     required this.priority,
@@ -428,6 +435,8 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
   void initState() {
     super.initState();
     data = ProjectFormData(
+      projectNo: '',
+      internalOrderNo: '',
       title: '',
       started: DateTime.now(),
       priority: 'Medium',
@@ -456,6 +465,20 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                   // Large description area at top
                   // Description
 
+                  // Project No.
+                  TextFormField(
+                    initialValue: data.projectNo,
+                    decoration: const InputDecoration(labelText: 'Project No.'),
+                    onSaved: (v) => data.projectNo = v?.trim(),
+                  ),
+                  // Internal Order No.
+                  TextFormField(
+                    initialValue: data.internalOrderNo,
+                    decoration: const InputDecoration(
+                      labelText: 'Project / Internal Order No.',
+                    ),
+                    onSaved: (v) => data.internalOrderNo = v?.trim(),
+                  ),
                   // Title
                   TextFormField(
                     initialValue: data.title,
@@ -464,8 +487,9 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                     ),
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) return 'Enter title';
-                      if (widget.titleValidator != null)
+                      if (widget.titleValidator != null) {
                         return widget.titleValidator!(v.trim());
+                      }
                       return null;
                     },
                     onSaved: (v) => data.title = v!.trim(),
@@ -524,24 +548,11 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                       initialValue: (data.executor?.isEmpty ?? true)
                           ? null
                           : data.executor,
-                      items:
-                          (widget.executors ??
-                                  const [
-                                    'Emma Carter',
-                                    'Liam Walker',
-                                    'Olivia Harris',
-                                    'Noah Clark',
-                                    'Ava Lewis',
-                                    'William Hall',
-                                    'Sophia Young',
-                                    'James Wright',
-                                    'Isabella King',
-                                  ])
-                              .map(
-                                (n) =>
-                                    DropdownMenuItem(value: n, child: Text(n)),
-                              )
-                              .toList(),
+                      items: (widget.executors ?? const [])
+                          .map(
+                            (n) => DropdownMenuItem(value: n, child: Text(n)),
+                          )
+                          .toList(),
                       onChanged: (v) => setState(() => data.executor = v ?? ''),
                       decoration: const InputDecoration(
                         labelText: 'Executor (optional)',
@@ -618,13 +629,12 @@ class _HeaderCell extends StatelessWidget {
   final bool active;
   final bool ascending;
   final VoidCallback onTap;
-  final bool showIcon;
+
   const _HeaderCell({
     required this.label,
     required this.active,
     required this.ascending,
     required this.onTap,
-    this.showIcon = true,
   });
 
   @override
@@ -652,7 +662,7 @@ class _HeaderCell extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (showIcon) Icon(icon, size: 16, color: color),
+          Icon(icon, size: 16, color: color),
         ],
       ),
     );

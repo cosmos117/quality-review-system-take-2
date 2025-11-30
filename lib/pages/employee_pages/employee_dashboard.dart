@@ -4,6 +4,7 @@ import 'package:quality_review/pages/employee_pages/employee_project_detail_page
 
 import '../../models/project.dart';
 import '../../controllers/projects_controller.dart';
+import '../../controllers/team_controller.dart';
 
 class EmployeeDashboard extends StatefulWidget {
   const EmployeeDashboard({super.key});
@@ -85,17 +86,6 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
     });
   }
 
-  List<String> get _executors => const [
-    'Emma Carter',
-    'Liam Walker',
-    'Olivia Harris',
-    'Noah Clark',
-    'Ava Lewis',
-    'William Hall',
-    'Sophia Young',
-    'James Wright',
-    'Isabella King',
-  ];
   // ...
 
   Widget _priorityChip(String p) {
@@ -348,20 +338,8 @@ class ProjectFormData {
 class _ProjectFormDialog extends StatefulWidget {
   final String title;
   final void Function(ProjectFormData data) onSubmit;
-  final List<String>? executors;
-  final String? Function(String)? titleValidator;
-  final double? width;
-  final bool showStatus;
-  final bool showExecutor;
-  const _ProjectFormDialog({
-    required this.title,
-    required this.onSubmit,
-    this.executors,
-    this.titleValidator,
-    this.width,
-    this.showStatus = true,
-    this.showExecutor = true,
-  });
+
+  const _ProjectFormDialog({required this.title, required this.onSubmit});
 
   @override
   State<_ProjectFormDialog> createState() => _ProjectFormDialogState();
@@ -392,7 +370,7 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
     return Material(
       color: Colors.transparent,
       child: Container(
-        width: widget.width ?? 520,
+        width: 520,
         height: 600,
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
@@ -441,10 +419,9 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                           labelText: 'Project Title *',
                         ),
                         validator: (v) {
-                          if (v == null || v.trim().isEmpty)
+                          if (v == null || v.trim().isEmpty) {
                             return 'Enter title';
-                          if (widget.titleValidator != null)
-                            return widget.titleValidator!(v.trim());
+                          }
                           return null;
                         },
                         onSaved: (v) => data.title = v!.trim(),
@@ -458,8 +435,9 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                             firstDate: DateTime(2000),
                             lastDate: DateTime(2100),
                           );
-                          if (picked != null)
+                          if (picked != null) {
                             setState(() => data.started = picked);
+                          }
                         },
                         child: AbsorbPointer(
                           child: TextFormField(
@@ -487,58 +465,48 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                         ),
                       ),
                     ];
-                    if (widget.showStatus) {
-                      fields.add(
-                        DropdownButtonFormField<String>(
-                          initialValue: data.status,
-                          items: ['In Progress', 'Completed', 'Not Started']
-                              .map(
-                                (p) =>
-                                    DropdownMenuItem(value: p, child: Text(p)),
-                              )
-                              .toList(),
-                          onChanged: (v) =>
-                              setState(() => data.status = v ?? data.status),
-                          decoration: const InputDecoration(
-                            labelText: 'Status *',
-                          ),
+                    fields.add(
+                      DropdownButtonFormField<String>(
+                        initialValue: data.status,
+                        items: ['In Progress', 'Completed', 'Not Started']
+                            .map(
+                              (p) => DropdownMenuItem(value: p, child: Text(p)),
+                            )
+                            .toList(),
+                        onChanged: (v) =>
+                            setState(() => data.status = v ?? data.status),
+                        decoration: const InputDecoration(
+                          labelText: 'Status *',
                         ),
-                      );
-                    }
-                    if (widget.showExecutor) {
-                      fields.add(
-                        DropdownButtonFormField<String>(
-                          initialValue: (data.executor?.isEmpty ?? true)
-                              ? null
-                              : data.executor,
-                          items:
-                              (widget.executors ??
-                                      const [
-                                        'Emma Carter',
-                                        'Liam Walker',
-                                        'Olivia Harris',
-                                        'Noah Clark',
-                                        'Ava Lewis',
-                                        'William Hall',
-                                        'Sophia Young',
-                                        'James Wright',
-                                        'Isabella King',
-                                      ])
-                                  .map(
-                                    (n) => DropdownMenuItem(
-                                      value: n,
-                                      child: Text(n),
-                                    ),
-                                  )
-                                  .toList(),
-                          onChanged: (v) =>
-                              setState(() => data.executor = v ?? ''),
-                          decoration: const InputDecoration(
-                            labelText: 'Executor (optional)',
-                          ),
+                      ),
+                    );
+                    fields.add(
+                      DropdownButtonFormField<String>(
+                        initialValue: (data.executor?.isEmpty ?? true)
+                            ? null
+                            : data.executor,
+                        items:
+                            (Get.isRegistered<TeamController>()
+                                    ? Get.find<TeamController>().members
+                                          .map((m) => m.name.trim())
+                                          .where((n) => n.isNotEmpty)
+                                          .toSet()
+                                          .toList()
+                                    : const <String>[])
+                                .map(
+                                  (n) => DropdownMenuItem(
+                                    value: n,
+                                    child: Text(n),
+                                  ),
+                                )
+                                .toList(),
+                        onChanged: (v) =>
+                            setState(() => data.executor = v ?? ''),
+                        decoration: const InputDecoration(
+                          labelText: 'Executor (optional)',
                         ),
-                      );
-                    }
+                      ),
+                    );
 
                     return Column(
                       children: [

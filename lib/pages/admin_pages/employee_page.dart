@@ -84,7 +84,7 @@ class EmployeePage extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: role,
+              initialValue: role,
               items: const [
                 'Admin',
                 'User',
@@ -111,8 +111,9 @@ class EmployeePage extends StatelessWidget {
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Enter password';
                     if (v.length < 6) return 'Min 6 chars';
-                    if (!RegExp(r'[A-Za-z]').hasMatch(v))
+                    if (!RegExp(r'[A-Za-z]').hasMatch(v)) {
                       return 'Include letter & number';
+                    }
                     return null;
                   },
                   onSaved: (v) => password = v!.trim(),
@@ -234,7 +235,7 @@ class EmployeePage extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: role,
+              initialValue: role,
               items: const [
                 'Admin',
                 'User',
@@ -248,7 +249,7 @@ class EmployeePage extends StatelessWidget {
                 return TextFormField(
                   initialValue: password,
                   decoration: InputDecoration(
-                    labelText: 'Password *',
+                    labelText: 'Password (optional)',
                     suffixIcon: IconButton(
                       icon: Icon(
                         obscure ? Icons.visibility_off : Icons.visibility,
@@ -260,14 +261,15 @@ class EmployeePage extends StatelessWidget {
                   obscureText: obscure,
                   textInputAction: TextInputAction.done,
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Enter password';
+                    // Password is optional during edit; validate only if provided
+                    if (v == null || v.isEmpty) return null;
                     if (v.length < 6) return 'Min 6 chars';
-                    if (!RegExp(r'[A-Za-z]').hasMatch(v) ||
-                        !RegExp(r'\d').hasMatch(v))
-                      return 'Include letter & number';
+                    if (!RegExp(r'[A-Za-z]').hasMatch(v)) {
+                      return 'Include letter';
+                    }
                     return null;
                   },
-                  onSaved: (v) => password = v!.trim(),
+                  onSaved: (v) => password = (v ?? '').trim(),
                 );
               },
             ),

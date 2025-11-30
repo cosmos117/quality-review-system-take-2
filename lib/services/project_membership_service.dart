@@ -12,10 +12,6 @@ class ProjectMembershipService {
     return ProjectMembership.fromJson(json);
   }
 
-  Map<String, dynamic> _toApi(ProjectMembership membership) {
-    return membership.toJson();
-  }
-
   /// Get all members for a specific project
   /// Backend expects: { "project_id": "..." } in request body
   Future<List<ProjectMembership>> getProjectMembers(String projectId) async {
@@ -37,6 +33,14 @@ class ProjectMembershipService {
     required String roleId,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/projects/members');
+    // Debug logging to help trace membership creation issues (e.g. User not found)
+    // Remove or silence if too noisy after resolving the issue.
+    // Prints the payload being sent to backend.
+    // Note: Keeping this lightweight; no additional error handling here.
+    // ignore: avoid_print
+    print(
+      '[ProjectMembershipService] addMember -> project_id=$projectId user_id=$userId role_id=$roleId',
+    );
     final json = await http.postJson(uri, {
       'project_id': projectId,
       'user_id': userId,
@@ -68,6 +72,10 @@ class ProjectMembershipService {
     required String userId,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/projects/members');
+    // ignore: avoid_print
+    print(
+      '[ProjectMembershipService] removeMember -> project_id=$projectId user_id=$userId',
+    );
     await http.deleteJson(uri, {'project_id': projectId, 'user_id': userId});
   }
 

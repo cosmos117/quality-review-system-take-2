@@ -3,11 +3,8 @@ import 'package:get/get.dart';
 
 import '../../models/project.dart';
 import '../../controllers/team_controller.dart';
-import '../../models/team_member.dart';
 import '../../controllers/projects_controller.dart';
-
-// In-memory assignment store (per project) until backend integration
-final Map<String, Set<String>> _assignedMembersByProject = {};
+import '../../controllers/auth_controller.dart';
 
 class EmployeeProjectDetailPage extends StatefulWidget {
   final Project project;
@@ -30,48 +27,24 @@ class _EmployeeProjectDetailsPageState
   late final ProjectsController _projectsCtrl;
   late Set<String> _selectedMemberIds;
   late Project _project; // local mutable copy for live updates
-  final String currentUser = 'Emily Carter';
+  // Removed hardcoded currentUser; use AuthController when available.
 
   @override
   void initState() {
     super.initState();
-    _teamCtrl = Get.put(TeamController());
-    _projectsCtrl = Get.put(ProjectsController());
+    // Use existing controllers to avoid duplicate instances with empty data
+    _teamCtrl = Get.isRegistered<TeamController>()
+        ? Get.find<TeamController>()
+        : Get.put(TeamController());
+    _projectsCtrl = Get.isRegistered<ProjectsController>()
+        ? Get.find<ProjectsController>()
+        : Get.put(ProjectsController());
     _project = widget.project;
-    if (_teamCtrl.members.isEmpty) {
-      // Optional seed if controller is empty (can be removed when backend wired)
-      _teamCtrl.loadInitial([
-        TeamMember(
-          id: 't1',
-          name: 'Emma Carter',
-          email: 'emma.carter@example.com',
-          role: 'Team Leader',
-          status: 'Active',
-          dateAdded: '2023-08-15',
-          lastActive: '2024-05-20',
-        ),
-        TeamMember(
-          id: 't2',
-          name: 'Liam Walker',
-          email: 'liam.walker@example.com',
-          role: 'Member',
-          status: 'Active',
-          dateAdded: '2023-09-22',
-          lastActive: '2024-05-21',
-        ),
-        TeamMember(
-          id: 't3',
-          name: 'Olivia Harris',
-          email: 'olivia.harris@example.com',
-          role: 'Reviewer',
-          status: 'Inactive',
-          dateAdded: '2023-10-10',
-          lastActive: '2024-04-30',
-        ),
-      ]);
-    }
-    _selectedMemberIds =
-        (_assignedMembersByProject[widget.project.id] ?? <String>{}).toSet();
+    // Initialize selection from project's existing assignedEmployees
+    _selectedMemberIds = (widget.project.assignedEmployees ?? const [])
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet();
   }
 
   String _formatDate(DateTime d) =>
@@ -105,6 +78,15 @@ class _EmployeeProjectDetailsPageState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (project.projectNo != null &&
+                        project.projectNo!.isNotEmpty)
+                      _row('Project No.', project.projectNo!),
+                    if (project.internalOrderNo != null &&
+                        project.internalOrderNo!.isNotEmpty)
+                      _row(
+                        'Project / Internal Order No.',
+                        project.internalOrderNo!,
+                      ),
                     _row('Title', project.title),
                     _row('Started', _formatDate(project.started)),
                     _row('Priority', project.priority),
@@ -183,14 +165,31 @@ class _EmployeeProjectDetailsPageState
             Row(
               children: [
                 ElevatedButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _assignedMembersByProject[project.id] = _selectedMemberIds
-                          .toSet();
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Assignments saved')),
-                    );
+                  onPressed: () async {
+                    final ids = _selectedMemberIds.toList();
+                    try {
+                      await _projectsCtrl.setProjectAssignments(
+                        project.id,
+                        ids,
+                      );
+                      setState(() {
+                        _project = _project.copyWith(assignedEmployees: ids);
+                      });
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Assignments saved')),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed: ${e.toString()}'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
                   },
                   icon: const Icon(Icons.save),
                   label: const Text('Save Assignments'),
@@ -207,7 +206,7 @@ class _EmployeeProjectDetailsPageState
               ],
             ),
             const SizedBox(height: 24),
-            if ((_assignedMembersByProject[project.id] ?? {}).isNotEmpty) ...[
+            if ((_project.assignedEmployees ?? const []).isNotEmpty) ...[
               Text(
                 'Currently Assigned',
                 style: Theme.of(context).textTheme.titleMedium,
@@ -215,10 +214,10 @@ class _EmployeeProjectDetailsPageState
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
-                children: (_assignedMembersByProject[project.id]!).map((id) {
-                  final idx = _teamCtrl.members.indexWhere((e) => e.id == id);
-                  final name = idx != -1 ? _teamCtrl.members[idx].name : id;
-                  return Chip(label: Text(name));
+                children: (_project.assignedEmployees ?? const []).map((id) {
+                  final member = _teamCtrl.findById(id);
+                  final label = member?.name ?? id;
+                  return Chip(label: Text(label));
                 }).toList(),
               ),
             ],
@@ -257,10 +256,19 @@ class _EmployeeProjectDetailsPageState
   }
 
   void _onStartProject() {
-    // Update controller state and local project copy
+    final auth = Get.isRegistered<AuthController>()
+        ? Get.find<AuthController>()
+        : null;
+    final userName = auth?.currentUser.value?.name;
+    if (userName == null || userName.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot start: user not authenticated')),
+      );
+      return;
+    }
     final updated = _project.copyWith(
       status: 'In Progress',
-      executor: currentUser,
+      executor: userName.trim(),
     );
     _projectsCtrl.updateProject(_project.id, updated);
     setState(() => _project = updated);

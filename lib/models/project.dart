@@ -1,5 +1,7 @@
 class Project {
   String id;
+  String? projectNo;
+  String? internalOrderNo;
   String title;
   String? description;
   DateTime started;
@@ -10,6 +12,8 @@ class Project {
 
   Project({
     required this.id,
+    this.projectNo,
+    this.internalOrderNo,
     required this.title,
     this.description,
     required this.started,
@@ -21,6 +25,8 @@ class Project {
 
   Project copyWith({
     String? id,
+    String? projectNo,
+    String? internalOrderNo,
     String? title,
     String? description,
     DateTime? started,
@@ -31,6 +37,8 @@ class Project {
   }) {
     return Project(
       id: id ?? this.id,
+      projectNo: projectNo ?? this.projectNo,
+      internalOrderNo: internalOrderNo ?? this.internalOrderNo,
       title: title ?? this.title,
       description: description ?? this.description,
       started: started ?? this.started,

@@ -1,8 +1,12 @@
 import 'dart:async';
 import 'package:get/get.dart';
 import '../models/project.dart';
+import '../models/team_member.dart';
 import '../services/project_service.dart';
+import '../services/project_membership_service.dart';
+import '../services/role_service.dart';
 import 'auth_controller.dart';
+import 'team_controller.dart';
 
 class ProjectsController extends GetxController {
   final RxList<Project> projects = <Project>[].obs;
@@ -174,8 +178,148 @@ class ProjectsController extends GetxController {
     try {
       final projectsList = await _service.getAll();
       projects.assignAll(projectsList.map(_normalize));
+      // Hydrate assignment membership data after loading projects
+      await _hydrateAssignments();
     } catch (e) {
       errorMessage.value = e.toString();
+    }
+  }
+
+  /// Bulk set project assignments (adds/removes memberships remotely then updates local state)
+  Future<void> setProjectAssignments(
+    String projectId,
+    List<String> memberIds,
+  ) async {
+    try {
+      final membershipService = Get.find<ProjectMembershipService>();
+      // Determine a default role to assign
+      String defaultRoleId = '';
+      try {
+        final roleService = Get.find<RoleService>();
+        final roles = await roleService.getAll();
+        if (roles.isNotEmpty) {
+          // Prefer an "Executor" role if present
+          final execRole = roles.firstWhere(
+            (r) => r.roleName.trim().toLowerCase() == 'executor',
+            orElse: () => roles.first,
+          );
+          defaultRoleId = execRole.id;
+        }
+      } catch (_) {
+        // Ignore role fetch errors; will fail if no roleId
+      }
+      if (defaultRoleId.isEmpty) {
+        throw Exception(
+          'No roles available to assign members. Create at least one role first.',
+        );
+      }
+
+      // Resolve any legacy name-based entries to user IDs via TeamController
+      final teamCtrl = Get.isRegistered<TeamController>()
+          ? Get.find<TeamController>()
+          : null;
+      final normalizedDesired = <String>{};
+      for (final raw in memberIds) {
+        final trimmed = raw.trim();
+        if (trimmed.isEmpty) continue;
+        var candidate = trimmed;
+        if (teamCtrl != null) {
+          final idExists = teamCtrl.members.any((m) => m.id == trimmed);
+          if (!idExists) {
+            TeamMember? nameMatch;
+            for (final m in teamCtrl.members) {
+              if (m.name.trim().toLowerCase() == trimmed.toLowerCase()) {
+                nameMatch = m;
+                break;
+              }
+            }
+            if (nameMatch != null) {
+              candidate = nameMatch.id;
+            }
+          }
+        }
+        normalizedDesired.add(candidate);
+      }
+
+      // Fetch existing memberships from backend
+      final existingMemberships = await membershipService.getProjectMembers(
+        projectId,
+      );
+      final existingIds = existingMemberships.map((m) => m.userId).toSet();
+      final desiredIds = normalizedDesired;
+
+      // Debug logging to trace assignment diff calculations.
+      // ignore: avoid_print
+      print(
+        '[ProjectsController] setProjectAssignments project=$projectId\n  existingIds=$existingIds\n  incomingMemberIds=$memberIds\n  normalizedDesired=$desiredIds',
+      );
+
+      final toAdd = desiredIds.difference(existingIds);
+      final toRemove = existingIds.difference(desiredIds);
+
+      // ignore: avoid_print
+      print(
+        '[ProjectsController] Diff result -> toAdd=$toAdd toRemove=$toRemove',
+      );
+
+      // Apply additions
+      for (final userId in toAdd) {
+        // ignore: avoid_print
+        print(
+          '[ProjectsController] Adding userId=$userId roleId=$defaultRoleId',
+        );
+        await membershipService.addMember(
+          projectId: projectId,
+          userId: userId,
+          roleId: defaultRoleId,
+        );
+      }
+
+      // Apply removals
+      for (final userId in toRemove) {
+        // ignore: avoid_print
+        print('[ProjectsController] Removing userId=$userId');
+        await membershipService.removeMember(
+          projectId: projectId,
+          userId: userId,
+        );
+      }
+
+      // Update local project assignedEmployees with final desired IDs
+      final idx = projects.indexWhere((p) => p.id == projectId);
+      if (idx != -1) {
+        final updated = projects[idx].copyWith(
+          assignedEmployees: desiredIds.toList(),
+        );
+        projects[idx] = _normalize(updated);
+      }
+    } catch (e) {
+      errorMessage.value = e.toString();
+      rethrow;
+    }
+  }
+
+  Future<void> _hydrateAssignments() async {
+    if (!Get.isRegistered<ProjectMembershipService>()) return;
+    final membershipService = Get.find<ProjectMembershipService>();
+    for (final project in projects) {
+      try {
+        final memberships = await membershipService.getProjectMembers(
+          project.id,
+        );
+        final ids = memberships
+            .map((m) => m.userId)
+            .where((id) => id.trim().isNotEmpty)
+            .toList();
+        final idx = projects.indexWhere((p) => p.id == project.id);
+        if (idx != -1) {
+          projects[idx] = _normalize(
+            projects[idx].copyWith(assignedEmployees: ids),
+          );
+        }
+      } catch (_) {
+        // Silently ignore per-project membership fetch errors
+      }
     }
   }
 }
