@@ -5,9 +5,9 @@ import '../../models/project.dart';
 import '../../models/project_membership.dart';
 import '../../components/project_detail_info.dart';
 import '../../services/project_membership_service.dart';
-import '../../controllers/team_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/projects_controller.dart';
+import 'phase1_checklist.dart';
 
 class MyProjectDetailPage extends StatefulWidget {
   final Project project;
@@ -112,6 +112,8 @@ class _MyProjectDetailPageState extends State<MyProjectDetailPage> {
                 : _buildAssignedEmployeesSection(),
             const SizedBox(height: 32),
             if (_showStartButton()) _buildStartButton(),
+            const SizedBox(height: 16),
+            _buildChecklistButton(),
           ],
         ),
       ),
@@ -284,6 +286,36 @@ class _MyProjectDetailPageState extends State<MyProjectDetailPage> {
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         ),
+      ),
+    );
+  }
+
+  Widget _buildChecklistButton() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: OutlinedButton.icon(
+        onPressed: () {
+          final leaders = _teamLeaders
+              .map((m) => m.userName ?? '')
+              .where((n) => n.trim().isNotEmpty)
+              .toList();
+          final executors = _executors
+              .map((m) => m.userName ?? '')
+              .where((n) => n.trim().isNotEmpty)
+              .toList();
+          final reviewers = _reviewers
+              .map((m) => m.userName ?? '')
+              .where((n) => n.trim().isNotEmpty)
+              .toList();
+          Get.to(() => QuestionsScreen(
+                projectTitle: _project.title,
+                leaders: leaders,
+                reviewers: reviewers,
+                executors: executors,
+              ));
+        },
+        icon: const Icon(Icons.checklist),
+        label: const Text('Open Phase 1 Checklist'),
       ),
     );
   }
