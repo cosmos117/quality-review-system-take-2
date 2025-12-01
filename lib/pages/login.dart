@@ -29,7 +29,15 @@ class LoginController extends GetxController {
       final auth = Get.put(AuthController());
       final user = await auth.login(email, password);
       final isAdmin = user.role.toLowerCase() == 'admin';
+
       Get.off(() => isAdmin ? AdminMainLayout() : EmployeeMainLayout());
+
+      // Preload projects for employees after navigation (non-blocking)
+      if (!isAdmin) {
+        Future.delayed(const Duration(milliseconds: 100), () {
+          auth.preloadEmployeeProjects();
+        });
+      }
     } catch (e) {
       Get.snackbar(
         'Login Failed',

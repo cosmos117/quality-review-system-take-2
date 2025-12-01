@@ -28,14 +28,83 @@ class _MyprojectState extends State<Myproject> {
     _loadProjects();
   }
 
-  Future<void> _loadProjects() async {
-    final ctrl = Get.find<ProjectsController>();
-    await ctrl.refreshProjects();
-    if (mounted) {
-      setState(() {
-        _cachedProjects = _computeMyProjects();
-        _isInitialLoad = false;
-      });
+  Future<void> _loadProjects({bool forceRefresh = false}) async {
+    if (!mounted) return;
+
+    try {
+      final ctrl = Get.find<ProjectsController>();
+      final authCtrl = Get.find<AuthController>();
+      final userId = authCtrl.currentUser.value?.id;
+
+      if (userId == null || userId.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _cachedProjects = [];
+            _isInitialLoad = false;
+          });
+        }
+        return;
+      }
+
+      // Check if projects are already loaded (from login preload)
+      final hasProjects = ctrl.projects.isNotEmpty;
+      final alreadyHydrated = ctrl.projects.any(
+        (p) => (p.assignedEmployees ?? []).isNotEmpty,
+      );
+
+      if (!hasProjects || !alreadyHydrated || forceRefresh) {
+        // Need to refresh if no projects or not hydrated yet
+        await ctrl.refreshProjects();
+
+        // Small delay to ensure hydration completes (race condition fix)
+        await Future.delayed(const Duration(milliseconds: 300));
+      } else {
+        print('[MyProjects] Using preloaded projects (already hydrated)');
+      }
+
+      if (!mounted) return;
+
+      // Use the controller's byAssigneeId method for more reliable filtering
+      final myProjects = ctrl.byAssigneeId(userId);
+
+      // Debug logging
+      print('[MyProjects] Loaded projects for user $userId:');
+      print('[MyProjects] Total projects found: ${myProjects.length}');
+      for (final p in myProjects) {
+        print(
+          '[MyProjects]   - ${p.title} (assignedEmployees: ${p.assignedEmployees})',
+        );
+      }
+
+      if (mounted) {
+        setState(() {
+          _cachedProjects = myProjects;
+          _isInitialLoad = false;
+        });
+
+        print('[MyProjects] Cached ${_cachedProjects.length} projects');
+      }
+    } catch (e) {
+      print('[MyProjects] Error loading projects: $e');
+      if (mounted) {
+        setState(() {
+          _cachedProjects = [];
+          _isInitialLoad = false;
+        });
+
+        // Show error snackbar
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load projects: $e'),
+            backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _loadProjects(forceRefresh: true),
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -43,23 +112,6 @@ class _MyprojectState extends State<Myproject> {
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
-  }
-
-  List<Project> _computeMyProjects() {
-    final projectsCtrl = Get.find<ProjectsController>();
-    final authCtrl = Get.find<AuthController>();
-    final userId = authCtrl.currentUser.value?.id;
-
-    if (userId == null || userId.isEmpty) {
-      return [];
-    }
-
-    final myProjects = projectsCtrl.projects.where((project) {
-      final assigned = project.assignedEmployees ?? [];
-      return assigned.contains(userId);
-    }).toList();
-
-    return myProjects;
   }
 
   List<Project> _getMyProjects() {
@@ -175,7 +227,7 @@ class _MyprojectState extends State<Myproject> {
                   IconButton(
                     icon: const Icon(Icons.refresh),
                     tooltip: 'Refresh projects',
-                    onPressed: _loadProjects,
+                    onPressed: () => _loadProjects(forceRefresh: true),
                   ),
                 ],
               ),

@@ -4,101 +4,174 @@ import '../../controllers/projects_controller.dart';
 import '../../models/team_member.dart';
 import '../../models/project.dart';
 
-class EmployeeProjectsPage extends StatelessWidget {
+class EmployeeProjectsPage extends StatefulWidget {
   final TeamMember member;
   const EmployeeProjectsPage({super.key, required this.member});
 
   @override
-  Widget build(BuildContext context) {
-    final projectsCtrl = Get.find<ProjectsController>();
-    // Gather projects by executor and assignee
-    final executorProjects = projectsCtrl.byExecutor(member.name);
-    final assignedProjects = projectsCtrl.byAssigneeId(member.id);
+  State<EmployeeProjectsPage> createState() => _EmployeeProjectsPageState();
+}
 
-    bool isCompleted(Project p) => p.status.toLowerCase() == 'completed';
-    var current = <Project>{
-      ...executorProjects.where((p) => !isCompleted(p)),
-      ...assignedProjects.where((p) => !isCompleted(p)),
-    }.toList();
-    var completed = <Project>{
-      ...executorProjects.where(isCompleted),
-      ...assignedProjects.where(isCompleted),
-    }.toList();
+class _EmployeeProjectsPageState extends State<EmployeeProjectsPage> {
+  bool _isLoading = true;
+  List<Project> _current = [];
+  List<Project> _completed = [];
 
-    // Add dummy projects for now if none exist for this member
-    if (current.isEmpty && completed.isEmpty) {
-      current = _dummyProjects(member, count: 3, status: 'In Progress');
-      completed = _dummyProjects(member, count: 2, status: 'Completed');
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(member.name),
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Get.back()),
-      ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth >= 900;
-          final content = isWide
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _ProjectListSection(
-                        title: 'Current Projects',
-                        projects: current,
-                      ),
-                    ),
-                    const SizedBox(width: 24),
-                    Expanded(
-                      child: _ProjectListSection(
-                        title: 'Completed Projects',
-                        projects: completed,
-                      ),
-                    ),
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _ProjectListSection(title: 'Current Projects', projects: current),
-                    const SizedBox(height: 24),
-                    _ProjectListSection(title: 'Completed Projects', projects: completed),
-                  ],
-                );
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Projects for ${member.name}', style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: 24),
-                content,
-              ],
-            ),
-          );
-        },
-      ),
-    );
+  @override
+  void initState() {
+    super.initState();
+    _loadProjects();
   }
 
-  List<Project> _dummyProjects(TeamMember m, {required int count, required String status}) {
-    final now = DateTime.now();
-    return List.generate(count, (i) {
-      return Project(
-  id: 'd_${m.id}_$status$i',
-        title: status == 'Completed'
-            ? 'Completed Task ${i + 1}'
-            : 'Ongoing Task ${i + 1}',
-        description: 'Auto-generated $status project for ${m.name}.',
-        started: now.subtract(Duration(days: 10 * (i + 1))),
-        priority: (i % 3 == 0) ? 'High' : (i % 3 == 1) ? 'Medium' : 'Low',
-        status: status,
-        executor: m.name,
-        assignedEmployees: [m.id],
+  Future<void> _loadProjects() async {
+    if (!mounted) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final projectsCtrl = Get.find<ProjectsController>();
+
+      // Refresh projects to ensure we have latest data with assigned employees
+      await projectsCtrl.refreshProjects();
+
+      // Small delay to ensure hydration completes (race condition fix)
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      if (!mounted) return;
+
+      // Use the controller's byAssigneeId method for more reliable filtering
+      final allProjects = projectsCtrl.byAssigneeId(widget.member.id);
+
+      // Debug logging
+      print(
+        '[EmployeeProjectsPage] Loaded projects for ${widget.member.name} (${widget.member.id}):',
       );
-    });
+      print(
+        '[EmployeeProjectsPage] Total projects found: ${allProjects.length}',
+      );
+      for (final p in allProjects) {
+        print(
+          '[EmployeeProjectsPage]   - ${p.title} (assignedEmployees: ${p.assignedEmployees})',
+        );
+      }
+
+      // Separate into current and completed
+      bool isCompleted(Project p) => p.status.toLowerCase() == 'completed';
+
+      if (mounted) {
+        setState(() {
+          _current = allProjects.where((p) => !isCompleted(p)).toList();
+          _completed = allProjects.where(isCompleted).toList();
+          _isLoading = false;
+        });
+
+        print(
+          '[EmployeeProjectsPage] Current: ${_current.length}, Completed: ${_completed.length}',
+        );
+      }
+    } catch (e) {
+      print('[EmployeeProjectsPage] Error loading projects: $e');
+      if (mounted) {
+        setState(() {
+          _current = [];
+          _completed = [];
+          _isLoading = false;
+        });
+
+        // Show error snackbar
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load projects: $e'),
+            backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: _loadProjects,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.member.name),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Get.back(),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            onPressed: _loadProjects,
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 900;
+                final content = isWide
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _ProjectListSection(
+                              title: 'Current Projects',
+                              projects: _current,
+                            ),
+                          ),
+                          const SizedBox(width: 24),
+                          Expanded(
+                            child: _ProjectListSection(
+                              title: 'Completed Projects',
+                              projects: _completed,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _ProjectListSection(
+                            title: 'Current Projects',
+                            projects: _current,
+                          ),
+                          const SizedBox(height: 24),
+                          _ProjectListSection(
+                            title: 'Completed Projects',
+                            projects: _completed,
+                          ),
+                        ],
+                      );
+
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Projects for ${widget.member.name}',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Total: ${_current.length + _completed.length} projects',
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      ),
+                      const SizedBox(height: 24),
+                      content,
+                    ],
+                  ),
+                );
+              },
+            ),
+    );
   }
 }
 
@@ -122,12 +195,18 @@ class _ProjectListSection extends StatelessWidget {
                 Text(title, style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.blueGrey.shade50,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text('${projects.length}', style: const TextStyle(fontSize: 12)),
+                  child: Text(
+                    '${projects.length}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
                 ),
               ],
             ),
@@ -136,9 +215,7 @@ class _ProjectListSection extends StatelessWidget {
               const Text('None')
             else
               Column(
-                children: [
-                  for (final p in projects) _ProjectTile(project: p),
-                ],
+                children: [for (final p in projects) _ProjectTile(project: p)],
               ),
           ],
         ),
@@ -167,7 +244,10 @@ class _ProjectTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(project.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(
+                  project.title,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   project.status,

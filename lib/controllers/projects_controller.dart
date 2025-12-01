@@ -377,38 +377,41 @@ class ProjectsController extends GetxController {
       '[ProjectsController] _hydrateAssignments: Starting for ${projects.length} projects',
     );
 
-    for (final project in projects) {
-      try {
-        final memberships = await membershipService.getProjectMembers(
-          project.id,
-        );
-        final ids = memberships
-            .map((m) => m.userId)
-            .where((id) => id.trim().isNotEmpty)
-            .toList();
-
-        // ignore: avoid_print
-        print(
-          '[ProjectsController] Project "${project.title}" (${project.id}): Found ${memberships.length} memberships → userIds=$ids',
-        );
-
-        final idx = projects.indexWhere((p) => p.id == project.id);
-        if (idx != -1) {
-          projects[idx] = _normalize(
-            projects[idx].copyWith(assignedEmployees: ids),
+    // Process all projects in parallel for faster hydration
+    await Future.wait(
+      projects.map((project) async {
+        try {
+          final memberships = await membershipService.getProjectMembers(
+            project.id,
           );
+          final ids = memberships
+              .map((m) => m.userId)
+              .where((id) => id.trim().isNotEmpty)
+              .toList();
+
           // ignore: avoid_print
           print(
-            '[ProjectsController] ✓ Updated project "${project.title}" assignedEmployees=$ids',
+            '[ProjectsController] Project "${project.title}" (${project.id}): Found ${memberships.length} memberships → userIds=$ids',
+          );
+
+          final idx = projects.indexWhere((p) => p.id == project.id);
+          if (idx != -1) {
+            projects[idx] = _normalize(
+              projects[idx].copyWith(assignedEmployees: ids),
+            );
+            // ignore: avoid_print
+            print(
+              '[ProjectsController] ✓ Updated project "${project.title}" assignedEmployees=$ids',
+            );
+          }
+        } catch (e) {
+          // ignore: avoid_print
+          print(
+            '[ProjectsController] ✗ Failed to hydrate assignments for project "${project.title}": $e',
           );
         }
-      } catch (e) {
-        // ignore: avoid_print
-        print(
-          '[ProjectsController] ✗ Failed to hydrate assignments for project "${project.title}": $e',
-        );
-      }
-    }
+      }),
+    );
 
     // ignore: avoid_print
     print('[ProjectsController] _hydrateAssignments: Complete');
