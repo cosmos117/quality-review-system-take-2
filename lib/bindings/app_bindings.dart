@@ -10,6 +10,7 @@ import '../services/project_membership_service.dart';
 import '../controllers/auth_controller.dart';
 import '../pages/employee_pages/checklist_controller.dart';
 import '../services/checklist_answer_service.dart';
+import '../services/approval_service.dart';
 
 class AppBindings extends Bindings {
   @override
@@ -29,6 +30,10 @@ class AppBindings extends Bindings {
     // Direct checklist answer service (simplified API)
     Get.put<ChecklistAnswerService>(
       ChecklistAnswerService(Get.find<SimpleHttp>()),
+      permanent: true,
+    );
+    Get.put<ApprovalService>(
+      ApprovalService(Get.find<SimpleHttp>()),
       permanent: true,
     );
 

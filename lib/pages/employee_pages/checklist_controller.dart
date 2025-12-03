@@ -1,9 +1,11 @@
 import 'package:get/get.dart';
 import '../../services/http_client.dart';
 import '../../services/checklist_answer_service.dart';
+import '../../services/approval_service.dart';
 
 class ChecklistController extends GetxService {
   late final ChecklistAnswerService _answerService;
+  late final ApprovalService _approvalService;
 
   // Cache for loaded answers: projectId -> phase -> role -> subQuestion -> answer map
   final _cache = <String, Map<int, Map<String, Map<String, dynamic>>>>{}.obs;
@@ -27,6 +29,7 @@ class ChecklistController extends GetxService {
     try {
       final http = Get.find<SimpleHttp>();
   _answerService = ChecklistAnswerService(http);
+  _approvalService = Get.find<ApprovalService>();
       print('✓ ChecklistController initialized successfully');
     } catch (e) {
       print('❌ Error initializing ChecklistController: $e');
@@ -161,12 +164,42 @@ class ChecklistController extends GetxService {
         };
         _submissionCache.refresh();
         print('✓ Submitted checklist for $role');
+
+  // If both roles are submitted and answers match, auto request SDH approval
+  await _maybeRequestApproval(projectId, phase);
       }
 
       return success;
     } catch (e) {
       print('Error submitting checklist: $e');
       return false;
+    }
+  }
+
+  // If executor and reviewer are both submitted and their answers match, request approval
+  Future<void> _maybeRequestApproval(String projectId, int phase) async {
+    try {
+      // Ensure we have fresh submission status for both roles
+      final execStatus = await _answerService.getSubmissionStatus(projectId, phase, 'executor');
+      final revStatus = await _answerService.getSubmissionStatus(projectId, phase, 'reviewer');
+
+      final execSubmitted = execStatus['is_submitted'] == true;
+      final revSubmitted = revStatus['is_submitted'] == true;
+      if (!execSubmitted || !revSubmitted) {
+        print('ℹ️ Approval not requested: both roles not submitted yet');
+        return;
+      }
+
+      // Compare answers on backend
+      final cmp = await _approvalService.compare(projectId, phase);
+      if (cmp['match'] == true) {
+        await _approvalService.request(projectId, phase);
+        print('📨 Approval requested for project=$projectId phase=$phase');
+      } else {
+        print('⚠️ Answers do not match; approval not requested');
+      }
+    } catch (e) {
+      print('Error while requesting approval: $e');
     }
   }
 

@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'checklist_controller.dart';
 import '../../controllers/auth_controller.dart';
+import '../../services/approval_service.dart';
+// import '../../config/api_config.dart';
 
 enum UploadStatus { pending, uploading, success, failed }
 
@@ -32,6 +34,7 @@ class QuestionsScreen extends StatefulWidget {
   final List<String> leaders;
   final List<String> reviewers;
   final List<String> executors;
+  final int? initialPhase;
 
   const QuestionsScreen({
     super.key,
@@ -40,6 +43,7 @@ class QuestionsScreen extends StatefulWidget {
     required this.leaders,
     required this.reviewers,
     required this.executors,
+    this.initialPhase,
   });
 
   @override
@@ -53,6 +57,12 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   final Set<int> reviewerExpanded = {};
   late final ChecklistController checklistCtrl;
   bool _isLoadingData = true;
+  int _selectedPhase = 1; // currently viewed phase
+  int _activePhase = 1; // max editable phase (older are view-only)
+  Map<String, dynamic>? _approvalStatus; // pending/approved/reverted
+  Map<String, dynamic>? _compareStatus; // match + stats
+
+  ApprovalService get _approvalService => Get.find<ApprovalService>();
 
   final List<Question> checklist = [
     Question(
@@ -208,6 +218,13 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
     print('✓ ChecklistController obtained: ${checklistCtrl.runtimeType}');
 
+    // If caller provided an initial phase, honor it
+    if (widget.initialPhase != null &&
+        widget.initialPhase! >= 1 &&
+        widget.initialPhase! <= 3) {
+      _selectedPhase = widget.initialPhase!;
+    }
+
     // Load existing answers from backend for both executor and reviewer
     _loadChecklistData();
   }
@@ -216,9 +233,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     setState(() {
       _isLoadingData = true;
     });
-
-    const phase = 1; // Phase 1
-    print('🔄 Loading checklist data for project: ${widget.projectId}');
+    final phase = _selectedPhase;
+    print(
+      '🔄 Loading checklist data for project: ${widget.projectId} phase=$phase',
+    );
 
     // Clear cache to force fresh load from backend
     checklistCtrl.clearProjectCache(widget.projectId);
@@ -227,6 +245,18 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       checklistCtrl.loadAnswers(widget.projectId, phase, 'executor'),
       checklistCtrl.loadAnswers(widget.projectId, phase, 'reviewer'),
     ]);
+
+    // Load approval and compare status
+    try {
+      final status = await _approvalService.compare(widget.projectId, phase);
+      _compareStatus = status;
+    } catch (_) {}
+    try {
+      _approvalStatus = await _approvalService.getStatus(
+        widget.projectId,
+        phase,
+      );
+    } catch (_) {}
 
     // Populate UI with loaded answers
     final executorSheet = checklistCtrl.getRoleSheet(
@@ -252,6 +282,28 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
       _isLoadingData = false;
     });
+
+    // Compute active phase (approved phases advance)
+    await _computeActivePhase();
+  }
+
+  Future<void> _computeActivePhase() async {
+    int active = 1;
+    try {
+      final st1 = await _approvalService.getStatus(widget.projectId, 1);
+      if (st1 != null && st1['status'] == 'approved') {
+        active = 2;
+        final st2 = await _approvalService.getStatus(widget.projectId, 2);
+        if (st2 != null && st2['status'] == 'approved') {
+          active = 3;
+        }
+      }
+    } catch (_) {}
+    setState(() {
+      _activePhase = active;
+      // If selected phase exceeds known phases cap at active
+      if (_selectedPhase > _activePhase) _selectedPhase = _activePhase;
+    });
   }
 
   @override
@@ -262,6 +314,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       final auth = Get.find<AuthController>();
       currentUserName = auth.currentUser.value?.name;
     }
+    // SDH role: show approve/revert controls
+    final isSDH =
+        currentUserName != null && (authRoleIsSDH(currentUserName) == true);
     final canEditExecutor =
         currentUserName != null &&
         widget.executors
@@ -272,6 +327,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         widget.reviewers
             .map((e) => e.trim().toLowerCase())
             .contains(currentUserName.trim().toLowerCase());
+
+    // Editing only allowed on active phase; older phases view-only for all
+    final phaseEditable = _selectedPhase >= _activePhase;
+    final canEditExecutorPhase = canEditExecutor && phaseEditable;
+    final canEditReviewerPhase = canEditReviewer && phaseEditable;
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -280,6 +340,65 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         ),
         backgroundColor: Colors.blue,
         actions: [
+          // Phase selector
+          DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              value: _selectedPhase,
+              alignment: Alignment.center,
+              dropdownColor: Colors.white,
+              icon: const Icon(Icons.expand_more, color: Colors.white),
+              items: [1, 2, 3]
+                  .map(
+                    (p) => DropdownMenuItem(
+                      value: p,
+                      child: Row(
+                        children: [
+                          Text('Phase $p'),
+                          const SizedBox(width: 8),
+                          if (p < _activePhase)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black12,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Text(
+                                'View only',
+                                style: TextStyle(fontSize: 10),
+                              ),
+                            )
+                          else if (p == _activePhase)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade200,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Text(
+                                'Active',
+                                style: TextStyle(fontSize: 10),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (val) async {
+                if (val == null) return;
+                setState(() {
+                  _selectedPhase = val;
+                });
+                await _loadChecklistData();
+              },
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             tooltip: 'Reload checklist data',
@@ -292,6 +411,48 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                     _loadChecklistData();
                   },
           ),
+          if (isSDH)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.admin_panel_settings, color: Colors.white),
+              onSelected: (value) async {
+                if (value == 'approve') {
+                  try {
+                    await _approvalService.approve(widget.projectId, 1);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Approved. Next phase created.'),
+                      ),
+                    );
+                    _loadChecklistData();
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Approve failed: $e')),
+                    );
+                  }
+                } else if (value == 'revert') {
+                  try {
+                    await _approvalService.revert(widget.projectId, 1);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Reverted to current stage.'),
+                      ),
+                    );
+                    _loadChecklistData();
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Revert failed: $e')),
+                    );
+                  }
+                }
+              },
+              itemBuilder: (ctx) => [
+                const PopupMenuItem(
+                  value: 'approve',
+                  child: Text('Approve SDH'),
+                ),
+                const PopupMenuItem(value: 'revert', child: Text('Revert SDH')),
+              ],
+            ),
         ],
       ),
       body: _isLoadingData
@@ -308,10 +469,20 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           : SafeArea(
               child: Row(
                 children: [
+                  // Left status rail
+                  SizedBox(width: 8),
                   // Executor Column
                   Expanded(
                     child: Column(
                       children: [
+                        if (_approvalStatus != null || _compareStatus != null)
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: ApprovalBanner(
+                              approvalStatus: _approvalStatus,
+                              compareStatus: _compareStatus,
+                            ),
+                          ),
                         Container(
                           width: double.infinity,
                           color: Colors.blue.shade100,
@@ -327,7 +498,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              if (!canEditExecutor)
+                              if (!canEditExecutorPhase)
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 8,
@@ -348,12 +519,12 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                         _SubmitBar(
                           role: 'executor',
                           projectId: widget.projectId,
-                          phase: 1,
+                          phase: _selectedPhase,
                           onSubmit: () async {
-                            if (!canEditExecutor) return;
+                            if (!canEditExecutorPhase) return;
                             final success = await checklistCtrl.submitChecklist(
                               widget.projectId,
-                              1, // Phase 1
+                              _selectedPhase,
                               'executor',
                             );
                             if (success) {
@@ -367,14 +538,16 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                                   ),
                                 );
                               }
+                              // Recompute active phase after submit (may have triggered approval)
+                              await _computeActivePhase();
                             }
                           },
                           submissionInfo: checklistCtrl.submissionInfo(
                             widget.projectId,
-                            1, // Phase 1
+                            _selectedPhase,
                             'executor',
                           ),
-                          canEdit: canEditExecutor,
+                          canEdit: canEditExecutorPhase,
                         ),
                         Expanded(
                           child: ListView.builder(
@@ -431,23 +604,24 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                                               child: SubQuestionCard(
                                                 key: ValueKey("executor_$subQ"),
                                                 subQuestion: subQ,
-                                                editable: canEditExecutor,
+                                                editable: canEditExecutorPhase,
                                                 initialData:
                                                     executorAnswers[subQ] ??
                                                     checklistCtrl.getAnswers(
                                                       widget.projectId,
-                                                      1, // Phase 1
+                                                      _selectedPhase,
                                                       'executor',
                                                       subQ,
                                                     ),
                                                 onAnswer: (ans) {
-                                                  if (!canEditExecutor) return;
+                                                  if (!canEditExecutorPhase)
+                                                    return;
                                                   setState(() {
                                                     executorAnswers[subQ] = ans;
                                                   });
                                                   checklistCtrl.setAnswer(
                                                     widget.projectId,
-                                                    1, // Phase 1
+                                                    _selectedPhase,
                                                     'executor',
                                                     subQ,
                                                     ans,
@@ -487,7 +661,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              if (!canEditReviewer)
+                              if (!canEditReviewerPhase)
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 8,
@@ -508,12 +682,12 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                         _SubmitBar(
                           role: 'reviewer',
                           projectId: widget.projectId,
-                          phase: 1,
+                          phase: _selectedPhase,
                           onSubmit: () async {
-                            if (!canEditReviewer) return;
+                            if (!canEditReviewerPhase) return;
                             final success = await checklistCtrl.submitChecklist(
                               widget.projectId,
-                              1, // Phase 1
+                              _selectedPhase,
                               'reviewer',
                             );
                             if (success) {
@@ -527,14 +701,15 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                                   ),
                                 );
                               }
+                              await _computeActivePhase();
                             }
                           },
                           submissionInfo: checklistCtrl.submissionInfo(
                             widget.projectId,
-                            1, // Phase 1
+                            _selectedPhase,
                             'reviewer',
                           ),
-                          canEdit: canEditReviewer,
+                          canEdit: canEditReviewerPhase,
                         ),
                         Expanded(
                           child: ListView.builder(
@@ -591,23 +766,24 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                                               child: SubQuestionCard(
                                                 key: ValueKey("reviewer_$subQ"),
                                                 subQuestion: subQ,
-                                                editable: canEditReviewer,
+                                                editable: canEditReviewerPhase,
                                                 initialData:
                                                     reviewerAnswers[subQ] ??
                                                     checklistCtrl.getAnswers(
                                                       widget.projectId,
-                                                      1, // Phase 1
+                                                      _selectedPhase,
                                                       'reviewer',
                                                       subQ,
                                                     ),
                                                 onAnswer: (ans) {
-                                                  if (!canEditReviewer) return;
+                                                  if (!canEditReviewerPhase)
+                                                    return;
                                                   setState(() {
                                                     reviewerAnswers[subQ] = ans;
                                                   });
                                                   checklistCtrl.setAnswer(
                                                     widget.projectId,
-                                                    1, // Phase 1
+                                                    _selectedPhase,
                                                     'reviewer',
                                                     subQ,
                                                     ans,
@@ -630,6 +806,48 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  // Simple helper to decide if current user is SDH
+  bool authRoleIsSDH(String userName) {
+    // TODO: Replace with real role check from AuthController when available
+    // For now, consider leaders list as SDH or explicit "sdh" name match
+    final u = userName.trim().toLowerCase();
+    if (u.contains('sdh')) return true;
+    return widget.leaders.map((e) => e.trim().toLowerCase()).contains(u);
+  }
+}
+
+class ApprovalBanner extends StatelessWidget {
+  final Map<String, dynamic>? approvalStatus;
+  final Map<String, dynamic>? compareStatus;
+  const ApprovalBanner({super.key, this.approvalStatus, this.compareStatus});
+
+  @override
+  Widget build(BuildContext context) {
+    final status = approvalStatus?['status']?.toString() ?? 'none';
+    final match = compareStatus?['match'] == true;
+    String text = 'Approval: $status';
+    Color bg = Colors.grey.shade200;
+    if (status == 'pending') bg = Colors.amber.shade100;
+    if (status == 'approved') bg = Colors.green.shade100;
+    if (status == 'reverted') bg = Colors.red.shade100;
+    final cmp = match ? 'Answers match' : 'Answers differ';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, size: 18),
+          const SizedBox(width: 8),
+          Expanded(child: Text('$text • $cmp')),
+        ],
+      ),
     );
   }
 }

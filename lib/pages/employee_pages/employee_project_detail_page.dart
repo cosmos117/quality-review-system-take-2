@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:collection/collection.dart';
 import '../../models/project.dart';
 import '../../controllers/team_controller.dart';
 import '../../controllers/projects_controller.dart';
@@ -9,6 +8,7 @@ import '../../services/project_service.dart';
 import '../../services/project_membership_service.dart';
 import '../../services/role_service.dart';
 import '../../models/role.dart';
+import 'phase1_checklist.dart';
 
 class EmployeeProjectDetailPage extends StatefulWidget {
   final Project project;
@@ -140,6 +140,38 @@ class _EmployeeProjectDetailsPageState
                       ),
                     ),
                     const SizedBox(height: 24),
+                    _PhaseCards(
+                      project: details.project,
+                      onOpenChecklist: (phase) {
+                        final proj = details.project;
+                        // Derive names from IDs using TeamController
+                        List<String> _namesFrom(Set<String> ids) {
+                          return ids
+                              .map(
+                                (id) => _teamCtrl.members
+                                    .firstWhereOrNull((m) => m.id == id)
+                                    ?.name,
+                              )
+                              .whereType<String>()
+                              .toList();
+                        }
+
+                        final leaders = _namesFrom(details.teamLeaderIds);
+                        final reviewers = _namesFrom(details.reviewerIds);
+                        final executors = _namesFrom(details.executorIds);
+                        Get.to(
+                          () => QuestionsScreen(
+                            projectId: proj.id,
+                            projectTitle: proj.title,
+                            leaders: leaders,
+                            reviewers: reviewers,
+                            executors: executors,
+                            initialPhase: phase,
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 24),
                     _RoleAssignmentSections(
                       teamCtrl: _teamCtrl,
                       details: details,
@@ -174,6 +206,98 @@ class _EmployeeProjectDetailsPageState
           Expanded(child: Text(value)),
         ],
       ),
+    );
+  }
+}
+
+class _PhaseCards extends StatelessWidget {
+  final Project project;
+  final void Function(int phase) onOpenChecklist;
+  const _PhaseCards({required this.project, required this.onOpenChecklist});
+
+  @override
+  Widget build(BuildContext context) {
+    // Decide active phase from project meta if available; else use 1
+    int activePhase = 1;
+    // If you have project.approval status cached, you can refine this.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Phases', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [1, 2, 3].map((p) {
+            final isActive = p == activePhase;
+            final isOld = p < activePhase;
+            return GestureDetector(
+              onTap: () => onOpenChecklist(p),
+              child: Card(
+                elevation: 1,
+                child: Container(
+                  width: 220,
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: isActive
+                            ? Colors.green
+                            : Colors.blueGrey,
+                        child: Text(
+                          '$p',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Phase $p',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                if (isOld)
+                                  _Badge(label: 'View only')
+                                else if (isActive)
+                                  _Badge(label: 'Active'),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final String label;
+  const _Badge({required this.label});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.black12,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(label, style: const TextStyle(fontSize: 10)),
     );
   }
 }
@@ -293,7 +417,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
         }
       }
 
-      await apply(leaderRoleId!, 'sdh', widget.details.teamLeaderIds.toSet());
+      await apply(leaderRoleId, 'sdh', widget.details.teamLeaderIds.toSet());
       await apply(
         executorRoleId,
         'executor',
