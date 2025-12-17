@@ -29,7 +29,7 @@ class AdminSidebar extends StatelessWidget {
                 height: 40,
                 width: 40,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF135BEC),
+                  color: const Color(0xFF2196F3),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.insights, color: Colors.white),
@@ -58,6 +58,12 @@ class AdminSidebar extends StatelessWidget {
             label: "Employees",
             active: selectedIndex == 1,
             onTap: () => onItemSelected?.call(1),
+          ),
+          SidebarItem(
+            icon: Icons.fact_check,
+            label: "Checklist Templates",
+            active: selectedIndex == 2,
+            onTap: () => onItemSelected?.call(2),
           ),
           const Spacer(),
 
@@ -126,20 +132,20 @@ class SidebarItem extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: active ? const Color.fromRGBO(19, 91, 236, 0.1) : null,
+            color: active ? const Color.fromRGBO(33, 150, 243, 0.12) : null,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
             children: [
               Icon(
                 icon,
-                color: active ? const Color(0xFF135BEC) : Colors.grey[700],
+                color: active ? const Color(0xFF2196F3) : Colors.grey[700],
               ),
               const SizedBox(width: 12),
               Text(
                 label,
                 style: TextStyle(
-                  color: active ? const Color(0xFF135BEC) : Colors.black87,
+                  color: active ? const Color(0xFF2196F3) : Colors.black87,
                   fontWeight: FontWeight.w500,
                 ),
               ),

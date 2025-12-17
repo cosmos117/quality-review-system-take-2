@@ -7,7 +7,6 @@ import '../services/project_membership_service.dart';
 import '../services/role_service.dart';
 import '../services/user_service.dart';
 import 'auth_controller.dart';
-import 'team_controller.dart';
 
 class ProjectsController extends GetxController {
   final RxList<Project> projects = <Project>[].obs;
