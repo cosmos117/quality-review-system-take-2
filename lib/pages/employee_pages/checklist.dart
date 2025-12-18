@@ -106,6 +106,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   final ScrollController _executorScroll = ScrollController();
   final ScrollController _reviewerScroll = ScrollController();
   final Set<String> _highlightSubs = {};
+  // Defect counting (mismatches between executor and reviewer)
+  Map<String, int> _defectsByChecklist = {};
+  int _defectsTotal = 0;
 
   ApprovalService get _approvalService => Get.find<ApprovalService>();
 
@@ -199,9 +202,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       try {
         final res = await checklistService.listForStage(stageId);
         // ensure we have a List<Map<String,dynamic>>
-        checklists = (res is List)
-            ? List<Map<String, dynamic>>.from(res)
-            : <Map<String, dynamic>>[];
+        checklists = List<Map<String, dynamic>>.from(res as List);
         print('✓ Checklists fetched: ${checklists.length} checklists found');
       } catch (e) {
         final msg = e.toString();
@@ -319,6 +320,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         reviewerAnswers.clear();
         reviewerAnswers.addAll(reviewerSheet);
       });
+      // Recompute defect counts after loading answers
+      _recomputeDefects();
     } catch (e) {
       // Silently fail on answer loading
     }
@@ -374,6 +377,65 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           }
         });
       }
+    }
+  }
+
+  void _recomputeDefects() {
+    final counts = <String, int>{};
+    int total = 0;
+    String _subKey(Map<String, String> s) => (s['id'] ?? s['text'])!;
+
+    for (final q in checklist) {
+      int c = 0;
+      for (final sub in q.subQuestions) {
+        final key = _subKey(sub);
+        dynamic a =
+            executorAnswers[key]?['answer'] ??
+            checklistCtrl.getAnswers(
+              widget.projectId,
+              _selectedPhase,
+              'executor',
+              key,
+            )?['answer'];
+        dynamic b =
+            reviewerAnswers[key]?['answer'] ??
+            checklistCtrl.getAnswers(
+              widget.projectId,
+              _selectedPhase,
+              'reviewer',
+              key,
+            )?['answer'];
+
+        String? na;
+        String? nb;
+        if (a is bool) {
+          na = a ? 'yes' : 'no';
+        } else if (a != null) {
+          na = a.toString().trim().toLowerCase();
+        }
+        if (b is bool) {
+          nb = b ? 'yes' : 'no';
+        } else if (b != null) {
+          nb = b.toString().trim().toLowerCase();
+        }
+
+        if (na != nb) {
+          // Count as defect if one side answered differently or only one side answered
+          if (!(na == null && nb == null)) {
+            c++;
+            total++;
+          }
+        }
+      }
+      final id = q.checklistId ?? q.mainQuestion;
+      counts[id] = c;
+    }
+
+    if (mounted) {
+      setState(() {
+        _defectsByChecklist = counts;
+        _defectsTotal = total;
+      });
     }
   }
 
@@ -641,6 +703,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                         compareStatus: _compareStatus,
                       ),
                     ),
+                  if (isSDH)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      child: _DefectSummaryBar(totalDefects: _defectsTotal),
+                    ),
                   if (_editMode)
                     Padding(
                       padding: const EdgeInsets.symmetric(
@@ -721,6 +788,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                           checklist: checklist,
                           answers: executorAnswers,
                           otherAnswers: reviewerAnswers,
+                          defectsByChecklist: _defectsByChecklist,
+                          showDefects: isSDH,
                           expanded: executorExpanded,
                           scrollController: _executorScroll,
                           highlightSubs: _highlightSubs,
@@ -739,6 +808,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                               subQ,
                               ans,
                             );
+                            _recomputeDefects();
                           },
                           onSubmit: () async {
                             if (!canEditExecutorPhase) return;
@@ -769,6 +839,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                           checklist: checklist,
                           answers: reviewerAnswers,
                           otherAnswers: executorAnswers,
+                          defectsByChecklist: _defectsByChecklist,
+                          showDefects: isSDH,
                           expanded: reviewerExpanded,
                           scrollController: _reviewerScroll,
                           highlightSubs: _highlightSubs,
@@ -787,6 +859,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                               subQ,
                               ans,
                             );
+                            _recomputeDefects();
                           },
                           onSubmit: () async {
                             if (!canEditReviewerPhase) return;
@@ -827,7 +900,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 class _AddCheckpointRow extends StatefulWidget {
   final String? checklistId;
   final Future<void> Function()? onAdded;
-  const _AddCheckpointRow({super.key, this.checklistId, this.onAdded});
+  const _AddCheckpointRow({this.checklistId, this.onAdded});
 
   @override
   State<_AddCheckpointRow> createState() => _AddCheckpointRowState();
@@ -896,7 +969,6 @@ class _EditableCheckpointTile extends StatefulWidget {
   final String? checklistId;
   final Future<void> Function()? onSaved;
   const _EditableCheckpointTile({
-    super.key,
     required this.initialText,
     this.checkpointId,
     this.checklistId,
@@ -984,6 +1056,8 @@ class _RoleColumn extends StatelessWidget {
   final Function(int) onExpand;
   final Function(String, Map<String, dynamic>) onAnswer;
   final Future<void> Function() onSubmit;
+  final Map<String, int>? defectsByChecklist;
+  final bool showDefects;
 
   const _RoleColumn({
     required this.role,
@@ -1003,6 +1077,8 @@ class _RoleColumn extends StatelessWidget {
     required this.onSubmit,
     this.editMode = false,
     this.onRefresh,
+    this.defectsByChecklist,
+    this.showDefects = false,
   });
 
   @override
@@ -1104,6 +1180,16 @@ class _RoleColumn extends StatelessWidget {
                       ListTile(
                         title: Row(
                           children: [
+                            // For reviewer, show the pill at the left (inner edge)
+                            if (showDefects && role == 'reviewer') ...[
+                              _DefectChip(
+                                count:
+                                    defectsByChecklist?[q.checklistId ??
+                                        q.mainQuestion] ??
+                                    0,
+                              ),
+                              const SizedBox(width: 8),
+                            ],
                             Expanded(
                               child: Text(
                                 q.mainQuestion,
@@ -1112,6 +1198,16 @@ class _RoleColumn extends StatelessWidget {
                                 ),
                               ),
                             ),
+                            // For executor, show the pill at the right (inner edge)
+                            if (showDefects && role == 'executor') ...[
+                              const SizedBox(width: 8),
+                              _DefectChip(
+                                count:
+                                    defectsByChecklist?[q.checklistId ??
+                                        q.mainQuestion] ??
+                                    0,
+                              ),
+                            ],
                             if (editMode &&
                                 (q.checklistId != null &&
                                     q.checklistId!.isNotEmpty))
@@ -1362,6 +1458,91 @@ class _RoleColumn extends StatelessWidget {
                   ),
                 );
               },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DefectChip extends StatelessWidget {
+  final int count;
+  const _DefectChip({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final has = count > 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: has ? Colors.redAccent : Colors.grey.shade400,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$count',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 4),
+          const Text(
+            'defects',
+            style: TextStyle(fontSize: 11, color: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DefectSummaryBar extends StatelessWidget {
+  final int totalDefects;
+  const _DefectSummaryBar({required this.totalDefects});
+
+  @override
+  Widget build(BuildContext context) {
+    final has = totalDefects > 0;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: has ? Colors.red.shade50 : Colors.green.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: has ? Colors.redAccent : Colors.green),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            has ? Icons.error_outline : Icons.check_circle_outline,
+            size: 22,
+            color: has ? Colors.red : Colors.green,
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            'Project Defects',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: has ? Colors.redAccent : Colors.green,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '$totalDefects',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             ),
           ),
         ],
