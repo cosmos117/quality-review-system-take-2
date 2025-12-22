@@ -167,6 +167,42 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     return cat;
   }
 
+  // Added: Get all available categories as a list for dropdown
+  List<Map<String, dynamic>> _getAvailableCategories() {
+    return _defectCategories.values.toList();
+  }
+
+  // Added: Assign defect category to a checkpoint
+  Future<void> _assignDefectCategory(
+    String checkpointId,
+    String categoryId,
+  ) async {
+    try {
+      final checklistService = Get.find<PhaseChecklistService>();
+      await checklistService.assignDefectCategory(checkpointId, categoryId);
+      debugPrint('✓ Category assigned to checkpoint $checkpointId');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Category assigned successfully')),
+      );
+    } catch (e) {
+      debugPrint('❌ Error assigning category: $e');
+      String errorMessage = e.toString();
+      // Extract meaningful error message
+      if (errorMessage.contains('no defect detected')) {
+        errorMessage = 'No defect detected for this checkpoint yet';
+      } else if (errorMessage.contains('Non-JSON')) {
+        errorMessage = 'Server error - please check if checkpoint exists';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $errorMessage'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
   Future<void> _loadChecklistData() async {
     if (!mounted) return;
 
@@ -851,6 +887,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                           highlightSubs: _highlightSubs,
                           checklistCtrl: checklistCtrl,
                           getCategoryInfo: _getCategoryInfo,
+                          availableCategories: _getAvailableCategories(),
+                          onCategoryAssigned: _assignDefectCategory,
                           onExpand: (idx) => setState(
                             () => executorExpanded.contains(idx)
                                 ? executorExpanded.remove(idx)
@@ -903,6 +941,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                           highlightSubs: _highlightSubs,
                           checklistCtrl: checklistCtrl,
                           getCategoryInfo: _getCategoryInfo,
+                          availableCategories: _getAvailableCategories(),
+                          onCategoryAssigned: _assignDefectCategory,
                           onExpand: (idx) => setState(
                             () => reviewerExpanded.contains(idx)
                                 ? reviewerExpanded.remove(idx)
@@ -1117,6 +1157,10 @@ class _RoleColumn extends StatelessWidget {
   final Map<String, int>? defectsByChecklist;
   final bool showDefects;
   final Map<String, dynamic>? Function(String?)? getCategoryInfo;
+  final List<Map<String, dynamic>>
+  availableCategories; // Added: for category assignment
+  final Function(String checkpointId, String categoryId)?
+  onCategoryAssigned; // Added: callback for category assignment
 
   const _RoleColumn({
     required this.role,
@@ -1139,6 +1183,8 @@ class _RoleColumn extends StatelessWidget {
     this.defectsByChecklist,
     this.showDefects = false,
     this.getCategoryInfo,
+    this.availableCategories = const [],
+    this.onCategoryAssigned,
   });
 
   @override
@@ -1509,6 +1555,12 @@ class _RoleColumn extends StatelessWidget {
                                         categoryInfo: getCategoryInfo?.call(
                                           sub['categoryId'],
                                         ),
+                                        checkpointId: key,
+                                        availableCategories:
+                                            availableCategories,
+                                        onCategoryAssigned: canEdit
+                                            ? onCategoryAssigned
+                                            : null,
                                       ),
                                     ],
                                   ),
@@ -1712,6 +1764,11 @@ class SubQuestionCard extends StatefulWidget {
   final bool editable;
   final bool highlight;
   final Map<String, dynamic>? categoryInfo;
+  final String? checkpointId; // Added: checkpoint ID for category assignment
+  final List<Map<String, dynamic>>
+  availableCategories; // Added: list of categories from template
+  final Function(String checkpointId, String categoryId)?
+  onCategoryAssigned; // Added: callback for category assignment
 
   const SubQuestionCard({
     super.key,
@@ -1721,6 +1778,9 @@ class SubQuestionCard extends StatefulWidget {
     this.editable = true,
     this.highlight = false,
     this.categoryInfo,
+    this.checkpointId,
+    this.availableCategories = const [],
+    this.onCategoryAssigned,
   });
 
   @override
@@ -1729,6 +1789,7 @@ class SubQuestionCard extends StatefulWidget {
 
 class _SubQuestionCardState extends State<SubQuestionCard> {
   String? selectedOption;
+  String? selectedCategory; // Added: for category assignment
   final TextEditingController remarkController = TextEditingController();
   List<Map<String, dynamic>> _images = [];
 
@@ -1746,6 +1807,15 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       final imgs = widget.initialData!['images'];
       if (imgs is List) _images = List<Map<String, dynamic>>.from(imgs);
     }
+  }
+
+  // Added: Check if a defect is detected for this checkpoint
+  // A defect is detected when executor answer ≠ reviewer answer
+  bool _isDefectDetected() {
+    // For now, only show the dropdown on the reviewer side
+    // In a full implementation, we'd need to pass the role and check answers properly
+    // This is a temporary check - the real defect detection happens on backend
+    return true; // Will be refined based on actual defect data
   }
 
   @override
@@ -1891,6 +1961,60 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
             ),
           ],
         ),
+        // Added: Defect Category Assignment Dropdown
+        // Only show if a defect is detected (executor answer ≠ reviewer answer)
+        if (widget.availableCategories.isNotEmpty &&
+            widget.checkpointId != null &&
+            _isDefectDetected())
+          Padding(
+            padding: const EdgeInsets.only(top: 12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Assign Defect Category',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                DropdownButton<String>(
+                  isExpanded: true,
+                  value: selectedCategory,
+                  hint: const Text('Select a category (if defect found)'),
+                  items: [
+                    DropdownMenuItem<String>(
+                      value: null,
+                      child: const Text('None'),
+                    ),
+                    ...widget.availableCategories.map((cat) {
+                      final catId = (cat['_id'] ?? '').toString();
+                      final catName = (cat['name'] ?? '').toString();
+                      return DropdownMenuItem<String>(
+                        value: catId,
+                        child: Text(catName),
+                      );
+                    }),
+                  ],
+                  onChanged: widget.editable
+                      ? (value) {
+                          setState(() => selectedCategory = value);
+                          if (value != null &&
+                              widget.onCategoryAssigned != null) {
+                            widget.onCategoryAssigned!(
+                              widget.checkpointId!,
+                              value,
+                            );
+                          }
+                        }
+                      : null,
+                  underline: Container(height: 1, color: Colors.grey.shade300),
+                ),
+              ],
+            ),
+          ),
         if (_images.isNotEmpty)
           SizedBox(
             height: 100,

@@ -122,6 +122,18 @@ class PhaseChecklistService {
     await http.delete(uri);
   }
 
+  // Assign defect category to a checkpoint
+  Future<void> assignDefectCategory(
+    String checkpointId,
+    String categoryId,
+  ) async {
+    _ensureToken();
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/checkpoints/$checkpointId/defect-category',
+    );
+    await http.patchJson(uri, {'categoryId': categoryId});
+  }
+
   // Submit/approve/request-changes
   Future<void> submit(String id) async {
     _ensureToken();

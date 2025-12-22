@@ -118,9 +118,6 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
         return TemplateQuestion(
           id: (cpData['_id'] ?? '').toString(),
           text: (cpData['text'] ?? '').toString(),
-          categoryId: (cpData['categoryId'] ?? '').toString().isEmpty
-              ? null
-              : (cpData['categoryId'] ?? '').toString(),
         );
       }).toList();
 
@@ -139,17 +136,9 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
       return DefectCategory(
         id: (catData['_id'] ?? '').toString(),
         name: (catData['name'] ?? '').toString(),
-        color: Color(
-          int.parse(
-            (catData['color'] ?? 'FF2196F3').substring(0, 8),
-            radix: 16,
-          ),
-        ),
       );
     }).toList();
   }
-
-  // ID helpers removed - now using MongoDB IDs from backend
 
   /// Manage defect categories
   Future<void> _manageCategories() async {
@@ -188,6 +177,8 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
       ),
     );
   }
+
+  // ID helpers removed - now using MongoDB IDs from backend
 
   void _setGroupsForPhase(int index, List<TemplateGroup> groups) {
     setState(() {
@@ -230,22 +221,21 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
                       ),
                     ),
                   ),
-                  // Manage Categories button
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF9C27B0),
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: _isLoading ? null : _manageCategories,
-                    icon: const Icon(Icons.category),
-                    label: const Text('Manage Categories'),
-                  ),
-                  const SizedBox(width: 8),
                   // Reload button
                   IconButton(
                     icon: const Icon(Icons.refresh),
                     tooltip: 'Reload Template',
                     onPressed: _isLoading ? null : _loadTemplate,
+                  ),
+                  // Manage Categories button
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4CAF50),
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: _isLoading ? null : _manageCategories,
+                    icon: const Icon(Icons.category),
+                    label: const Text('Manage Categories'),
                   ),
                 ],
               ),
@@ -342,7 +332,6 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
                               onChanged: (g) => _setGroupsForPhase(0, g),
                               templateService: _templateService,
                               onReload: _loadTemplate,
-                              defectCategories: _defectCategories,
                             ),
                             _PhaseEditor(
                               key: const ValueKey('phase-2'),
@@ -351,7 +340,6 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
                               onChanged: (g) => _setGroupsForPhase(1, g),
                               templateService: _templateService,
                               onReload: _loadTemplate,
-                              defectCategories: _defectCategories,
                             ),
                             _PhaseEditor(
                               key: const ValueKey('phase-3'),
@@ -360,7 +348,6 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
                               onChanged: (g) => _setGroupsForPhase(2, g),
                               templateService: _templateService,
                               onReload: _loadTemplate,
-                              defectCategories: _defectCategories,
                             ),
                           ],
                         ),
@@ -384,7 +371,6 @@ class _PhaseEditor extends StatefulWidget {
   final ValueChanged<List<TemplateGroup>> onChanged;
   final TemplateService templateService;
   final Future<void> Function() onReload;
-  final List<DefectCategory> defectCategories;
 
   const _PhaseEditor({
     super.key,
@@ -393,7 +379,6 @@ class _PhaseEditor extends StatefulWidget {
     required this.onChanged,
     required this.templateService,
     required this.onReload,
-    required this.defectCategories,
   });
 
   @override
@@ -519,7 +504,7 @@ class _PhaseEditorState extends State<_PhaseEditor> {
 
   /// Add question (checkpoint) to backend
   Future<void> _addQuestion(TemplateGroup group) async {
-    final q = await _promptQuestion(categories: widget.defectCategories);
+    final q = await _promptQuestion();
     if (q == null) return;
 
     setState(() => _isSaving = true);
@@ -529,7 +514,6 @@ class _PhaseEditorState extends State<_PhaseEditor> {
         checklistId: group.id,
         stage: _stage,
         questionText: q.text,
-        categoryId: q.categoryId,
       );
       final stageData = response[_stage] as List<dynamic>?;
       var appliedFromResponse = false;
@@ -552,9 +536,6 @@ class _PhaseEditorState extends State<_PhaseEditor> {
                 (cp) => TemplateQuestion(
                   id: (cp['_id'] ?? '').toString(),
                   text: (cp['text'] ?? '').toString(),
-                  categoryId: (cp['categoryId'] ?? '').toString().isEmpty
-                      ? null
-                      : (cp['categoryId'] ?? '').toString(),
                 ),
               )
               .toList();
@@ -614,10 +595,7 @@ class _PhaseEditorState extends State<_PhaseEditor> {
     TemplateGroup group,
     TemplateQuestion question,
   ) async {
-    final updated = await _promptQuestion(
-      initial: question,
-      categories: widget.defectCategories,
-    );
+    final updated = await _promptQuestion(initial: question);
     if (updated == null) return;
 
     setState(() => _isSaving = true);
@@ -628,7 +606,6 @@ class _PhaseEditorState extends State<_PhaseEditor> {
         checklistId: group.id,
         stage: _stage,
         newText: updated.text,
-        categoryId: updated.categoryId,
       );
 
       await widget.onReload();
@@ -685,140 +662,115 @@ class _PhaseEditorState extends State<_PhaseEditor> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Stack(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2196F3),
-                    foregroundColor: Colors.white,
-                    textStyle: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  onPressed: _isSaving ? null : _addGroup,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Checklist Group'),
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2196F3),
+                foregroundColor: Colors.white,
+                textStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: _groups.isEmpty
-                    ? _EmptyState(
-                        title: 'No checklist groups yet',
-                        subtitle: 'Click "Add Checklist Group" to create one.',
-                      )
-                    : ListView.builder(
-                        itemCount: _groups.length,
-                        itemBuilder: (context, i) {
-                          final group = _groups[i];
-                          return Card(
-                            margin: const EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              side: const BorderSide(color: Colors.black12),
-                            ),
-                            child: ExpansionTile(
-                              initiallyExpanded: group.expanded,
-                              onExpansionChanged: (v) =>
-                                  setState(() => group.expanded = v),
-                              tilePadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              childrenPadding: const EdgeInsets.fromLTRB(
-                                16,
-                                0,
-                                16,
-                                16,
-                              ),
-                              leading: const Icon(
-                                Icons.view_list,
-                                color: Color(0xFF2196F3),
-                              ),
-                              title: Text(
-                                group.name,
-                                style: theme.textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 26,
-                                ),
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    tooltip: 'Edit Group',
-                                    icon: const Icon(Icons.edit),
-                                    onPressed: () => _editGroup(group),
-                                  ),
-                                  IconButton(
-                                    tooltip: 'Delete Group',
-                                    icon: const Icon(
-                                      Icons.delete_outline,
-                                      color: Colors.red,
-                                    ),
-                                    onPressed: () => _removeGroup(group),
-                                  ),
-                                ],
-                              ),
-                              children: [
-                                // Questions list
-                                ...group.questions.map(
-                                  (q) => _QuestionRow(
-                                    question: q,
-                                    onEdit: () => _editQuestion(group, q),
-                                    onDelete: () => _removeQuestion(group, q),
-                                    defectCategories: widget.defectCategories,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: TextButton.icon(
-                                    onPressed: () => _addQuestion(group),
-                                    style: TextButton.styleFrom(
-                                      textStyle: const TextStyle(fontSize: 16),
-                                    ),
-                                    icon: const Icon(Icons.add),
-                                    label: const Text('Add Question'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
-        ),
-        // Loading overlay when saving
-        if (_isSaving)
-          Container(
-            color: Colors.black26,
-            child: const Center(
-              child: Card(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(),
-                      SizedBox(height: 16),
-                      Text('Saving...'),
-                    ],
-                  ),
-                ),
-              ),
+              onPressed: _isSaving ? null : _addGroup,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Checklist Group'),
             ),
           ),
-      ],
+          const SizedBox(height: 12),
+          Expanded(
+            child: _groups.isEmpty
+                ? _EmptyState(
+                    title: 'No checklist groups yet',
+                    subtitle: 'Click "Add Checklist Group" to create one.',
+                  )
+                : ListView.builder(
+                    itemCount: _groups.length,
+                    itemBuilder: (context, i) {
+                      final group = _groups[i];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: const BorderSide(color: Colors.black12),
+                        ),
+                        child: ExpansionTile(
+                          initiallyExpanded: group.expanded,
+                          onExpansionChanged: (v) =>
+                              setState(() => group.expanded = v),
+                          tilePadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          childrenPadding: const EdgeInsets.fromLTRB(
+                            16,
+                            0,
+                            16,
+                            16,
+                          ),
+                          leading: const Icon(
+                            Icons.view_list,
+                            color: Color(0xFF2196F3),
+                          ),
+                          title: Text(
+                            group.name,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 26,
+                            ),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Edit Group',
+                                icon: const Icon(Icons.edit),
+                                onPressed: () => _editGroup(group),
+                              ),
+                              IconButton(
+                                tooltip: 'Delete Group',
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.red,
+                                ),
+                                onPressed: () => _removeGroup(group),
+                              ),
+                            ],
+                          ),
+                          children: [
+                            // Questions list
+                            ...group.questions.map(
+                              (q) => _QuestionRow(
+                                question: q,
+                                onEdit: () => _editQuestion(group, q),
+                                onDelete: () => _removeQuestion(group, q),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                onPressed: () => _addQuestion(group),
+                                style: TextButton.styleFrom(
+                                  textStyle: const TextStyle(fontSize: 16),
+                                ),
+                                icon: const Icon(Icons.add),
+                                label: const Text('Add Question'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -828,85 +780,45 @@ class _QuestionRow extends StatelessWidget {
   final TemplateQuestion question;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
-  final List<DefectCategory> defectCategories;
 
   const _QuestionRow({
     required this.question,
     required this.onEdit,
     required this.onDelete,
-    required this.defectCategories,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final category = defectCategories.firstWhere(
-      (c) => c.id == question.categoryId,
-      orElse: () =>
-          DefectCategory(id: '', name: 'Uncategorized', color: Colors.grey),
-    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      question.text,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: category.color.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: category.color),
-                      ),
-                      child: Text(
-                        category.name,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: category.color.computeLuminance() > 0.5
-                              ? Colors.black
-                              : category.color,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+          Expanded(
+            child: Text(
+              question.text,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontSize: 18,
+                fontWeight: FontWeight.w400,
               ),
-              Row(
-                children: [
-                  IconButton(
-                    tooltip: 'Edit Question',
-                    icon: const Icon(Icons.edit),
-                    onPressed: onEdit,
-                  ),
-                  IconButton(
-                    tooltip: 'Delete Question',
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
-                    onPressed: onDelete,
-                  ),
-                ],
+            ),
+          ),
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Edit Question',
+                icon: const Icon(Icons.edit),
+                onPressed: onEdit,
+              ),
+              IconButton(
+                tooltip: 'Delete Question',
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                onPressed: onDelete,
               ),
             ],
           ),
-          // Remark preview removed per requirement
         ],
       ),
     );
@@ -922,41 +834,35 @@ class TemplateQuestion {
     required this.text,
     this.hasRemark = false,
     this.remarkHint,
-    this.categoryId,
   });
 
   final String id;
   String text;
   bool hasRemark;
   String? remarkHint;
-  String? categoryId;
-  // PreviewAnswer removed
 
   TemplateQuestion copy() => TemplateQuestion(
     id: id,
     text: text,
     hasRemark: hasRemark,
     remarkHint: remarkHint,
-    categoryId: categoryId,
   );
 }
 
 class DefectCategory {
-  DefectCategory({required this.id, required this.name, required this.color});
+  DefectCategory({required this.id, required this.name});
 
   final String id;
   String name;
-  Color color;
 
-  DefectCategory copy() => DefectCategory(id: id, name: name, color: color);
+  DefectCategory copy() => DefectCategory(id: id, name: name);
 
   Map<String, dynamic> toJson() {
     final json = {
       'name': name,
-      'color': color.value.toRadixString(16).padLeft(8, '0'),
+      'color': '#2196F3', // Default blue color
     };
     // Only include _id if it looks like a MongoDB ObjectId (24 hex chars)
-    // Don't include temporary client-side IDs
     if (id.length == 24 && RegExp(r'^[0-9a-fA-F]{24}$').hasMatch(id)) {
       json['_id'] = id;
     }
@@ -994,13 +900,10 @@ Future<String?> _promptGroupName({String? initial}) async {
   );
 }
 
-Future<TemplateQuestion?> _promptQuestion({
-  TemplateQuestion? initial,
-  List<DefectCategory> categories = const [],
-}) async {
+Future<TemplateQuestion?> _promptQuestion({TemplateQuestion? initial}) async {
   return await showDialog<TemplateQuestion>(
     context: Get.context!,
-    builder: (ctx) => _QuestionDialog(initial: initial, categories: categories),
+    builder: (ctx) => _QuestionDialog(initial: initial),
   );
 }
 
@@ -1106,12 +1009,12 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// Question Dialog with Category Selection
+// Question Dialog (without category selection)
+// Note: Defect categories are assigned during review, not in the template
 class _QuestionDialog extends StatefulWidget {
   final TemplateQuestion? initial;
-  final List<DefectCategory> categories;
 
-  const _QuestionDialog({this.initial, required this.categories});
+  const _QuestionDialog({this.initial});
 
   @override
   State<_QuestionDialog> createState() => _QuestionDialogState();
@@ -1119,13 +1022,11 @@ class _QuestionDialog extends StatefulWidget {
 
 class _QuestionDialogState extends State<_QuestionDialog> {
   late final TextEditingController _textController;
-  String? _selectedCategoryId;
 
   @override
   void initState() {
     super.initState();
     _textController = TextEditingController(text: widget.initial?.text ?? '');
-    _selectedCategoryId = widget.initial?.categoryId;
   }
 
   @override
@@ -1154,47 +1055,14 @@ class _QuestionDialogState extends State<_QuestionDialog> {
                 ),
                 maxLines: 3,
               ),
-              const SizedBox(height: 16),
-              const Text(
-                'Defect Category',
-                style: TextStyle(fontWeight: FontWeight.w500),
-              ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _selectedCategoryId,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  isDense: true,
+              Text(
+                'Defect categories will be assigned during the review phase when discrepancies are detected.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
                 ),
-                hint: const Text('Select category'),
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: null,
-                    child: Text('Uncategorized'),
-                  ),
-                  ...widget.categories.map(
-                    (cat) => DropdownMenuItem<String>(
-                      value: cat.id,
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 16,
-                            height: 16,
-                            decoration: BoxDecoration(
-                              color: cat.color,
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(cat.name),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-                onChanged: (value) {
-                  setState(() => _selectedCategoryId = value);
-                },
               ),
             ],
           ),
@@ -1222,7 +1090,6 @@ class _QuestionDialogState extends State<_QuestionDialog> {
                   widget.initial?.id ??
                   'q_${DateTime.now().microsecondsSinceEpoch}_${UniqueKey()}',
               text: text,
-              categoryId: _selectedCategoryId,
             );
             Navigator.pop(context, question);
           },
@@ -1259,74 +1126,31 @@ class _DefectCategoryManagerState extends State<_DefectCategoryManager> {
 
   Future<void> _addCategory() async {
     final nameController = TextEditingController();
-    Color selectedColor = const Color(0xFF2196F3);
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setStateDialog) => AlertDialog(
-          title: const Text('Add Category'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Category Name',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text('Color'),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 12,
-                children:
-                    [
-                      Colors.red,
-                      Colors.orange,
-                      Colors.yellow,
-                      Colors.green,
-                      Colors.blue,
-                      Colors.purple,
-                      Colors.pink,
-                      Colors.teal,
-                    ].map((color) {
-                      return GestureDetector(
-                        onTap: () {
-                          setStateDialog(() => selectedColor = color);
-                        },
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: color,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: selectedColor == color
-                                  ? Colors.black
-                                  : Colors.transparent,
-                              width: 3,
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-              ),
-            ],
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Category'),
+        content: SizedBox(
+          width: 400,
+          child: TextField(
+            controller: nameController,
+            decoration: const InputDecoration(
+              labelText: 'Category Name',
+              border: OutlineInputBorder(),
+            ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Add'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Add'),
+          ),
+        ],
       ),
     );
 
@@ -1336,7 +1160,6 @@ class _DefectCategoryManagerState extends State<_DefectCategoryManager> {
           DefectCategory(
             id: 'cat_${DateTime.now().microsecondsSinceEpoch}',
             name: nameController.text.trim(),
-            color: selectedColor,
           ),
         );
       });
@@ -1368,14 +1191,6 @@ class _DefectCategoryManagerState extends State<_DefectCategoryManager> {
                       itemBuilder: (ctx, i) {
                         final cat = _categories[i];
                         return ListTile(
-                          leading: Container(
-                            width: 24,
-                            height: 24,
-                            decoration: BoxDecoration(
-                              color: cat.color,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
                           title: Text(cat.name),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete, color: Colors.red),
@@ -1430,5 +1245,3 @@ class _DefectCategoryManagerState extends State<_DefectCategoryManager> {
     );
   }
 }
-
-// Uses Get.context to open dialogs without passing BuildContext around.
