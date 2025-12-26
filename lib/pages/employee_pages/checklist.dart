@@ -101,18 +101,20 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   late final ChecklistController checklistCtrl;
   String? _currentStageId;
   bool _isLoadingData = true;
-  int _selectedPhase = 1; // currently viewed phase
-  int _activePhase = 1; // max editable phase (older are view-only)
-  Map<String, dynamic>? _approvalStatus; // pending/approved/reverted
-  Map<String, dynamic>? _compareStatus; // match + stats
+  int _selectedPhase = 1;
+  int _activePhase = 1;
+  Map<String, dynamic>? _approvalStatus;
+  Map<String, dynamic>? _compareStatus;
   final ScrollController _executorScroll = ScrollController();
   final ScrollController _reviewerScroll = ScrollController();
   final Set<String> _highlightSubs = {};
-  // Defect counting (mismatches between executor and reviewer)
   Map<String, int> _defectsByChecklist = {};
+  Map<String, int> _checkpointsByChecklist =
+      {}; // Track checkpoints per checklist
   int _defectsTotal = 0;
-  // Defect categories from template
+  int _totalCheckpoints = 0; // Total number of checkpoints
   Map<String, Map<String, dynamic>> _defectCategories = {};
+  final Map<String, String?> _selectedDefectCategory = {};
 
   ApprovalService get _approvalService => Get.find<ApprovalService>();
 
@@ -128,17 +130,14 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
     print('✓ ChecklistController obtained: ${checklistCtrl.runtimeType}');
 
-    // If caller provided an initial phase, honor it
     if (widget.initialPhase != null &&
         widget.initialPhase! >= 1 &&
         widget.initialPhase! <= 3) {
       _selectedPhase = widget.initialPhase!;
     }
 
-    // Initialize with empty checklist; load from backend
     checklist = [];
 
-    // Load existing answers from backend for both executor and reviewer
     _loadChecklistData();
   }
 
@@ -154,7 +153,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       );
       return null;
     }
-    // Ensure the category has both name and color
     if ((cat['name'] ?? '').isEmpty || (cat['color'] ?? '').isEmpty) {
       debugPrint(
         '🔹 _getCategoryInfo: Category missing name or color for ID: $categoryId, cat: $cat',
@@ -167,17 +165,20 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     return cat;
   }
 
-  // Added: Get all available categories as a list for dropdown
   List<Map<String, dynamic>> _getAvailableCategories() {
     return _defectCategories.values.toList();
   }
 
-  // Added: Assign defect category to a checkpoint
   Future<void> _assignDefectCategory(
     String checkpointId,
     String categoryId,
   ) async {
     try {
+      // Persist locally immediately so UI keeps selection across rebuilds
+      setState(() {
+        _selectedDefectCategory[checkpointId] = categoryId;
+      });
+      // Fire-and-update backend (do not block UI stability)
       final checklistService = Get.find<PhaseChecklistService>();
       await checklistService.assignDefectCategory(checkpointId, categoryId);
       debugPrint('✓ Category assigned to checkpoint $checkpointId');
@@ -337,6 +338,19 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         final cpObjs = checkpoints
             .map((cp) {
               final categoryId = (cp['categoryId'] ?? '').toString();
+              // Capture already-assigned defect category from backend (if any)
+              try {
+                final defect = cp['defect'];
+                final defectCatId = defect is Map
+                    ? (defect['categoryId'] ?? '').toString()
+                    : '';
+                final cpId = (cp['_id'] ?? '').toString();
+                if (cpId.isNotEmpty) {
+                  _selectedDefectCategory[cpId] = defectCatId.isNotEmpty
+                      ? defectCatId
+                      : _selectedDefectCategory[cpId];
+                }
+              } catch (_) {}
               print(
                 '  📌 Checkpoint: ${cp['question']} | categoryId: "$categoryId"',
               );
@@ -474,12 +488,17 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
   void _recomputeDefects() {
     final counts = <String, int>{};
+    final checkpointCounts = <String, int>{};
     int total = 0;
+    int totalCheckpoints = 0; // Count total checkpoints
     String _subKey(Map<String, String> s) => (s['id'] ?? s['text'])!;
 
     for (final q in checklist) {
       int c = 0;
+      int qCheckpoints = 0; // Checkpoints in this checklist
       for (final sub in q.subQuestions) {
+        totalCheckpoints++; // Count each checkpoint
+        qCheckpoints++;
         final key = _subKey(sub);
         dynamic a =
             executorAnswers[key]?['answer'] ??
@@ -521,12 +540,15 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       }
       final id = q.checklistId ?? q.mainQuestion;
       counts[id] = c;
+      checkpointCounts[id] = qCheckpoints;
     }
 
     if (mounted) {
       setState(() {
         _defectsByChecklist = counts;
+        _checkpointsByChecklist = checkpointCounts;
         _defectsTotal = total;
+        _totalCheckpoints = totalCheckpoints;
       });
     }
   }
@@ -798,7 +820,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                   if (isSDH)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      child: _DefectSummaryBar(totalDefects: _defectsTotal),
+                      child: _DefectSummaryBar(
+                        totalDefects: _defectsTotal,
+                        totalCheckpoints: _totalCheckpoints,
+                      ),
                     ),
                   if (_editMode)
                     Padding(
@@ -880,7 +905,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                           checklist: checklist,
                           answers: executorAnswers,
                           otherAnswers: reviewerAnswers,
+                          selectedDefectCategory: _selectedDefectCategory,
                           defectsByChecklist: _defectsByChecklist,
+                          checkpointsByChecklist: _checkpointsByChecklist,
                           showDefects: isSDH,
                           expanded: executorExpanded,
                           scrollController: _executorScroll,
@@ -934,7 +961,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                           checklist: checklist,
                           answers: reviewerAnswers,
                           otherAnswers: executorAnswers,
+                          selectedDefectCategory: _selectedDefectCategory,
                           defectsByChecklist: _defectsByChecklist,
+                          checkpointsByChecklist: _checkpointsByChecklist,
                           showDefects: isSDH,
                           expanded: reviewerExpanded,
                           scrollController: _reviewerScroll,
@@ -1149,12 +1178,14 @@ class _RoleColumn extends StatelessWidget {
   final ScrollController scrollController;
   final Set<String> highlightSubs;
   final ChecklistController checklistCtrl;
+  final Map<String, String?> selectedDefectCategory;
   final bool editMode;
   final Future<void> Function()? onRefresh;
   final Function(int) onExpand;
   final Function(String, Map<String, dynamic>) onAnswer;
   final Future<void> Function() onSubmit;
   final Map<String, int>? defectsByChecklist;
+  final Map<String, int>? checkpointsByChecklist;
   final bool showDefects;
   final Map<String, dynamic>? Function(String?)? getCategoryInfo;
   final List<Map<String, dynamic>>
@@ -1175,12 +1206,14 @@ class _RoleColumn extends StatelessWidget {
     required this.scrollController,
     required this.highlightSubs,
     required this.checklistCtrl,
+    required this.selectedDefectCategory,
     required this.onExpand,
     required this.onAnswer,
     required this.onSubmit,
     this.editMode = false,
     this.onRefresh,
     this.defectsByChecklist,
+    this.checkpointsByChecklist,
     this.showDefects = false,
     this.getCategoryInfo,
     this.availableCategories = const [],
@@ -1285,35 +1318,29 @@ class _RoleColumn extends StatelessWidget {
                     children: [
                       ListTile(
                         title: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // For reviewer, show the pill at the left (inner edge)
-                            if (showDefects && role == 'reviewer') ...[
+                            if (showDefects && role == 'executor')
                               _DefectChip(
-                                count:
+                                defectCount:
                                     defectsByChecklist?[q.checklistId ??
                                         q.mainQuestion] ??
                                     0,
+                                checkpointCount:
+                                    checkpointsByChecklist?[q.checklistId ??
+                                        q.mainQuestion] ??
+                                    0,
                               ),
-                              const SizedBox(width: 8),
-                            ],
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Text(
                                 q.mainQuestion,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                 ),
+                                textAlign: TextAlign.center,
                               ),
                             ),
-                            // For executor, show the pill at the right (inner edge)
-                            if (showDefects && role == 'executor') ...[
-                              const SizedBox(width: 8),
-                              _DefectChip(
-                                count:
-                                    defectsByChecklist?[q.checklistId ??
-                                        q.mainQuestion] ??
-                                    0,
-                              ),
-                            ],
                             if (editMode &&
                                 (q.checklistId != null &&
                                     q.checklistId!.isNotEmpty))
@@ -1556,6 +1583,8 @@ class _RoleColumn extends StatelessWidget {
                                           sub['categoryId'],
                                         ),
                                         checkpointId: key,
+                                        selectedCategoryId:
+                                            selectedDefectCategory[key],
                                         availableCategories:
                                             availableCategories,
                                         onCategoryAssigned: canEdit
@@ -1582,35 +1611,29 @@ class _RoleColumn extends StatelessWidget {
 }
 
 class _DefectChip extends StatelessWidget {
-  final int count;
-  const _DefectChip({required this.count});
+  final int defectCount;
+  final int checkpointCount;
+  const _DefectChip({required this.defectCount, required this.checkpointCount});
 
   @override
   Widget build(BuildContext context) {
-    final has = count > 0;
+    final percentage = checkpointCount > 0
+        ? ((defectCount / checkpointCount) * 100).toStringAsFixed(1)
+        : '0.0';
+    final has = defectCount > 0;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: has ? Colors.redAccent : Colors.grey.shade400,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '$count',
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(width: 4),
-          const Text(
-            'defects',
-            style: TextStyle(fontSize: 11, color: Colors.white),
-          ),
-        ],
+      child: Text(
+        '$percentage%',
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
       ),
     );
   }
@@ -1618,46 +1641,64 @@ class _DefectChip extends StatelessWidget {
 
 class _DefectSummaryBar extends StatelessWidget {
   final int totalDefects;
-  const _DefectSummaryBar({required this.totalDefects});
+  final int totalCheckpoints;
+  const _DefectSummaryBar({
+    required this.totalDefects,
+    required this.totalCheckpoints,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final has = totalDefects > 0;
+    // Calculate defect rate percentage: (defects / total checkpoints) * 100
+    final defectRate = totalCheckpoints > 0
+        ? ((totalDefects / totalCheckpoints) * 100).toStringAsFixed(2)
+        : '0.00';
+    final hasDefects = totalDefects > 0;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: has ? Colors.red.shade50 : Colors.green.shade50,
+        color: hasDefects ? Colors.red.shade50 : Colors.green.shade50,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: has ? Colors.redAccent : Colors.green),
+        border: Border.all(color: hasDefects ? Colors.redAccent : Colors.green),
       ),
       child: Row(
         children: [
           Icon(
-            has ? Icons.error_outline : Icons.check_circle_outline,
+            hasDefects ? Icons.error_outline : Icons.check_circle_outline,
             size: 22,
-            color: has ? Colors.red : Colors.green,
+            color: hasDefects ? Colors.red : Colors.green,
           ),
           const SizedBox(width: 10),
           const Text(
-            'Project Defects',
+            'Defect Rate',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
-              color: has ? Colors.redAccent : Colors.green,
+              color: hasDefects ? Colors.redAccent : Colors.green,
               borderRadius: BorderRadius.circular(999),
             ),
-            child: Text(
-              '$totalDefects',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$defectRate%',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                Text(
+                  '($totalDefects/$totalCheckpoints)',
+                  style: const TextStyle(fontSize: 10, color: Colors.white),
+                ),
+              ],
             ),
           ),
         ],
@@ -1765,6 +1806,8 @@ class SubQuestionCard extends StatefulWidget {
   final bool highlight;
   final Map<String, dynamic>? categoryInfo;
   final String? checkpointId; // Added: checkpoint ID for category assignment
+  final String?
+  selectedCategoryId; // New: controlled selected category from parent
   final List<Map<String, dynamic>>
   availableCategories; // Added: list of categories from template
   final Function(String checkpointId, String categoryId)?
@@ -1779,6 +1822,7 @@ class SubQuestionCard extends StatefulWidget {
     this.highlight = false,
     this.categoryInfo,
     this.checkpointId,
+    this.selectedCategoryId,
     this.availableCategories = const [],
     this.onCategoryAssigned,
   });
@@ -1797,6 +1841,11 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
   void initState() {
     super.initState();
     _initializeData();
+    _initializeCategoryOnce();
+    // Initialize from parent-selected category, if provided
+    if (widget.selectedCategoryId != null) {
+      selectedCategory = widget.selectedCategoryId;
+    }
   }
 
   void _initializeData() {
@@ -1809,6 +1858,16 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     }
   }
 
+  // Initialize category only once on first load
+  void _initializeCategoryOnce() {
+    if (selectedCategory == null && widget.initialData != null) {
+      final defectData = widget.initialData!['defect'];
+      if (defectData is Map && defectData['categoryId'] != null) {
+        selectedCategory = defectData['categoryId'].toString();
+      }
+    }
+  }
+
   // Added: Check if a defect is detected for this checkpoint
   // A defect is detected when executor answer ≠ reviewer answer
   bool _isDefectDetected() {
@@ -1818,12 +1877,47 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     return true; // Will be refined based on actual defect data
   }
 
+  // Helper method to get category name by ID
+  String? _getCategoryName(String? categoryId) {
+    if (categoryId == null) return null;
+    try {
+      final category = widget.availableCategories.firstWhere(
+        (cat) => (cat['_id'] ?? '').toString() == categoryId,
+        orElse: () => {},
+      );
+      return (category['name'] ?? '').toString();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Helper method to check if a category ID is valid
+  bool _isValidCategoryId(String? categoryId) {
+    if (categoryId == null) return false;
+    return widget.availableCategories.any(
+      (cat) => (cat['_id'] ?? '').toString() == categoryId,
+    );
+  }
+
+  // Controlled selected category: prefer parent value when provided
+  String? _currentSelectedCategory() {
+    return widget.selectedCategoryId ?? selectedCategory;
+  }
+
   @override
   void didUpdateWidget(SubQuestionCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.initialData != oldWidget.initialData) {
       _initializeData();
       setState(() {});
+    }
+    // Keep in sync with parent-controlled selected category
+    if (widget.selectedCategoryId != oldWidget.selectedCategoryId &&
+        widget.selectedCategoryId != null &&
+        widget.selectedCategoryId != selectedCategory) {
+      setState(() {
+        selectedCategory = widget.selectedCategoryId;
+      });
     }
   }
 
@@ -1861,6 +1955,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
 
   @override
   Widget build(BuildContext context) {
+    final currentCat = _currentSelectedCategory();
     final base = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1875,46 +1970,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                 ),
               ),
             ),
-            if (widget.categoryInfo != null) ...[
-              const SizedBox(width: 8),
-              Builder(
-                builder: (context) {
-                  String colorStr = widget.categoryInfo!['color'] ?? 'FF2196F3';
-                  // Handle different color formats: 'FF2196F3' or '0xFF2196F3' or '2196F3'
-                  if (!colorStr.startsWith('0x')) {
-                    colorStr = '0x$colorStr';
-                  }
-                  if (colorStr.startsWith('0x')) {
-                    colorStr = colorStr.substring(2);
-                  }
-                  if (colorStr.length == 6) {
-                    colorStr = 'FF$colorStr'; // Add alpha channel
-                  }
-
-                  final color = Color(int.parse(colorStr, radix: 16));
-
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: color),
-                    ),
-                    child: Text(
-                      widget.categoryInfo!['name'] ?? 'Category',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: color,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
+            if (widget.categoryInfo != null) ...[],
           ],
         ),
         RadioListTile<String>(
@@ -1962,17 +2018,17 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
           ],
         ),
         // Added: Defect Category Assignment Dropdown
-        // Only show if a defect is detected (executor answer ≠ reviewer answer)
+        // Show if categories are available and checkpoint has defect or category already assigned
         if (widget.availableCategories.isNotEmpty &&
             widget.checkpointId != null &&
-            _isDefectDetected())
+            (currentCat != null || _isDefectDetected()))
           Padding(
             padding: const EdgeInsets.only(top: 12.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Assign Defect Category',
+                  'Assigned Defect Category',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -1980,38 +2036,84 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                DropdownButton<String>(
-                  isExpanded: true,
-                  value: selectedCategory,
-                  hint: const Text('Select a category (if defect found)'),
-                  items: [
-                    DropdownMenuItem<String>(
-                      value: null,
-                      child: const Text('None'),
+                if (currentCat != null && !widget.editable)
+                  // Display only mode - show the assigned category
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
                     ),
-                    ...widget.availableCategories.map((cat) {
-                      final catId = (cat['_id'] ?? '').toString();
-                      final catName = (cat['name'] ?? '').toString();
-                      return DropdownMenuItem<String>(
-                        value: catId,
-                        child: Text(catName),
-                      );
-                    }),
-                  ],
-                  onChanged: widget.editable
-                      ? (value) {
-                          setState(() => selectedCategory = value);
-                          if (value != null &&
-                              widget.onCategoryAssigned != null) {
-                            widget.onCategoryAssigned!(
-                              widget.checkpointId!,
-                              value,
-                            );
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(4),
+                      color: Colors.grey.shade50,
+                    ),
+                    child: Text(
+                      _getCategoryName(currentCat) ?? 'Unknown Category',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  )
+                else
+                  // Edit mode - show dropdown
+                  DropdownButton<String?>(
+                    isExpanded: true,
+                    value: currentCat,
+                    hint: const Text('Select a category (if defect found)'),
+                    items: () {
+                      final items = <DropdownMenuItem<String?>>[
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text('None (clear category)'),
+                        ),
+                        ...widget.availableCategories.map((cat) {
+                          final id = (cat['_id'] ?? '').toString();
+                          final name = (cat['name'] ?? 'Unnamed').toString();
+                          return DropdownMenuItem<String?>(
+                            value: id.isNotEmpty ? id : null,
+                            enabled: id.isNotEmpty,
+                            child: Text(name),
+                          );
+                        }),
+                      ];
+
+                      // Keep showing the current selection even if it is no longer available
+                      if (currentCat != null &&
+                          !_isValidCategoryId(currentCat) &&
+                          items.every((item) => item.value != currentCat)) {
+                        items.add(
+                          DropdownMenuItem<String?>(
+                            value: currentCat,
+                            child: Text(
+                              _getCategoryName(currentCat) ??
+                                  'Selected (unavailable)',
+                              style: const TextStyle(
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                      return items;
+                    }(),
+                    onChanged: widget.editable
+                        ? (val) {
+                            setState(() => selectedCategory = val);
+
+                            if (val != null &&
+                                widget.checkpointId != null &&
+                                widget.onCategoryAssigned != null) {
+                              widget.onCategoryAssigned!(
+                                widget.checkpointId!,
+                                val,
+                              );
+                            }
                           }
-                        }
-                      : null,
-                  underline: Container(height: 1, color: Colors.grey.shade300),
-                ),
+                        : null,
+                    underline: Container(
+                      height: 1,
+                      color: Colors.grey.shade300,
+                    ),
+                  ),
               ],
             ),
           ),
