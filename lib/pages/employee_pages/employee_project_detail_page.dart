@@ -149,14 +149,13 @@ class _EmployeeProjectDetailsPageState
                       ),
                     ),
                     const SizedBox(height: 24),
-                    if (details.project.status.toLowerCase() ==
-                        'in progress') ...[
+                    if (_isChecklistAccessible()) ...[
                       _PhaseCards(
                         project: details.project,
                         onOpenChecklist: (phase) {
                           final proj = details.project;
                           // Derive names from IDs using TeamController
-                          List<String> _namesFrom(Set<String> ids) {
+                          List<String> namesFrom(Set<String> ids) {
                             return ids
                                 .map(
                                   (id) => _teamCtrl.members
@@ -167,9 +166,9 @@ class _EmployeeProjectDetailsPageState
                                 .toList();
                           }
 
-                          final leaders = _namesFrom(details.teamLeaderIds);
-                          final reviewers = _namesFrom(details.reviewerIds);
-                          final executors = _namesFrom(details.executorIds);
+                          final leaders = namesFrom(details.teamLeaderIds);
+                          final reviewers = namesFrom(details.reviewerIds);
+                          final executors = namesFrom(details.executorIds);
                           Get.to(
                             () => QuestionsScreen(
                               projectId: proj.id,
@@ -178,7 +177,6 @@ class _EmployeeProjectDetailsPageState
                               reviewers: reviewers,
                               executors: executors,
                               initialPhase: phase,
-                              // Optionally deep-link to specific sub-question: pass via initialSubQuestion
                             ),
                           );
                         },
@@ -197,7 +195,7 @@ class _EmployeeProjectDetailsPageState
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Text(
-                                      'Checklists will be available after the project is started.',
+                                      'Checklists will be available when the project is in progress or under review.',
                                       style: TextStyle(
                                         color: Colors.blue.shade800,
                                         fontWeight: FontWeight.w500,
@@ -251,15 +249,26 @@ class _EmployeeProjectDetailsPageState
 
   bool _showStartButton() {
     // Must not already be in progress or completed
-    final statusLower = _project.status.toLowerCase();
-    if (statusLower == 'in progress' || statusLower == 'completed')
+    final statusLower = _detailsCtrl.project.status.toLowerCase();
+    if (statusLower.contains('progress') || statusLower.contains('completed')) {
       return false;
+    }
     // Current user must be a reviewer/employee
     if (!Get.isRegistered<AuthController>()) return false;
     final auth = Get.find<AuthController>();
     final userId = auth.currentUser.value?.id;
     if (userId == null) return false;
     return true; // All reviewers can start
+  }
+
+  bool _isChecklistAccessible() {
+    // Checklist is accessible when project status indicates it's started/in progress
+    final statusLower = _detailsCtrl.project.status.toLowerCase();
+    // Match: "in progress", "in_progress", "in-progress", "in review", "execution", "started"
+    return statusLower.contains('progress') || 
+           statusLower.contains('review') || 
+           statusLower.contains('execution') ||
+           statusLower.contains('started');
   }
 
   Widget _buildStartButton() {

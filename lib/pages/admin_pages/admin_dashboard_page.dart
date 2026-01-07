@@ -207,18 +207,18 @@ class AdminDashboardPage extends StatelessWidget {
 
                       // Build existing uniqueness index: projectNo, internalOrderNo, title
                       final existingKeys = <String>{};
-                      String _norm(String s) => s.trim().toLowerCase();
-                      void _addKeys(Project p) {
-                        final t = _norm(p.title);
+                      String norm(String s) => s.trim().toLowerCase();
+                      void addKeys(Project p) {
+                        final t = norm(p.title);
                         if (t.isNotEmpty) existingKeys.add('title:$t');
                         final pn = (p.projectNo ?? '').trim();
-                        if (pn.isNotEmpty) existingKeys.add('no:${_norm(pn)}');
+                        if (pn.isNotEmpty) existingKeys.add('no:${norm(pn)}');
                         final io = (p.internalOrderNo ?? '').trim();
-                        if (io.isNotEmpty) existingKeys.add('io:${_norm(io)}');
+                        if (io.isNotEmpty) existingKeys.add('io:${norm(io)}');
                       }
 
                       for (final p in projCtrl.projects) {
-                        _addKeys(p);
+                        addKeys(p);
                       }
 
                       // Track duplicates within the same import batch as well
@@ -228,12 +228,12 @@ class AdminDashboardPage extends StatelessWidget {
 
                       for (final p in projects) {
                         final keys = <String>{};
-                        final t = _norm(p.title);
+                        final t = norm(p.title);
                         if (t.isNotEmpty) keys.add('title:$t');
                         final pn = (p.projectNo ?? '').trim();
-                        if (pn.isNotEmpty) keys.add('no:${_norm(pn)}');
+                        if (pn.isNotEmpty) keys.add('no:${norm(pn)}');
                         final io = (p.internalOrderNo ?? '').trim();
-                        if (io.isNotEmpty) keys.add('io:${_norm(io)}');
+                        if (io.isNotEmpty) keys.add('io:${norm(io)}');
 
                         final isDup = keys.any(
                           (k) =>

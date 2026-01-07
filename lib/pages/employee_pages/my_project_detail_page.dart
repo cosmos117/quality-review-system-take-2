@@ -115,7 +115,7 @@ class _MyProjectDetailPageState extends State<MyProjectDetailPage> {
             const SizedBox(height: 32),
             if (_showStartButton()) _buildStartButton(),
             const SizedBox(height: 16),
-            if (_project.status.toLowerCase() == 'in progress')
+            if (_isChecklistAccessible())
               _buildChecklistButton()
             else
               Card(
@@ -131,7 +131,7 @@ class _MyProjectDetailPageState extends State<MyProjectDetailPage> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Checklists will be available after you start the project.',
+                              'Checklists will be available when the project is in progress or under review.',
                               style: TextStyle(
                                 color: Colors.blue.shade800,
                                 fontWeight: FontWeight.w500,
@@ -279,8 +279,9 @@ class _MyProjectDetailPageState extends State<MyProjectDetailPage> {
     if (_isLoadingAssignments) return false;
     // Must not already be in progress or completed
     final statusLower = _project.status.toLowerCase();
-    if (statusLower == 'in progress' || statusLower == 'completed')
+    if (statusLower == 'in progress' || statusLower == 'completed') {
       return false;
+    }
     // Current user must be an executor or reviewer
     if (!Get.isRegistered<AuthController>()) return false;
     final auth = Get.find<AuthController>();
@@ -355,6 +356,16 @@ class _MyProjectDetailPageState extends State<MyProjectDetailPage> {
         label: const Text('Open Checklist'),
       ),
     );
+  }
+
+  bool _isChecklistAccessible() {
+    // Checklist is accessible when project status indicates it's started/in progress
+    final statusLower = _project.status.toLowerCase();
+    // Match: "in progress", "in_progress", "in-progress", "in review", "execution", "started"
+    return statusLower.contains('progress') || 
+           statusLower.contains('review') || 
+           statusLower.contains('execution') ||
+           statusLower.contains('started');
   }
 
   Widget _buildExportButton() {

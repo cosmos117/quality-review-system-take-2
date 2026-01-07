@@ -41,7 +41,7 @@ class ExcelImportService {
       colIndex[v.toLowerCase()] = i;
     }
 
-    DateTime? _date(dynamic v) {
+    DateTime? date(dynamic v) {
       if (v == null) return null;
       final s = v.toString().trim();
       if (s.isEmpty) return null;
@@ -62,7 +62,7 @@ class ExcelImportService {
       }
     }
 
-    double? _num(dynamic v) {
+    double? num(dynamic v) {
       if (v == null) return null;
       try {
         return double.parse(v.toString());
@@ -71,7 +71,7 @@ class ExcelImportService {
       }
     }
 
-    String? _cell(List<Data?> row, String name) {
+    String? cell(List<Data?> row, String name) {
       final idx = colIndex[name.toLowerCase()];
       if (idx == null || idx >= row.length) return null;
       final val = row[idx]?.value;
@@ -82,33 +82,33 @@ class ExcelImportService {
     final projects = <Project>[];
     for (int r = 1; r < rows.length; r++) {
       final row = rows[r];
-      final title = _cell(row, 'Project Name') ?? 'Untitled';
-      final status = _cell(row, 'Project Status') ?? 'Not Started';
+      final title = cell(row, 'Project Name') ?? 'Untitled';
+      final status = cell(row, 'Project Status') ?? 'Not Started';
 
       final p = Project(
         id: '',
-        projectNo: _cell(row, 'Project No.'),
-        internalOrderNo: _cell(row, 'Project / Internal Order No.'),
+        projectNo: cell(row, 'Project No.'),
+        internalOrderNo: cell(row, 'Project / Internal Order No.'),
         title: title,
-        description: _cell(row, 'Action Required'),
-        started: _date(_cell(row, 'Creation On')) ?? DateTime.now(),
+        description: cell(row, 'Action Required'),
+        started: date(cell(row, 'Creation On')) ?? DateTime.now(),
         priority: 'Medium',
         status: status,
         executor: null,
-        groupOrCostCentre: _cell(row, 'Group/Cost Centre'),
-        actionRequired: _cell(row, 'Action Required'),
-        sponsor: _cell(row, 'Sponsor'),
-        competence: _cell(row, 'Competence'),
-        competenceManager: _cell(row, 'Competence Manager'),
-        projectLeader: _cell(row, 'Project Leader'),
-        projectTeam: _cell(row, 'Project Team'),
-        createdBy: _cell(row, 'Created By'),
-        creationOn: _date(_cell(row, 'Creation On')),
-        requiredDeliveryDate: _date(_cell(row, 'Required Delivery Date')),
-        plannedEndDate: _date(_cell(row, 'Planned End Date')),
-        actualDeliveryDate: _date(_cell(row, 'Actual Delivery Date')),
-        plannedEfforts: _num(_cell(row, 'Planned Efforts')),
-        actualEfforts: _num(_cell(row, 'Actual Efforts')),
+        groupOrCostCentre: cell(row, 'Group/Cost Centre'),
+        actionRequired: cell(row, 'Action Required'),
+        sponsor: cell(row, 'Sponsor'),
+        competence: cell(row, 'Competence'),
+        competenceManager: cell(row, 'Competence Manager'),
+        projectLeader: cell(row, 'Project Leader'),
+        projectTeam: cell(row, 'Project Team'),
+        createdBy: cell(row, 'Created By'),
+        creationOn: date(cell(row, 'Creation On')),
+        requiredDeliveryDate: date(cell(row, 'Required Delivery Date')),
+        plannedEndDate: date(cell(row, 'Planned End Date')),
+        actualDeliveryDate: date(cell(row, 'Actual Delivery Date')),
+        plannedEfforts: num(cell(row, 'Planned Efforts')),
+        actualEfforts: num(cell(row, 'Actual Efforts')),
       );
       projects.add(p);
     }
