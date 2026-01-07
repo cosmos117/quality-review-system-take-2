@@ -133,17 +133,24 @@ class TemplateService {
   /// [stage] indicates which stage the checklist belongs to
   /// [questionText] is the checkpoint text
   /// [categoryId] optional defect category ID
+  /// [sectionId] optional - if provided, adds to section; otherwise adds to group directly
   Future<Map<String, dynamic>> addCheckpoint({
     required String checklistId,
     required String stage,
     required String questionText,
     String? categoryId,
+    String? sectionId,
   }) async {
     try {
       _ensureToken();
       if (!['stage1', 'stage2', 'stage3'].contains(stage)) {
         throw Exception('Invalid stage');
       }
+
+      // Build endpoint based on whether sectionId is provided
+      final String endpoint = sectionId != null
+          ? '$_baseUrl/checklists/$checklistId/sections/$sectionId/checkpoints'
+          : '$_baseUrl/checklists/$checklistId/checkpoints';
 
       final body = {
         'stage': stage,
@@ -153,7 +160,7 @@ class TemplateService {
       };
 
       final response = await http.postJson(
-        Uri.parse('$_baseUrl/checklists/$checklistId/checkpoints'),
+        Uri.parse(endpoint),
         body,
       );
       return response['data'] as Map<String, dynamic>? ?? response;
@@ -174,12 +181,18 @@ class TemplateService {
     required String stage,
     required String newText,
     String? categoryId,
+    String? sectionId,
   }) async {
     try {
       _ensureToken();
       if (!['stage1', 'stage2', 'stage3'].contains(stage)) {
         throw Exception('Invalid stage');
       }
+
+      // Choose endpoint based on section presence
+      final String endpoint = sectionId != null
+          ? '$_baseUrl/checklists/$checklistId/sections/$sectionId/checkpoints/$checkpointId'
+          : '$_baseUrl/checkpoints/$checkpointId';
 
       final body = {
         'checklistId': checklistId,
@@ -190,7 +203,7 @@ class TemplateService {
       };
 
       final response = await http.patchJson(
-        Uri.parse('$_baseUrl/checkpoints/$checkpointId'),
+        Uri.parse(endpoint),
         body,
       );
       return response['data'] as Map<String, dynamic>? ?? response;
@@ -199,14 +212,16 @@ class TemplateService {
     }
   }
 
-  /// Delete a checkpoint (question) from a checklist
+  /// Delete a checkpoint (question) from a checklist or section
   /// [checkpointId] is the MongoDB _id of the checkpoint
   /// [checklistId] is the MongoDB _id of the parent checklist
   /// [stage] indicates which stage the checkpoint belongs to
-  Future<void> deleteCheckpoint({
+  /// [sectionId] optional - if provided, deletes from section; otherwise deletes from group directly
+  Future<Map<String, dynamic>> deleteCheckpoint({
     required String checkpointId,
     required String checklistId,
     required String stage,
+    String? sectionId,
   }) async {
     try {
       _ensureToken();
@@ -214,10 +229,16 @@ class TemplateService {
         throw Exception('Invalid stage');
       }
 
-      await http.deleteJson(Uri.parse('$_baseUrl/checkpoints/$checkpointId'), {
+      // Build endpoint based on whether sectionId is provided
+      final String endpoint = sectionId != null
+          ? '$_baseUrl/checklists/$checklistId/sections/$sectionId/checkpoints/$checkpointId'
+          : '$_baseUrl/checkpoints/$checkpointId';
+
+      final response = await http.deleteJson(Uri.parse(endpoint), {
         'checklistId': checklistId,
         'stage': stage,
       });
+      return response['data'] as Map<String, dynamic>? ?? response;
     } catch (e) {
       throw Exception('Error deleting checkpoint: $e');
     }
@@ -233,6 +254,82 @@ class TemplateService {
       });
     } catch (e) {
       throw Exception('Error updating defect categories: $e');
+    }
+  }
+
+  /// Add a section to a checklist group in the template
+  /// [checklistId] is the MongoDB _id of the checklist (group)
+  /// [stage] indicates which stage the checklist belongs to
+  /// [sectionName] is the name of the new section
+  Future<Map<String, dynamic>> addSection({
+    required String checklistId,
+    required String stage,
+    required String sectionName,
+  }) async {
+    try {
+      _ensureToken();
+      if (!['stage1', 'stage2', 'stage3'].contains(stage)) {
+        throw Exception('Invalid stage');
+      }
+
+      final response = await http.postJson(
+        Uri.parse('$_baseUrl/checklists/$checklistId/sections'),
+        {'stage': stage, 'text': sectionName},
+      );
+      return response['data'] as Map<String, dynamic>? ?? response;
+    } catch (e) {
+      throw Exception('Error adding section: $e');
+    }
+  }
+
+  /// Update a section in a checklist group in the template
+  /// [checklistId] is the MongoDB _id of the checklist (group)
+  /// [sectionId] is the MongoDB _id of the section
+  /// [stage] indicates which stage the checklist belongs to
+  /// [newName] is the updated section name
+  Future<Map<String, dynamic>> updateSection({
+    required String checklistId,
+    required String sectionId,
+    required String stage,
+    required String newName,
+  }) async {
+    try {
+      _ensureToken();
+      if (!['stage1', 'stage2', 'stage3'].contains(stage)) {
+        throw Exception('Invalid stage');
+      }
+
+      final response = await http.putJson(
+        Uri.parse('$_baseUrl/checklists/$checklistId/sections/$sectionId'),
+        {'stage': stage, 'text': newName},
+      );
+      return response['data'] as Map<String, dynamic>? ?? response;
+    } catch (e) {
+      throw Exception('Error updating section: $e');
+    }
+  }
+
+  /// Delete a section from a checklist group in the template
+  /// [checklistId] is the MongoDB _id of the checklist (group)
+  /// [sectionId] is the MongoDB _id of the section
+  /// [stage] indicates which stage the checklist belongs to
+  Future<void> deleteSection({
+    required String checklistId,
+    required String sectionId,
+    required String stage,
+  }) async {
+    try {
+      _ensureToken();
+      if (!['stage1', 'stage2', 'stage3'].contains(stage)) {
+        throw Exception('Invalid stage');
+      }
+
+      await http.deleteJson(
+        Uri.parse('$_baseUrl/checklists/$checklistId/sections/$sectionId'),
+        {'stage': stage},
+      );
+    } catch (e) {
+      throw Exception('Error deleting section: $e');
     }
   }
 }

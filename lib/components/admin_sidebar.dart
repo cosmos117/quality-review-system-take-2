@@ -37,7 +37,7 @@ class AdminSidebar extends StatelessWidget {
               const SizedBox(width: 12),
               const Expanded(
                 child: Text(
-                  "Dashboard",
+                  "Atlas Copco",
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
                 ),

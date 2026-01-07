@@ -40,7 +40,7 @@ class ChecklistAnswerService {
       data.forEach((key, value) {
         if (value is Map) {
           result[key] = Map<String, dynamic>.from(value);
-          print('  ↳ Question: "${key}" has answer: ${result[key]?['answer']}');
+          print('  ↳ Question: "$key" has answer: ${result[key]?['answer']}');
         }
       });
 

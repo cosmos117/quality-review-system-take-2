@@ -109,7 +109,7 @@ class Project {
   }
 
   factory Project.fromMap(Map<String, dynamic> map) {
-    DateTime? _parseDate(dynamic v) {
+    DateTime? parseDate(dynamic v) {
       if (v == null) return null;
       if (v is DateTime) return v;
       final s = v.toString().trim();
@@ -121,7 +121,7 @@ class Project {
       }
     }
 
-    double? _parseNum(dynamic v) {
+    double? parseNum(dynamic v) {
       if (v == null) return null;
       try {
         return double.parse(v.toString());
@@ -136,7 +136,7 @@ class Project {
       internalOrderNo: map['internalOrderNo'],
       title: map['title'] ?? 'Untitled',
       description: map['description'],
-      started: _parseDate(map['started']) ?? DateTime.now(),
+      started: parseDate(map['started']) ?? DateTime.now(),
       priority: map['priority'] ?? 'Medium',
       status: map['status'] ?? 'Not Started',
       executor: map['executor'],
@@ -150,12 +150,12 @@ class Project {
       projectLeader: map['projectLeader'],
       projectTeam: map['projectTeam'],
       createdBy: map['createdBy'],
-      creationOn: _parseDate(map['creationOn']),
-      requiredDeliveryDate: _parseDate(map['requiredDeliveryDate']),
-      plannedEndDate: _parseDate(map['plannedEndDate']),
-      actualDeliveryDate: _parseDate(map['actualDeliveryDate']),
-      plannedEfforts: _parseNum(map['plannedEfforts']),
-      actualEfforts: _parseNum(map['actualEfforts']),
+      creationOn: parseDate(map['creationOn']),
+      requiredDeliveryDate: parseDate(map['requiredDeliveryDate']),
+      plannedEndDate: parseDate(map['plannedEndDate']),
+      actualDeliveryDate: parseDate(map['actualDeliveryDate']),
+      plannedEfforts: parseNum(map['plannedEfforts']),
+      actualEfforts: parseNum(map['actualEfforts']),
     );
   }
 

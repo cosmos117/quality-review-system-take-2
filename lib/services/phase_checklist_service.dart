@@ -125,13 +125,18 @@ class PhaseChecklistService {
   // Assign defect category to a checkpoint
   Future<void> assignDefectCategory(
     String checkpointId,
-    String categoryId,
-  ) async {
+    String categoryId, {
+    String? severity,
+  }) async {
     _ensureToken();
     final uri = Uri.parse(
       '${ApiConfig.baseUrl}/checkpoints/$checkpointId/defect-category',
     );
-    await http.patchJson(uri, {'categoryId': categoryId});
+    final body = {
+      'categoryId': categoryId,
+      if (severity != null) 'severity': severity,
+    };
+    await http.patchJson(uri, body);
   }
 
   // Submit/approve/request-changes
@@ -159,5 +164,17 @@ class PhaseChecklistService {
       '${ApiConfig.checklistBaseUrl}/checklists/$id/request-changes',
     );
     await http.postJson(uri, {'user_id': 'self', 'message': message});
+  }
+
+  // Get defect statistics for a checklist based on history
+  Future<Map<String, dynamic>> getDefectStats(String checklistId) async {
+    _ensureToken();
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/checklists/$checklistId/defect-stats',
+    );
+    print('📍 API Call: GET $uri');
+    final json = await http.getJson(uri);
+    print('📦 Response: $json');
+    return (json['data'] as Map<String, dynamic>?) ?? {};
   }
 }

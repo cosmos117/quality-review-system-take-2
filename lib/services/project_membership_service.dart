@@ -21,19 +21,17 @@ class ProjectMembershipService {
       );
       // ignore: avoid_print
       print(
-        '[ProjectMembershipService] getProjectMembers -> GET ' + uri.toString(),
+        '[ProjectMembershipService] getProjectMembers -> GET $uri',
       );
       final json = await http.getJson(uri);
       // ignore: avoid_print
       print(
-        '[ProjectMembershipService] getProjectMembers <- response keys=' +
-            json.keys.join(', '),
+        '[ProjectMembershipService] getProjectMembers <- response keys=${json.keys.join(', ')}',
       );
       if (json['error'] != null) {
         // ignore: avoid_print
         print(
-          '[ProjectMembershipService] getProjectMembers ERROR: ' +
-              json['error'].toString(),
+          '[ProjectMembershipService] getProjectMembers ERROR: ${json['error']}',
         );
       }
 
@@ -41,8 +39,7 @@ class ProjectMembershipService {
         final members = (json['data']['members'] as List).cast<dynamic>();
         // ignore: avoid_print
         print(
-          '[ProjectMembershipService] getProjectMembers parsed members count=' +
-              members.length.toString(),
+          '[ProjectMembershipService] getProjectMembers parsed members count=${members.length}',
         );
         return members.map((e) => _fromApi(e as Map<String, dynamic>)).toList();
       }

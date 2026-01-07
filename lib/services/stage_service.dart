@@ -56,4 +56,16 @@ class StageService {
     final response = await http.getJson(uri);
     return response['data'] as Map<String, dynamic>? ?? response;
   }
+
+  /// Increment loopback counter for a stage (when SDH reverts phase)
+  Future<Map<String, dynamic>> incrementLoopbackCounter(String stageId) async {
+    _ensureToken();
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/stages/$stageId/increment-loopback',
+    );
+    print('📍 API Call: PATCH $uri');
+    final json = await http.patchJson(uri, {});
+    print('📦 Response: $json');
+    return (json['data'] as Map<String, dynamic>?) ?? {};
+  }
 }

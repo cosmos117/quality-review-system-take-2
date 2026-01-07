@@ -113,7 +113,9 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
       final text = (checklistData['text'] ?? '').toString();
       final checkpointsData =
           checklistData['checkpoints'] as List<dynamic>? ?? [];
+      final sectionsData = checklistData['sections'] as List<dynamic>? ?? [];
 
+      // Parse direct questions on the group
       final questions = checkpointsData.map((cpData) {
         return TemplateQuestion(
           id: (cpData['_id'] ?? '').toString(),
@@ -121,10 +123,33 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
         );
       }).toList();
 
+      // Parse sections with their questions
+      final sections = sectionsData.map((sectionData) {
+        final sectionId = (sectionData['_id'] ?? '').toString();
+        final sectionText = (sectionData['text'] ?? '').toString();
+        final sectionCheckpoints =
+            sectionData['checkpoints'] as List<dynamic>? ?? [];
+
+        final sectionQuestions = sectionCheckpoints.map((cpData) {
+          return TemplateQuestion(
+            id: (cpData['_id'] ?? '').toString(),
+            text: (cpData['text'] ?? '').toString(),
+          );
+        }).toList();
+
+        return TemplateSection(
+          id: sectionId,
+          name: sectionText,
+          questions: sectionQuestions,
+          expanded: false,
+        );
+      }).toList();
+
       return TemplateGroup(
         id: id,
         name: text,
         questions: questions,
+        sections: sections,
         expanded: false,
       );
     }).toList();
@@ -502,133 +527,16 @@ class _PhaseEditorState extends State<_PhaseEditor> {
     }
   }
 
-  /// Add question (checkpoint) to backend
-  Future<void> _addQuestion(TemplateGroup group) async {
-    final q = await _promptQuestion();
-    if (q == null) return;
 
-    setState(() => _isSaving = true);
 
-    try {
-      final response = await widget.templateService.addCheckpoint(
-        checklistId: group.id,
-        stage: _stage,
-        questionText: q.text,
-      );
-      final stageData = response[_stage] as List<dynamic>?;
-      var appliedFromResponse = false;
 
-      if (stageData != null) {
-        Map<String, dynamic>? updatedGroupData;
-        for (final item in stageData) {
-          if (item is Map<String, dynamic> &&
-              item['_id']?.toString() == group.id) {
-            updatedGroupData = item;
-            break;
-          }
-        }
-
-        if (updatedGroupData != null) {
-          final questionsData =
-              (updatedGroupData['checkpoints'] as List<dynamic>? ?? []);
-          final updatedQuestions = questionsData
-              .map(
-                (cp) => TemplateQuestion(
-                  id: (cp['_id'] ?? '').toString(),
-                  text: (cp['text'] ?? '').toString(),
-                ),
-              )
-              .toList();
-
-          setState(() {
-            _groups = _groups.map((g) {
-              if (g.id == group.id) {
-                return TemplateGroup(
-                  id: g.id,
-                  name: g.name,
-                  questions: updatedQuestions,
-                  expanded: g.expanded,
-                );
-              }
-              return g;
-            }).toList();
-          });
-          widget.onChanged(_groups);
-          appliedFromResponse = true;
-        }
-      }
-
-      if (!appliedFromResponse) {
-        setState(() {
-          _groups = _groups.map((g) {
-            if (g.id == group.id) {
-              return TemplateGroup(
-                id: g.id,
-                name: g.name,
-                questions: [
-                  ...g.questions,
-                  TemplateQuestion(id: q.id, text: q.text),
-                ],
-                expanded: g.expanded,
-              );
-            }
-            return g;
-          }).toList();
-        });
-        widget.onChanged(_groups);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
-    }
-  }
-
-  /// Edit question (checkpoint) in backend
-  Future<void> _editQuestion(
-    TemplateGroup group,
-    TemplateQuestion question,
-  ) async {
-    final updated = await _promptQuestion(initial: question);
-    if (updated == null) return;
-
-    setState(() => _isSaving = true);
-
-    try {
-      await widget.templateService.updateCheckpoint(
-        checkpointId: question.id,
-        checklistId: group.id,
-        stage: _stage,
-        newText: updated.text,
-      );
-
-      await widget.onReload();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Question updated successfully')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
-    }
-  }
 
   /// Remove question (checkpoint) from backend
-  Future<void> _removeQuestion(TemplateGroup group, TemplateQuestion q) async {
+  Future<void> _removeQuestion(
+    TemplateGroup group,
+    TemplateSection? section,
+    TemplateQuestion q,
+  ) async {
     final confirm = await _confirmDelete(
       title: 'Remove Question?',
       message: 'This will delete the selected question.',
@@ -642,9 +550,292 @@ class _PhaseEditorState extends State<_PhaseEditor> {
         checkpointId: q.id,
         checklistId: group.id,
         stage: _stage,
+        sectionId: section?.id,
       );
 
-      await widget.onReload();
+      // Update local state instead of reloading
+      setState(() {
+        if (section != null) {
+          // Remove from section
+          section.questions.removeWhere((question) => question.id == q.id);
+        } else {
+          // Remove from group
+          group.questions.removeWhere((question) => question.id == q.id);
+        }
+      });
+      widget.onChanged(_groups);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Question deleted successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  /// Add section to checklist group
+  Future<void> _addSection(TemplateGroup group) async {
+    final name = await _promptSectionName();
+    if (name == null) return;
+
+    setState(() => _isSaving = true);
+
+    try {
+      final response = await widget.templateService.addSection(
+        checklistId: group.id,
+        stage: _stage,
+        sectionName: name,
+      );
+
+      // Parse response to get new section with ID
+      final stageData = response[_stage] as List<dynamic>?;
+      if (stageData != null) {
+        final updatedGroup = stageData.firstWhere(
+          (g) => g['_id'].toString() == group.id,
+          orElse: () => null,
+        );
+        if (updatedGroup != null) {
+          final sectionsData = updatedGroup['sections'] as List<dynamic>? ?? [];
+          final newSectionData = sectionsData.last;
+          final newSection = TemplateSection(
+            id: newSectionData['_id'].toString(),
+            name: newSectionData['text'].toString(),
+            questions: [],
+          );
+          setState(() {
+            group.sections.add(newSection);
+          });
+          widget.onChanged(_groups);
+        }
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Section added successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  /// Edit section in checklist group
+  Future<void> _editSection(
+    TemplateGroup group,
+    TemplateSection section,
+  ) async {
+    final name = await _promptSectionName(initial: section.name);
+    if (name == null) return;
+
+    setState(() => _isSaving = true);
+
+    try {
+      await widget.templateService.updateSection(
+        checklistId: group.id,
+        sectionId: section.id,
+        stage: _stage,
+        newName: name,
+      );
+
+      // Update local state instead of reloading
+      setState(() {
+        section.name = name;
+      });
+      widget.onChanged(_groups);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Section updated successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  /// Delete section from checklist group
+  Future<void> _removeSection(
+    TemplateGroup group,
+    TemplateSection section,
+  ) async {
+    final confirm = await _confirmDelete(
+      title: 'Remove Section?',
+      message: 'This will delete "${section.name}" and all its questions.',
+    );
+    if (confirm != true) return;
+
+    setState(() => _isSaving = true);
+
+    try {
+      await widget.templateService.deleteSection(
+        checklistId: group.id,
+        sectionId: section.id,
+        stage: _stage,
+      );
+
+      // Update local state instead of reloading
+      setState(() {
+        group.sections.removeWhere((s) => s.id == section.id);
+      });
+      widget.onChanged(_groups);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Section deleted successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  /// Update question method signature for optional section
+  Future<void> _addQuestion(
+    TemplateGroup group, {
+    TemplateSection? section,
+  }) async {
+    final q = await _promptQuestion();
+    if (q == null) return;
+
+    setState(() => _isSaving = true);
+
+    try {
+      final response = await widget.templateService.addCheckpoint(
+        checklistId: group.id,
+        stage: _stage,
+        questionText: q.text,
+        sectionId: section?.id,
+      );
+      
+      // Parse response to get new checkpoint with ID
+      final stageData = response[_stage] as List<dynamic>?;
+      if (stageData != null) {
+        final updatedGroup = stageData.firstWhere(
+          (g) => g['_id'].toString() == group.id,
+          orElse: () => null,
+        );
+        if (updatedGroup != null) {
+          if (section != null) {
+            // Find the section and get the new checkpoint
+            final sectionsData = updatedGroup['sections'] as List<dynamic>? ?? [];
+            final updatedSection = sectionsData.firstWhere(
+              (s) => s['_id'].toString() == section.id,
+              orElse: () => null,
+            );
+            if (updatedSection != null) {
+              final checkpointsData = updatedSection['checkpoints'] as List<dynamic>? ?? [];
+              if (checkpointsData.isNotEmpty) {
+                final newCheckpoint = checkpointsData.last;
+                setState(() {
+                  section.questions.add(TemplateQuestion(
+                    id: newCheckpoint['_id'].toString(),
+                    text: newCheckpoint['text'].toString(),
+                  ));
+                });
+              }
+            }
+          } else {
+            // Add to group directly
+            final checkpointsData = updatedGroup['checkpoints'] as List<dynamic>? ?? [];
+            if (checkpointsData.isNotEmpty) {
+              final newCheckpoint = checkpointsData.last;
+              setState(() {
+                group.questions.add(TemplateQuestion(
+                  id: newCheckpoint['_id'].toString(),
+                  text: newCheckpoint['text'].toString(),
+                ));
+              });
+            }
+          }
+          widget.onChanged(_groups);
+        }
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Question added successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  /// Edit question with optional section parameter
+  Future<void> _editQuestion(
+    TemplateGroup group,
+    TemplateSection? section,
+    TemplateQuestion question,
+  ) async {
+    final updated = await _promptQuestion(initial: question);
+    if (updated == null) return;
+
+    setState(() => _isSaving = true);
+
+    try {
+      await widget.templateService.updateCheckpoint(
+        checkpointId: question.id,
+        checklistId: group.id,
+        stage: _stage,
+        newText: updated.text,
+        sectionId: section?.id,
+      );
+
+      // Update local state instead of reloading
+      setState(() {
+        question.text = updated.text;
+        question.hasRemark = updated.hasRemark;
+        question.remarkHint = updated.remarkHint;
+      });
+      widget.onChanged(_groups);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Question updated successfully')),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -743,25 +934,121 @@ class _PhaseEditorState extends State<_PhaseEditor> {
                             ],
                           ),
                           children: [
-                            // Questions list
+                            // Direct questions on the group
                             ...group.questions.map(
                               (q) => _QuestionRow(
                                 question: q,
-                                onEdit: () => _editQuestion(group, q),
-                                onDelete: () => _removeQuestion(group, q),
+                                onEdit: () => _editQuestion(group, null, q),
+                                onDelete: () => _removeQuestion(group, null, q),
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: TextButton.icon(
-                                onPressed: () => _addQuestion(group),
-                                style: TextButton.styleFrom(
-                                  textStyle: const TextStyle(fontSize: 16),
+                            // Sections (optional containers)
+                            ...group.sections.map((section) {
+                              return Card(
+                                margin: const EdgeInsets.symmetric(vertical: 8),
+                                color: Colors.grey[50],
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: const BorderSide(
+                                    color: Colors.black12,
+                                    width: 1,
+                                  ),
                                 ),
-                                icon: const Icon(Icons.add),
-                                label: const Text('Add Question'),
-                              ),
+                                child: ExpansionTile(
+                                  initiallyExpanded: section.expanded,
+                                  onExpansionChanged: (v) =>
+                                      setState(() => section.expanded = v),
+                                  tilePadding:
+                                      const EdgeInsets.symmetric(horizontal: 12),
+                                  childrenPadding:
+                                      const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                                  title: Text(
+                                    section.name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        tooltip: 'Edit Section',
+                                        icon: const Icon(Icons.edit, size: 18),
+                                        onPressed: () =>
+                                            _editSection(group, section),
+                                        constraints: const BoxConstraints(),
+                                        padding:
+                                            const EdgeInsets.all(4),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Delete Section',
+                                        icon: const Icon(
+                                          Icons.delete_outline,
+                                          size: 18,
+                                          color: Colors.red,
+                                        ),
+                                        onPressed: () =>
+                                            _removeSection(group, section),
+                                        constraints: const BoxConstraints(),
+                                        padding:
+                                            const EdgeInsets.all(4),
+                                      ),
+                                    ],
+                                  ),
+                                  children: [
+                                    // Questions in this section
+                                    ...section.questions.map((q) {
+                                      return _QuestionRow(
+                                        question: q,
+                                        onEdit: () => _editQuestion(
+                                            group, section, q),
+                                        onDelete: () => _removeQuestion(
+                                            group, section, q),
+                                      );
+                                    }),
+                                    const SizedBox(height: 8),
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: TextButton.icon(
+                                        onPressed: () => _addQuestion(
+                                          group,
+                                          section: section,
+                                        ),
+                                        style: TextButton.styleFrom(
+                                          textStyle:
+                                              const TextStyle(fontSize: 14),
+                                        ),
+                                        icon: const Icon(Icons.add, size: 18),
+                                        label: const Text('Add Question'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                            const SizedBox(height: 8),
+                            // Buttons to add direct question or section
+                            Row(
+                              children: [
+                                TextButton.icon(
+                                  onPressed: () => _addQuestion(group),
+                                  style: TextButton.styleFrom(
+                                    textStyle: const TextStyle(fontSize: 14),
+                                  ),
+                                  icon: const Icon(Icons.add),
+                                  label: const Text('Add Question'),
+                                ),
+                                const SizedBox(width: 8),
+                                TextButton.icon(
+                                  onPressed: () => _addSection(group),
+                                  style: TextButton.styleFrom(
+                                    textStyle: const TextStyle(fontSize: 14),
+                                  ),
+                                  icon: const Icon(Icons.add),
+                                  label: const Text('Add Section'),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -849,6 +1136,28 @@ class TemplateQuestion {
   );
 }
 
+// Section model for optional section containers within groups
+class TemplateSection {
+  TemplateSection({
+    required this.id,
+    required this.name,
+    this.questions = const [],
+    this.expanded = false,
+  });
+
+  final String id;
+  String name;
+  List<TemplateQuestion> questions;
+  bool expanded;
+
+  TemplateSection copy() => TemplateSection(
+    id: id,
+    name: name,
+    expanded: expanded,
+    questions: questions.map((q) => q.copy()).toList(),
+  );
+}
+
 class DefectCategory {
   DefectCategory({required this.id, required this.name});
 
@@ -875,12 +1184,14 @@ class TemplateGroup {
     required this.id,
     required this.name,
     this.questions = const [],
+    this.sections = const [],
     this.expanded = false,
   });
 
   final String id;
   String name;
   List<TemplateQuestion> questions;
+  List<TemplateSection> sections;
   bool expanded;
 
   TemplateGroup copy() => TemplateGroup(
@@ -888,6 +1199,7 @@ class TemplateGroup {
     name: name,
     expanded: expanded,
     questions: questions.map((q) => q.copy()).toList(),
+    sections: sections.map((s) => s.copy()).toList(),
   );
 }
 
@@ -904,6 +1216,14 @@ Future<TemplateQuestion?> _promptQuestion({TemplateQuestion? initial}) async {
   return await showDialog<TemplateQuestion>(
     context: Get.context!,
     builder: (ctx) => _QuestionDialog(initial: initial),
+  );
+}
+
+Future<String?> _promptSectionName({String? initial}) async {
+  return await _textPrompt(
+    title: initial == null ? 'Add Section' : 'Edit Section',
+    label: 'Section Name',
+    initial: initial,
   );
 }
 
@@ -1054,15 +1374,6 @@ class _QuestionDialogState extends State<_QuestionDialog> {
                   isDense: true,
                 ),
                 maxLines: 3,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Defect categories will be assigned during the review phase when discrepancies are detected.',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                  fontStyle: FontStyle.italic,
-                ),
               ),
             ],
           ),
