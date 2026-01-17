@@ -1,7 +1,7 @@
 /// Hierarchical checklist execution widget for ProjectChecklist structure.
 /// This widget handles role-based editing (Executor, Reviewer, SDH) and renders
 /// the hierarchical structure: Group → Sections (optional) → Questions.
-/// 
+///
 /// This is distinct from the template editor (checklist.dart) and is used
 /// when displaying a project's execution-mode checklist.
 
@@ -64,17 +64,20 @@ class _ProjectChecklistExecutionWidgetState
       currentUserName = auth.currentUser.value?.name;
     }
 
-    _canEditExecutor = currentUserName != null &&
+    _canEditExecutor =
+        currentUserName != null &&
         widget.executors
             .map((e) => e.trim().toLowerCase())
             .contains(currentUserName.trim().toLowerCase());
 
-    _canEditReviewer = currentUserName != null &&
+    _canEditReviewer =
+        currentUserName != null &&
         widget.reviewers
             .map((e) => e.trim().toLowerCase())
             .contains(currentUserName.trim().toLowerCase());
 
-    _isSDH = currentUserName != null &&
+    _isSDH =
+        currentUserName != null &&
         widget.leaders
             .map((e) => e.trim().toLowerCase())
             .contains(currentUserName.trim().toLowerCase());
@@ -141,10 +144,7 @@ class _ProjectChecklistExecutionWidgetState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -183,10 +183,7 @@ class _ProjectChecklistExecutionWidgetState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -195,9 +192,7 @@ class _ProjectChecklistExecutionWidgetState
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_errorMessage != null) {
@@ -217,9 +212,7 @@ class _ProjectChecklistExecutionWidgetState
     }
 
     if (_checklist == null || _checklist!.groups.isEmpty) {
-      return const Center(
-        child: Text('No checklist items found'),
-      );
+      return const Center(child: Text('No checklist items found'));
     }
 
     return ListView.builder(
@@ -228,15 +221,76 @@ class _ProjectChecklistExecutionWidgetState
         final group = _checklist!.groups[index];
         final isExpanded = _expandedGroups.contains(group.id);
 
+        // Calculate defect count and rate for the group
+        int totalItems = group.questions.length;
+        for (final section in group.sections) {
+          totalItems += section.questions.length;
+        }
+
+        int defectCount = 0;
+        // Count rejections in direct questions
+        for (final q in group.questions) {
+          if (q.reviewerStatus == 'Rejected') {
+            defectCount++;
+          }
+        }
+        // Count rejections in section questions
+        for (final section in group.sections) {
+          for (final q in section.questions) {
+            if (q.reviewerStatus == 'Rejected') {
+              defectCount++;
+            }
+          }
+        }
+
+        double defectRate = totalItems > 0
+            ? (defectCount / totalItems) * 100
+            : 0;
+
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: ExpansionTile(
-            title: Text(
-              group.groupName,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    group.groupName,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Group defect stats badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: defectCount > 0
+                        ? Colors.orange.shade100
+                        : Colors.blue.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: defectCount > 0
+                          ? Colors.orange.shade300
+                          : Colors.blue.shade300,
+                    ),
+                  ),
+                  child: Text(
+                    '${defectRate.toStringAsFixed(1)}% (${defectCount}/${totalItems})',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: defectCount > 0
+                          ? Colors.orange.shade800
+                          : Colors.blue.shade800,
+                    ),
+                  ),
+                ),
+              ],
             ),
             initiallyExpanded: isExpanded,
             onExpansionChanged: (expanded) {
@@ -260,22 +314,20 @@ class _ProjectChecklistExecutionWidgetState
                         groupId: group.id,
                         onExecutorUpdate: (answer, remark) =>
                             _updateExecutorAnswer(
-                          group.id,
-                          question.id,
-                          answer,
-                          remark,
-                        ),
+                              group.id,
+                              question.id,
+                              answer,
+                              remark,
+                            ),
                         onReviewerUpdate: (status, remark) =>
                             _updateReviewerStatus(
-                          group.id,
-                          question.id,
-                          status,
-                          remark,
-                        ),
-                        canEditExecutor:
-                            !widget.readOnly && _canEditExecutor,
-                        canEditReviewer:
-                            !widget.readOnly && _canEditReviewer,
+                              group.id,
+                              question.id,
+                              status,
+                              remark,
+                            ),
+                        canEditExecutor: !widget.readOnly && _canEditExecutor,
+                        canEditReviewer: !widget.readOnly && _canEditReviewer,
                         isSDH: _isSDH,
                       );
                     }).toList(),
@@ -287,22 +339,20 @@ class _ProjectChecklistExecutionWidgetState
                         groupId: group.id,
                         onExecutorUpdate: (questionId, answer, remark) =>
                             _updateExecutorAnswer(
-                          group.id,
-                          questionId,
-                          answer,
-                          remark,
-                        ),
+                              group.id,
+                              questionId,
+                              answer,
+                              remark,
+                            ),
                         onReviewerUpdate: (questionId, status, remark) =>
                             _updateReviewerStatus(
-                          group.id,
-                          questionId,
-                          status,
-                          remark,
-                        ),
-                        canEditExecutor:
-                            !widget.readOnly && _canEditExecutor,
-                        canEditReviewer:
-                            !widget.readOnly && _canEditReviewer,
+                              group.id,
+                              questionId,
+                              status,
+                              remark,
+                            ),
+                        canEditExecutor: !widget.readOnly && _canEditExecutor,
+                        canEditReviewer: !widget.readOnly && _canEditReviewer,
                         isSDH: _isSDH,
                       );
                     }).toList(),
@@ -350,10 +400,12 @@ class _QuestionTileState extends State<_QuestionTile> {
   @override
   void initState() {
     super.initState();
-    _executorRemarkCtrl =
-        TextEditingController(text: widget.question.executorRemark ?? '');
-    _reviewerRemarkCtrl =
-        TextEditingController(text: widget.question.reviewerRemark ?? '');
+    _executorRemarkCtrl = TextEditingController(
+      text: widget.question.executorRemark ?? '',
+    );
+    _reviewerRemarkCtrl = TextEditingController(
+      text: widget.question.reviewerRemark ?? '',
+    );
   }
 
   @override
@@ -365,28 +417,85 @@ class _QuestionTileState extends State<_QuestionTile> {
 
   @override
   Widget build(BuildContext context) {
+    // Calculate defect metrics
+    bool isDefect = widget.question.reviewerStatus == 'Rejected';
+    String defectRate = isDefect ? '100%' : '0%';
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(
+          color: isDefect ? Colors.red.shade300 : Colors.grey.shade300,
+          width: isDefect ? 2 : 1,
+        ),
         borderRadius: BorderRadius.circular(8),
+        color: isDefect ? Colors.red.shade50 : Colors.white,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Question text
-          Text(
-            widget.question.text,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          // Header with question text and defect badge
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  widget.question.text,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Defect rate badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDefect ? Colors.red.shade100 : Colors.green.shade100,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: isDefect
+                        ? Colors.red.shade300
+                        : Colors.green.shade300,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isDefect ? Icons.error : Icons.check_circle,
+                      size: 14,
+                      color: isDefect
+                          ? Colors.red.shade700
+                          : Colors.green.shade700,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      defectRate,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isDefect
+                            ? Colors.red.shade700
+                            : Colors.green.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
 
           // Executor section
           if (widget.canEditExecutor || widget.question.executorAnswer != null)
             _buildExecutorSection(),
-          if ((widget.canEditExecutor || widget.question.executorAnswer != null) &&
-              (widget.canEditReviewer || widget.question.reviewerStatus != null))
+          if ((widget.canEditExecutor ||
+                  widget.question.executorAnswer != null) &&
+              (widget.canEditReviewer ||
+                  widget.question.reviewerStatus != null))
             const Divider(),
 
           // Reviewer section
@@ -417,10 +526,12 @@ class _QuestionTileState extends State<_QuestionTile> {
               DropdownButton<String?>(
                 value: widget.question.executorAnswer,
                 items: [null, 'Yes', 'No', 'NA']
-                    .map((value) => DropdownMenuItem(
-                          value: value,
-                          child: Text(value ?? 'Not Answered'),
-                        ))
+                    .map(
+                      (value) => DropdownMenuItem(
+                        value: value,
+                        child: Text(value ?? 'Not Answered'),
+                      ),
+                    )
                     .toList(),
                 onChanged: (value) async {
                   _executorRemarkCtrl.clear();
@@ -524,10 +635,12 @@ class _QuestionTileState extends State<_QuestionTile> {
               DropdownButton<String?>(
                 value: widget.question.reviewerStatus,
                 items: [null, 'Approved', 'Rejected']
-                    .map((value) => DropdownMenuItem(
-                          value: value,
-                          child: Text(value ?? 'Not Reviewed'),
-                        ))
+                    .map(
+                      (value) => DropdownMenuItem(
+                        value: value,
+                        child: Text(value ?? 'Not Reviewed'),
+                      ),
+                    )
                     .toList(),
                 onChanged: (value) async {
                   _reviewerRemarkCtrl.clear();
@@ -634,6 +747,13 @@ class _SectionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Calculate defect metrics for section
+    int totalItems = section.questions.length;
+    int defectCount = section.questions
+        .where((q) => q.reviewerStatus == 'Rejected')
+        .length;
+    double defectRate = totalItems > 0 ? (defectCount / totalItems) * 100 : 0;
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
@@ -645,19 +765,55 @@ class _SectionTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: Colors.blue.shade100,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(8)),
-            ),
-            child: Text(
-              section.sectionName,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(8),
               ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    section.sectionName,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Section defect stats
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: defectCount > 0
+                        ? Colors.orange.shade100
+                        : Colors.green.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: defectCount > 0
+                          ? Colors.orange.shade300
+                          : Colors.green.shade300,
+                    ),
+                  ),
+                  child: Text(
+                    '${defectRate.toStringAsFixed(1)}% (${defectCount}/${totalItems})',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: defectCount > 0
+                          ? Colors.orange.shade800
+                          : Colors.green.shade800,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           Padding(

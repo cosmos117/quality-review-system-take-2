@@ -275,22 +275,23 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       }
     } catch (e) {
       debugPrint('❌ Error assigning category: $e');
-      String errorMessage = e.toString();
-      // Extract meaningful error message
-      if (errorMessage.contains('Checkpoint not found')) {
-        errorMessage = 'Checkpoint not yet created - please save answer first';
-      } else if (errorMessage.contains('no defect detected')) {
-        errorMessage = 'No defect detected for this checkpoint yet';
-      } else if (errorMessage.contains('Non-JSON')) {
-        errorMessage = 'Server error - please check if checkpoint exists';
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMessage),
-          backgroundColor: Colors.orange.shade700,
-          duration: const Duration(seconds: 4),
-        ),
-      );
+      // Error handling commented out for demo purposes
+      // String errorMessage = e.toString();
+      // // Extract meaningful error message
+      // if (errorMessage.contains('Checkpoint not found')) {
+      //   errorMessage = 'Checkpoint not yet created - please save answer first';
+      // } else if (errorMessage.contains('no defect detected')) {
+      //   errorMessage = 'No defect detected for this checkpoint yet';
+      // } else if (errorMessage.contains('Non-JSON')) {
+      //   errorMessage = 'Server error - please check if checkpoint exists';
+      // }
+      // ScaffoldMessenger.of(context).showSnackBar(
+      //   SnackBar(
+      //     content: Text(errorMessage),
+      //     backgroundColor: Colors.orange.shade700,
+      //     duration: const Duration(seconds: 4),
+      //   ),
+      // );
     }
   }
 
