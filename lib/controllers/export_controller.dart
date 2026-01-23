@@ -3,17 +3,22 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../services/excel_export_service.dart';
+import '../services/master_excel_export_service.dart';
 
 // Conditional web imports
 import 'dart:html' as html;
 
 class ExportController extends GetxController {
   final ExcelExportService excelExportService;
+  final MasterExcelExportService masterExcelExportService;
 
   final isExporting = false.obs;
   final exportError = RxnString();
 
-  ExportController({required this.excelExportService});
+  ExportController({
+    required this.excelExportService,
+    required this.masterExcelExportService,
+  });
 
   /// Export project to Excel and save to device
   Future<bool> exportProjectToExcel(
@@ -64,6 +69,54 @@ class ExportController extends GetxController {
       exportError.value = 'Export failed: $e';
       Get.snackbar(
         'Export Failed',
+        'Error: $e',
+        duration: const Duration(seconds: 3),
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      isExporting.value = false;
+      return false;
+    }
+  }
+
+  /// Export all projects as master Excel file
+  Future<bool> exportMasterExcel() async {
+    try {
+      isExporting.value = true;
+      exportError.value = null;
+
+      print('🚀 Starting master Excel export for all projects...');
+
+      // Download master Excel from backend
+      final fileBytes = await masterExcelExportService.downloadMasterExcel();
+
+      final timestamp = DateTime.now().toIso8601String().split('T')[0];
+      final filename =
+          'master_export_${timestamp}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+
+      // Try web download first
+      try {
+        _downloadFileWeb(Uint8List.fromList(fileBytes), filename);
+        print('✓ Web download initiated: $filename');
+      } catch (webError) {
+        print('⚠️ Web download failed, trying native...');
+        await _downloadFileNative(Uint8List.fromList(fileBytes), filename);
+      }
+
+      Get.snackbar(
+        'Success',
+        'Master Excel exported successfully!\n$filename',
+        duration: const Duration(seconds: 4),
+      );
+
+      isExporting.value = false;
+      return true;
+    } catch (e, stackTrace) {
+      print('❌ Master export error: $e');
+      print('Stack trace: $stackTrace');
+      exportError.value = 'Master export failed: $e';
+      Get.snackbar(
+        'Master Export Failed',
         'Error: $e',
         duration: const Duration(seconds: 3),
         backgroundColor: Colors.red,

@@ -16,6 +16,9 @@ import '../controllers/auth_controller.dart';
 import '../pages/employee_pages/checklist_controller.dart';
 import '../services/checklist_answer_service.dart';
 import '../services/approval_service.dart';
+import '../services/excel_export_service.dart';
+import '../services/master_excel_export_service.dart';
+import '../controllers/export_controller.dart';
 
 class AppBindings extends Bindings {
   @override
@@ -59,6 +62,30 @@ class AppBindings extends Bindings {
     );
     Get.put<DefectCategorizationService>(
       DefectCategorizationService(Get.find<SimpleHttp>()),
+      permanent: true,
+    );
+
+    // Export services
+    Get.put<ExcelExportService>(
+      ExcelExportService(
+        projectService: Get.find<ProjectService>(),
+        membershipService: Get.find<ProjectMembershipService>(),
+        checklistService: Get.find<PhaseChecklistService>(),
+        answerService: Get.find<ChecklistAnswerService>(),
+        stageService: Get.find<StageService>(),
+        templateService: Get.find<TemplateService>(),
+      ),
+      permanent: true,
+    );
+    Get.put<MasterExcelExportService>(
+      MasterExcelExportService(httpClient: Get.find<SimpleHttp>()),
+      permanent: true,
+    );
+    Get.put<ExportController>(
+      ExportController(
+        excelExportService: Get.find<ExcelExportService>(),
+        masterExcelExportService: Get.find<MasterExcelExportService>(),
+      ),
       permanent: true,
     );
 

@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../../models/project.dart';
 import '../../controllers/projects_controller.dart';
 import '../../controllers/admin_dashboard_ui_controller.dart';
+import '../../controllers/export_controller.dart';
 import '../../components/admin_dialog.dart';
 import 'admin_project_details_page.dart';
 import '../../controllers/team_controller.dart';
@@ -268,6 +269,43 @@ class AdminDashboardPage extends StatelessWidget {
                     icon: const Icon(Icons.file_upload),
                     label: const Text('Import from Excel'),
                   ),
+                  const SizedBox(width: 12),
+
+                  // Export Master Excel Button
+                  Obx(() {
+                    final exportCtrl = Get.find<ExportController>();
+                    return ElevatedButton.icon(
+                      onPressed: exportCtrl.isExporting.value
+                          ? null
+                          : () async {
+                              await exportCtrl.exportMasterExcel();
+                            },
+                      icon: exportCtrl.isExporting.value
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : const Icon(Icons.download),
+                      label: Text(
+                        exportCtrl.isExporting.value
+                            ? 'Exporting...'
+                            : 'Export Master Excel',
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green[600],
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                    );
+                  }),
                 ],
               ),
               const SizedBox(height: 12),
