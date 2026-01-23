@@ -248,21 +248,33 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     String? severity,
   }) async {
     try {
+      print(
+        '🔄 Assigning defect category: checkpoint=$checkpointId | category=$categoryId | severity=$severity',
+      );
+
       // Persist locally immediately so UI keeps selection across rebuilds
       setState(() {
         _selectedDefectCategory[checkpointId] = categoryId;
         if (severity != null) {
           _selectedDefectSeverity[checkpointId] = severity;
         }
+        print(
+          '  ✓ Local state updated: _selectedDefectCategory[$checkpointId]=$categoryId, _selectedDefectSeverity[$checkpointId]=$severity',
+        );
       });
+
       // Fire-and-update backend (do not block UI stability)
       final checklistService = Get.find<PhaseChecklistService>();
       if (categoryId != null) {
+        print(
+          '  📡 Calling backend: PATCH /checkpoints/$checkpointId/defect-category',
+        );
         await checklistService.assignDefectCategory(
           checkpointId,
           categoryId,
           severity: severity,
         );
+        print('  ✓ Backend assignment successful');
         debugPrint('✓ Category assigned to checkpoint $checkpointId');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -274,6 +286,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         debugPrint('✓ Category cleared for checkpoint $checkpointId');
       }
     } catch (e) {
+      print('  ❌ Error assigning category: $e');
       debugPrint('❌ Error assigning category: $e');
       // Error handling commented out for demo purposes
       // String errorMessage = e.toString();
@@ -303,6 +316,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       _approvalStatus = null;
       _compareStatus = null;
       _errorMessage = null;
+      // Clear previous category/severity data before loading fresh data
+      _selectedDefectCategory.clear();
+      _selectedDefectSeverity.clear();
     });
 
     final phase = _selectedPhase;
@@ -455,33 +471,62 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           );
           print('    Checkpoints: ${checkpoints.length}');
 
+          // Debug: Print first checkpoint structure to verify defect data
+          if (checkpoints.isNotEmpty) {
+            final firstCp = checkpoints.first;
+            print('    📋 First checkpoint structure:');
+            print('      _id: ${firstCp['_id']}');
+            print('      question: ${firstCp['question']}');
+            print('      defect: ${firstCp['defect']}');
+            if (firstCp['defect'] is Map) {
+              print('        - categoryId: ${firstCp['defect']['categoryId']}');
+              print('        - severity: ${firstCp['defect']['severity']}');
+              print('        - isDetected: ${firstCp['defect']['isDetected']}');
+            }
+          }
+
           final cpObjs = checkpoints
               .map((cp) {
-                final categoryId = (cp['categoryId'] ?? '').toString();
-                // Capture already-assigned defect category from backend (if any)
+                // Extract defect category and severity from checkpoint.defect
+                String? defectCatId;
+                String? defectSeverity;
                 try {
                   final defect = cp['defect'];
-                  final defectCatId = defect is Map
-                      ? (defect['categoryId'] ?? '').toString()
-                      : '';
-                  final defectSeverity = defect is Map
-                      ? (defect['severity'] ?? '').toString()
-                      : '';
-                  final cpId = (cp['_id'] ?? '').toString();
-                  if (cpId.isNotEmpty) {
-                    _selectedDefectCategory[cpId] = defectCatId.isNotEmpty
-                        ? defectCatId
-                        : _selectedDefectCategory[cpId];
-                    _selectedDefectSeverity[cpId] = defectSeverity.isNotEmpty
-                        ? defectSeverity
-                        : _selectedDefectSeverity[cpId];
+                  if (defect is Map) {
+                    defectCatId = (defect['categoryId'] ?? '').toString();
+                    defectSeverity = (defect['severity'] ?? '').toString();
+
+                    // Handle null/empty severity
+                    if (defectSeverity == 'null' || defectSeverity.isEmpty) {
+                      defectSeverity = null;
+                    }
                   }
-                } catch (_) {}
-                print(
-                  '  📌 Checkpoint: ${cp['question']} | categoryId: "$categoryId"',
-                );
+                } catch (e) {
+                  print('    ⚠️ Error extracting defect from checkpoint: $e');
+                }
+
+                final cpId = (cp['_id'] ?? '').toString();
+                if (cpId.isNotEmpty &&
+                    defectCatId != null &&
+                    defectCatId.isNotEmpty) {
+                  _selectedDefectCategory[cpId] = defectCatId;
+                  if (defectSeverity != null) {
+                    _selectedDefectSeverity[cpId] = defectSeverity;
+                  }
+                  print(
+                    '  ✓ Loaded defect: checkpoint=$cpId | category="$defectCatId" | severity="$defectSeverity"',
+                  );
+                } else if (cpId.isNotEmpty) {
+                  print(
+                    '  ⚠️ No defect category for checkpoint: $cpId (catId: "$defectCatId")',
+                  );
+                }
+
+                // categoryId on checkpoint itself (legacy, not used now)
+                final categoryId = (cp['categoryId'] ?? '').toString();
+
                 return {
-                  'id': (cp['_id'] ?? '').toString(),
+                  'id': cpId,
                   'text': (cp['question'] ?? '').toString(),
                   'categoryId': categoryId,
                 };
@@ -489,6 +534,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
               .where((m) => (m['text'] ?? '').isNotEmpty)
               .cast<Map<String, String>>()
               .toList();
+
+          print('    📝 Created ${cpObjs.length} question objects:');
+          cpObjs.forEach((obj) {
+            print('       • id=${obj['id']} | text=${obj['text']}');
+          });
 
           if (cpObjs.isNotEmpty) {
             loadedChecklist.add(
@@ -584,6 +634,27 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     setState(() {
       _isLoadingData = false;
     });
+
+    // DEBUG: Print current state of defect maps
+    print('');
+    print(
+      '═══════════════════════════════════════════════════════════════',
+    );
+    print('🔍 DEBUG: Defect Category & Severity Maps After Loading');
+    print(
+      '═══════════════════════════════════════════════════════════════',
+    );
+    print('📍 Total checkpoints with categories: ${_selectedDefectCategory.length}');
+    _selectedDefectCategory.forEach((checkpointId, categoryId) {
+      final severity = _selectedDefectSeverity[checkpointId] ?? 'N/A';
+      print(
+        '   • Checkpoint: $checkpointId | Category: $categoryId | Severity: $severity',
+      );
+    });
+    print(
+      '═══════════════════════════════════════════════════════════════',
+    );
+    print('');
 
     // Compute active phase
     await _computeActivePhase();
@@ -815,8 +886,30 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
     // Editing only allowed on active phase; older phases view-only for all
     final phaseEditable = _selectedPhase >= _activePhase;
-    final canEditExecutorPhase = canEditExecutor && phaseEditable;
-    final canEditReviewerPhase = canEditReviewer && phaseEditable;
+
+    // Check if executor checklist for this phase has been submitted
+    final executorSubmitted =
+        checklistCtrl.submissionInfo(
+          widget.projectId,
+          _selectedPhase,
+          'executor',
+        )?['is_submitted'] ==
+        true;
+
+    // Check if reviewer checklist for this phase has been submitted
+    final reviewerSubmitted =
+        checklistCtrl.submissionInfo(
+          widget.projectId,
+          _selectedPhase,
+          'reviewer',
+        )?['is_submitted'] ==
+        true;
+
+    // Can edit only if phase is editable AND checklist has not been submitted
+    final canEditExecutorPhase =
+        canEditExecutor && phaseEditable && !executorSubmitted;
+    final canEditReviewerPhase =
+        canEditReviewer && phaseEditable && !reviewerSubmitted;
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -1751,14 +1844,20 @@ class _RoleColumn extends StatelessWidget {
                                   final key = subKey(sub);
                                   final text = subText(sub);
                                   final sectionName = sub['sectionName'];
+                                  
+                                  // DEBUG: Log the key and category lookup
+                                  final catFromMap = selectedDefectCategory[key];
+                                  final sevFromMap = selectedDefectSeverity[key];
+                                  if (catFromMap != null || sevFromMap != null) {
+                                    print(
+                                      '🎯 Building SubQuestionCard: key=$key | category=$catFromMap | severity=$sevFromMap | role=$role',
+                                    );
+                                  }
 
                                   final widgets = <Widget>[];
 
                                   // Add section header if section changed
                                   if (sectionName != null &&
-                                      sectionName.isNotEmpty &&
-                                      sectionName != lastSection) {
-                                    lastSection = sectionName;
                                     widgets.add(
                                       Padding(
                                         padding: const EdgeInsets.only(
@@ -2247,10 +2346,16 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     // Initialize from parent-selected category, if provided
     if (widget.selectedCategoryId != null) {
       selectedCategory = widget.selectedCategoryId;
+      print(
+        '🎨 SubQuestionCard.initState: Initialized from parent category=${widget.selectedCategoryId}',
+      );
     }
     // Initialize from parent-selected severity, if provided
     if (widget.selectedSeverity != null) {
       selectedSeverity = widget.selectedSeverity;
+      print(
+        '🎨 SubQuestionCard.initState: Initialized from parent severity=${widget.selectedSeverity}',
+      );
     }
   }
 
@@ -2359,8 +2464,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     "answer": selectedOption,
     "remark": remarkController.text,
     "images": _images,
-    "categoryId": selectedCategory,
-    "severity": _currentSelectedSeverity(),
   });
 
   Future<void> _pickImages() async {
@@ -2651,8 +2754,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                                 severity: _currentSelectedSeverity(),
                               );
                             }
-                            // Save answer with category
-                            _updateAnswer();
                           }
                         : null,
                     underline: Container(
@@ -2744,8 +2845,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                                 severity: val,
                               );
                             }
-                            // Save answer with severity
-                            _updateAnswer();
                           }
                         : null,
                     underline: Container(
