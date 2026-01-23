@@ -6,7 +6,6 @@ import 'package:quality_review/pages/admin_pages/admin_dashboard_page.dart';
 import 'package:quality_review/pages/admin_pages/employee_page.dart';
 import '../../controllers/auth_controller.dart';
 import '../login.dart';
-import 'admin_checklist_template_page.dart';
 
 class AdminMainLayout extends StatelessWidget {
   AdminMainLayout({super.key});

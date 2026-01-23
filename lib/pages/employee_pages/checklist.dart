@@ -4,7 +4,6 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
-import 'package:collection/collection.dart';
 import 'checklist_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../services/approval_service.dart';
@@ -237,11 +236,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     return _defectCategories.values.toList();
   }
 
-  String? _getCheckpointIdForSubQuestion(String subQuestion) {
-    // In this implementation, the checkpoint ID is the subquestion key itself
-    return subQuestion;
-  }
-
   Future<void> _assignDefectCategory(
     String checkpointId,
     String? categoryId, {
@@ -249,62 +243,35 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   }) async {
     try {
       print(
-        '🔄 Assigning defect category: checkpoint=$checkpointId | category=$categoryId | severity=$severity',
+        '🔄 Assigning defect category: $checkpointId → $categoryId ($severity)',
       );
 
-      // Persist locally immediately so UI keeps selection across rebuilds
+      // Immediately update local state
       setState(() {
         _selectedDefectCategory[checkpointId] = categoryId;
         if (severity != null) {
           _selectedDefectSeverity[checkpointId] = severity;
         }
-        print(
-          '  ✓ Local state updated: _selectedDefectCategory[$checkpointId]=$categoryId, _selectedDefectSeverity[$checkpointId]=$severity',
-        );
       });
 
-      // Fire-and-update backend (do not block UI stability)
-      final checklistService = Get.find<PhaseChecklistService>();
-      if (categoryId != null) {
-        print(
-          '  📡 Calling backend: PATCH /checkpoints/$checkpointId/defect-category',
-        );
+      // Save to backend
+      if (categoryId != null && categoryId.isNotEmpty) {
+        final checklistService = Get.find<PhaseChecklistService>();
+        print('📡 Saving to backend...');
         await checklistService.assignDefectCategory(
           checkpointId,
           categoryId,
           severity: severity,
         );
-        print('  ✓ Backend assignment successful');
-        debugPrint('✓ Category assigned to checkpoint $checkpointId');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Defect category and severity assigned'),
-          ),
-        );
-      } else {
-        // Handle clearing category if backend supports it
-        debugPrint('✓ Category cleared for checkpoint $checkpointId');
+        print('✓ Saved successfully');
       }
     } catch (e) {
-      print('  ❌ Error assigning category: $e');
-      debugPrint('❌ Error assigning category: $e');
-      // Error handling commented out for demo purposes
-      // String errorMessage = e.toString();
-      // // Extract meaningful error message
-      // if (errorMessage.contains('Checkpoint not found')) {
-      //   errorMessage = 'Checkpoint not yet created - please save answer first';
-      // } else if (errorMessage.contains('no defect detected')) {
-      //   errorMessage = 'No defect detected for this checkpoint yet';
-      // } else if (errorMessage.contains('Non-JSON')) {
-      //   errorMessage = 'Server error - please check if checkpoint exists';
-      // }
-      // ScaffoldMessenger.of(context).showSnackBar(
-      //   SnackBar(
-      //     content: Text(errorMessage),
-      //     backgroundColor: Colors.orange.shade700,
-      //     duration: const Duration(seconds: 4),
-      //   ),
-      // );
+      print('❌ Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+      }
     }
   }
 
@@ -350,7 +317,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
       // Step 1: Fetch stages
       final stageService = Get.find<StageService>();
-      final checklistService = Get.find<PhaseChecklistService>();
 
       final stages = await stageService.listStages(widget.projectId);
       print('✓ Stages fetched: ${stages.length} stages found');
@@ -487,48 +453,28 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
           final cpObjs = checkpoints
               .map((cp) {
-                // Extract defect category and severity from checkpoint.defect
-                String? defectCatId;
-                String? defectSeverity;
-                try {
-                  final defect = cp['defect'];
-                  if (defect is Map) {
-                    defectCatId = (defect['categoryId'] ?? '').toString();
-                    defectSeverity = (defect['severity'] ?? '').toString();
-
-                    // Handle null/empty severity
-                    if (defectSeverity == 'null' || defectSeverity.isEmpty) {
-                      defectSeverity = null;
-                    }
-                  }
-                } catch (e) {
-                  print('    ⚠️ Error extracting defect from checkpoint: $e');
-                }
-
                 final cpId = (cp['_id'] ?? '').toString();
-                if (cpId.isNotEmpty &&
-                    defectCatId != null &&
-                    defectCatId.isNotEmpty) {
+
+                // Extract defect category and severity from checkpoint.defect
+                final defect = cp['defect'] as Map? ?? {};
+                final defectCatId = (defect['categoryId'] ?? '').toString();
+                final defectSeverity = (defect['severity'] ?? '').toString();
+
+                // Store in local maps for UI
+                if (defectCatId.isNotEmpty) {
                   _selectedDefectCategory[cpId] = defectCatId;
-                  if (defectSeverity != null) {
-                    _selectedDefectSeverity[cpId] = defectSeverity;
-                  }
+                  _selectedDefectSeverity[cpId] = defectSeverity.isNotEmpty
+                      ? defectSeverity
+                      : null;
                   print(
-                    '  ✓ Loaded defect: checkpoint=$cpId | category="$defectCatId" | severity="$defectSeverity"',
-                  );
-                } else if (cpId.isNotEmpty) {
-                  print(
-                    '  ⚠️ No defect category for checkpoint: $cpId (catId: "$defectCatId")',
+                    '✓ Loaded defect: $cpId → $defectCatId ($defectSeverity)',
                   );
                 }
-
-                // categoryId on checkpoint itself (legacy, not used now)
-                final categoryId = (cp['categoryId'] ?? '').toString();
 
                 return {
                   'id': cpId,
                   'text': (cp['question'] ?? '').toString(),
-                  'categoryId': categoryId,
+                  'categoryId': defectCatId,
                 };
               })
               .where((m) => (m['text'] ?? '').isNotEmpty)
@@ -637,23 +583,19 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
     // DEBUG: Print current state of defect maps
     print('');
-    print(
-      '═══════════════════════════════════════════════════════════════',
-    );
+    print('═══════════════════════════════════════════════════════════════');
     print('🔍 DEBUG: Defect Category & Severity Maps After Loading');
+    print('═══════════════════════════════════════════════════════════════');
     print(
-      '═══════════════════════════════════════════════════════════════',
+      '📍 Total checkpoints with categories: ${_selectedDefectCategory.length}',
     );
-    print('📍 Total checkpoints with categories: ${_selectedDefectCategory.length}');
     _selectedDefectCategory.forEach((checkpointId, categoryId) {
       final severity = _selectedDefectSeverity[checkpointId] ?? 'N/A';
       print(
         '   • Checkpoint: $checkpointId | Category: $categoryId | Severity: $severity',
       );
     });
-    print(
-      '═══════════════════════════════════════════════════════════════',
-    );
+    print('═══════════════════════════════════════════════════════════════');
     print('');
 
     // Compute active phase
@@ -1844,11 +1786,14 @@ class _RoleColumn extends StatelessWidget {
                                   final key = subKey(sub);
                                   final text = subText(sub);
                                   final sectionName = sub['sectionName'];
-                                  
+
                                   // DEBUG: Log the key and category lookup
-                                  final catFromMap = selectedDefectCategory[key];
-                                  final sevFromMap = selectedDefectSeverity[key];
-                                  if (catFromMap != null || sevFromMap != null) {
+                                  final catFromMap =
+                                      selectedDefectCategory[key];
+                                  final sevFromMap =
+                                      selectedDefectSeverity[key];
+                                  if (catFromMap != null ||
+                                      sevFromMap != null) {
                                     print(
                                       '🎯 Building SubQuestionCard: key=$key | category=$catFromMap | severity=$sevFromMap | role=$role',
                                     );
@@ -1858,6 +1803,7 @@ class _RoleColumn extends StatelessWidget {
 
                                   // Add section header if section changed
                                   if (sectionName != null &&
+                                      sectionName != lastSection) {
                                     widgets.add(
                                       Padding(
                                         padding: const EdgeInsets.only(
@@ -1884,6 +1830,7 @@ class _RoleColumn extends StatelessWidget {
                                         ),
                                       ),
                                     );
+                                    lastSection = sectionName;
                                   }
 
                                   // Add the question card
@@ -2342,21 +2289,10 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
   void initState() {
     super.initState();
     _initializeData();
-    _initializeCategoryOnce();
-    // Initialize from parent-selected category, if provided
-    if (widget.selectedCategoryId != null) {
-      selectedCategory = widget.selectedCategoryId;
-      print(
-        '🎨 SubQuestionCard.initState: Initialized from parent category=${widget.selectedCategoryId}',
-      );
-    }
-    // Initialize from parent-selected severity, if provided
-    if (widget.selectedSeverity != null) {
-      selectedSeverity = widget.selectedSeverity;
-      print(
-        '🎨 SubQuestionCard.initState: Initialized from parent severity=${widget.selectedSeverity}',
-      );
-    }
+
+    // Initialize category and severity from parent or initialData
+    selectedCategory = widget.selectedCategoryId;
+    selectedSeverity = widget.selectedSeverity;
   }
 
   void _initializeData() {
@@ -2366,93 +2302,33 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       if (remarkController.text != newRemark) remarkController.text = newRemark;
       final imgs = widget.initialData!['images'];
       if (imgs is List) _images = List<Map<String, dynamic>>.from(imgs);
-      // Restore categoryId and severity from saved answer
-      final savedCategoryId = widget.initialData!['categoryId'];
-      if (savedCategoryId != null && (savedCategoryId as String).isNotEmpty) {
-        selectedCategory = savedCategoryId as String;
-      }
-      final savedSeverity = widget.initialData!['severity'];
-      if (savedSeverity != null && (savedSeverity as String).isNotEmpty) {
-        selectedSeverity = savedSeverity as String;
-      }
     }
   }
 
-  // Initialize category only once on first load
-  void _initializeCategoryOnce() {
-    if (selectedCategory == null && widget.initialData != null) {
-      final defectData = widget.initialData!['defect'];
-      if (defectData is Map && defectData['categoryId'] != null) {
-        selectedCategory = defectData['categoryId'].toString();
-      }
-    }
-  }
+  // Check if a defect is detected for this checkpoint
+  bool _isDefectDetected() => true;
 
-  // Added: Check if a defect is detected for this checkpoint
-  // A defect is detected when executor answer ≠ reviewer answer
-  bool _isDefectDetected() {
-    // For now, only show the dropdown on the reviewer side
-    // In a full implementation, we'd need to pass the role and check answers properly
-    // This is a temporary check - the real defect detection happens on backend
-    return true; // Will be refined based on actual defect data
-  }
-
-  // Helper method to get category name by ID
+  // Get category name by ID
   String? _getCategoryName(String? categoryId) {
-    if (categoryId == null) return null;
+    if (categoryId == null || categoryId.isEmpty) return null;
     try {
-      final category = widget.availableCategories.firstWhere(
-        (cat) => (cat['_id'] ?? '').toString() == categoryId,
+      final cat = widget.availableCategories.firstWhere(
+        (c) => (c['_id'] ?? '').toString() == categoryId,
         orElse: () => {},
       );
-      return (category['name'] ?? '').toString();
+      return (cat['name'] ?? '').toString();
     } catch (e) {
       return null;
     }
   }
 
-  // Helper method to check if a category ID is valid
-  bool _isValidCategoryId(String? categoryId) {
-    if (categoryId == null) return false;
-    return widget.availableCategories.any(
-      (cat) => (cat['_id'] ?? '').toString() == categoryId,
-    );
-  }
+  // Current selected category
+  String? _currentSelectedCategory() =>
+      selectedCategory ?? widget.selectedCategoryId;
 
-  // Controlled selected category: prefer parent value when provided
-  String? _currentSelectedCategory() {
-    return widget.selectedCategoryId ?? selectedCategory;
-  }
-
-  // Controlled selected severity: prefer parent value when provided
-  String? _currentSelectedSeverity() {
-    return widget.selectedSeverity ?? selectedSeverity;
-  }
-
-  @override
-  void didUpdateWidget(SubQuestionCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.initialData != oldWidget.initialData) {
-      _initializeData();
-      setState(() {});
-    }
-    // Keep in sync with parent-controlled selected category
-    if (widget.selectedCategoryId != oldWidget.selectedCategoryId &&
-        widget.selectedCategoryId != null &&
-        widget.selectedCategoryId != selectedCategory) {
-      setState(() {
-        selectedCategory = widget.selectedCategoryId;
-      });
-    }
-    // Keep in sync with parent-controlled selected severity
-    if (widget.selectedSeverity != oldWidget.selectedSeverity &&
-        widget.selectedSeverity != null &&
-        widget.selectedSeverity != selectedSeverity) {
-      setState(() {
-        selectedSeverity = widget.selectedSeverity;
-      });
-    }
-  }
+  // Current selected severity
+  String? _currentSelectedSeverity() =>
+      selectedSeverity ?? widget.selectedSeverity;
 
   @override
   void dispose() {
@@ -2682,88 +2558,54 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                if (currentCat != null && !widget.editable)
-                  // Display only mode - show the assigned category
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(4),
-                      color: Colors.grey.shade50,
-                    ),
-                    child: Text(
-                      _getCategoryName(currentCat) ?? 'Unknown Category',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  )
-                else
+                if (widget.editable)
                   // Edit mode - show dropdown
                   DropdownButton<String?>(
                     isExpanded: true,
                     value: currentCat,
-                    hint: const Text('Select a category (if defect found)'),
-                    items: () {
-                      final items = <DropdownMenuItem<String?>>[
-                        const DropdownMenuItem(
-                          value: null,
-                          child: Text('None (clear category)'),
-                        ),
-                        ...widget.availableCategories.map((cat) {
-                          final id = (cat['_id'] ?? '').toString();
-                          final name = (cat['name'] ?? 'Unnamed').toString();
-                          return DropdownMenuItem<String?>(
-                            value: id.isNotEmpty ? id : null,
-                            enabled: id.isNotEmpty,
-                            child: Text(name),
-                          );
-                        }),
-                      ];
-
-                      // Keep showing the current selection even if it is no longer available
-                      if (currentCat != null &&
-                          !_isValidCategoryId(currentCat) &&
-                          items.every((item) => item.value != currentCat)) {
-                        items.add(
-                          DropdownMenuItem<String?>(
-                            value: currentCat,
-                            child: Text(
-                              _getCategoryName(currentCat) ??
-                                  'Selected (unavailable)',
-                              style: const TextStyle(
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
+                    hint: const Text('Select category'),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('None')),
+                      ...widget.availableCategories.map((cat) {
+                        final id = (cat['_id'] ?? '').toString();
+                        final name = (cat['name'] ?? 'Unnamed').toString();
+                        return DropdownMenuItem<String?>(
+                          value: id,
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         );
+                      }),
+                    ],
+                    onChanged: (val) {
+                      setState(() => selectedCategory = val);
+                      if (val != null &&
+                          widget.checkpointId != null &&
+                          widget.onCategoryAssigned != null) {
+                        widget.onCategoryAssigned!(
+                          widget.checkpointId!,
+                          val,
+                          severity: selectedSeverity,
+                        );
                       }
-                      return items;
-                    }(),
-                    onChanged: widget.editable
-                        ? (val) {
-                            setState(() => selectedCategory = val);
-                            // Assign category to backend if provided
-                            if (val != null &&
-                                widget.checkpointId != null &&
-                                widget.onCategoryAssigned != null) {
-                              widget.onCategoryAssigned!(
-                                widget.checkpointId!,
-                                val,
-                                severity: _currentSelectedSeverity(),
-                              );
-                            }
-                          }
-                        : null,
-                    underline: Container(
-                      height: 1,
-                      color: Colors.grey.shade300,
-                    ),
+                    },
+                  )
+                else if (currentCat != null)
+                  // View mode - show selected category
+                  Text(
+                    _getCategoryName(currentCat) ?? 'Unknown',
+                    style: const TextStyle(fontSize: 14),
+                  )
+                else
+                  const Text(
+                    'No category assigned',
+                    style: TextStyle(color: Colors.grey),
                   ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Defect Severity',
+                  'Severity',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -2771,58 +2613,13 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                if (_currentSelectedSeverity() != null && !widget.editable)
-                  // Display-only mode for reviewer view when not editable
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: _currentSelectedSeverity() == 'Critical'
-                            ? Colors.red
-                            : Colors.orange,
-                      ),
-                      borderRadius: BorderRadius.circular(4),
-                      color: _currentSelectedSeverity() == 'Critical'
-                          ? Colors.red.shade50
-                          : Colors.orange.shade50,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _currentSelectedSeverity() == 'Critical'
-                              ? Icons.warning
-                              : Icons.info,
-                          size: 16,
-                          color: _currentSelectedSeverity() == 'Critical'
-                              ? Colors.red
-                              : Colors.orange,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _currentSelectedSeverity() ?? 'Not specified',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w500,
-                            color: _currentSelectedSeverity() == 'Critical'
-                                ? Colors.red
-                                : Colors.orange,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
+                if (widget.editable)
                   DropdownButton<String?>(
                     isExpanded: true,
-                    value: _currentSelectedSeverity(),
-                    hint: const Text('Select defect severity'),
+                    value: selectedSeverity,
+                    hint: const Text('Select severity'),
                     items: const [
-                      DropdownMenuItem(
-                        value: null,
-                        child: Text('Not specified'),
-                      ),
+                      DropdownMenuItem(value: null, child: Text('None')),
                       DropdownMenuItem(
                         value: 'Critical',
                         child: Text('Critical'),
@@ -2832,25 +2629,35 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                         child: Text('Non-Critical'),
                       ),
                     ],
-                    onChanged: widget.editable
-                        ? (val) {
-                            setState(() => selectedSeverity = val);
-                            // Assign severity to backend along with category if available
-                            if (widget.checkpointId != null &&
-                                widget.onCategoryAssigned != null &&
-                                selectedCategory != null) {
-                              widget.onCategoryAssigned!(
-                                widget.checkpointId!,
-                                selectedCategory,
-                                severity: val,
-                              );
-                            }
-                          }
-                        : null,
-                    underline: Container(
-                      height: 1,
-                      color: Colors.grey.shade300,
+                    onChanged: (val) {
+                      setState(() => selectedSeverity = val);
+                      if (widget.checkpointId != null &&
+                          widget.onCategoryAssigned != null &&
+                          currentCat != null) {
+                        widget.onCategoryAssigned!(
+                          widget.checkpointId!,
+                          currentCat,
+                          severity: val,
+                        );
+                      }
+                    },
+                  )
+                else if (selectedSeverity != null)
+                  Text(
+                    selectedSeverity == 'Critical'
+                        ? '⚠️ Critical'
+                        : 'ℹ️ Non-Critical',
+                    style: TextStyle(
+                      color: selectedSeverity == 'Critical'
+                          ? Colors.red
+                          : Colors.orange,
+                      fontWeight: FontWeight.w500,
                     ),
+                  )
+                else
+                  const Text(
+                    'Not specified',
+                    style: TextStyle(color: Colors.grey),
                   ),
               ],
             ),
