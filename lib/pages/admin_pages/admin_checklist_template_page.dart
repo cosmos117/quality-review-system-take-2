@@ -3,11 +3,27 @@ import 'package:get/get.dart';
 import '../../services/template_service.dart';
 
 // Admin Checklist Template Management Page
-// - 3 phases (P1, P2, P3) with backend integration
+// - Dynamic phases with custom names (not just P1, P2, P3)
+// - Manage Phases (add/rename/delete)
 // - Manage Checklist Groups (add/edit/delete)
 // - Manage Questions within each group (add/edit/delete)
 // - All operations persist to database via TemplateService
 // - Phase data loaded from MongoDB template singleton
+
+/// Phase model with dynamic name and stage identifier
+class PhaseModel {
+  String id;
+  String name;
+  String stage; // stage1, stage2, stage3, etc.
+  List<TemplateGroup> groups;
+
+  PhaseModel({
+    required this.id,
+    required this.name,
+    required this.stage,
+    this.groups = const [],
+  });
+}
 
 class AdminChecklistTemplatePage extends StatefulWidget {
   const AdminChecklistTemplatePage({super.key});
@@ -18,19 +34,18 @@ class AdminChecklistTemplatePage extends StatefulWidget {
 }
 
 class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
+    with TickerProviderStateMixin {
+  late TabController _tabController;
 
-  // Independent state per phase
-  late List<TemplateGroup> _p1Groups;
-  late List<TemplateGroup> _p2Groups;
-  late List<TemplateGroup> _p3Groups;
+  // Dynamic phases list
+  List<PhaseModel> _phases = [];
 
   // Defect categories
   late List<DefectCategory> _defectCategories;
 
   bool _isLoading = true;
   String? _errorMessage;
+  bool _hasUnsavedPhaseChanges = false;
 
   // Getter for TemplateService - ensures it's always available
   TemplateService get _templateService => Get.find<TemplateService>();
@@ -38,12 +53,15 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
 
-    // Initialize empty lists
-    _p1Groups = [];
-    _p2Groups = [];
-    _p3Groups = [];
+    // Initialize with default 3 phases (for backwards compatibility)
+    _phases = [
+      PhaseModel(id: 'p1', name: 'Phase 1', stage: 'stage1', groups: []),
+      PhaseModel(id: 'p2', name: 'Phase 2', stage: 'stage2', groups: []),
+      PhaseModel(id: 'p3', name: 'Phase 3', stage: 'stage3', groups: []),
+    ];
+
+    _tabController = TabController(length: _phases.length, vsync: this);
     _defectCategories = [];
 
     // Load template from backend
@@ -67,33 +85,75 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
       // Fetch template from backend
       final templateData = await _templateService.fetchTemplate();
 
+      // Load phase names from metadata if available
+      final phaseMetadata = templateData['phaseNames'] as Map<String, dynamic>?;
+      final newPhases = <PhaseModel>[..._phases];
+
+      if (phaseMetadata != null) {
+        // Update phase names from saved metadata
+        for (var phase in newPhases) {
+          final savedName = phaseMetadata[phase.stage];
+          if (savedName != null) {
+            phase.name = savedName.toString();
+          }
+        }
+        // Check for additional phases beyond the default 3
+        final allStages =
+            (phaseMetadata.keys.toList() as List<dynamic>)
+                .map((e) => e.toString())
+                .toList()
+              ..sort();
+        for (var stage in allStages) {
+          if (!newPhases.any((p) => p.stage == stage)) {
+            // Add new phase from metadata
+            final phaseNum = int.tryParse(stage.replaceAll('stage', '')) ?? 0;
+            newPhases.add(
+              PhaseModel(
+                id: 'p$phaseNum',
+                name: phaseMetadata[stage].toString(),
+                stage: stage,
+                groups: [],
+              ),
+            );
+          }
+        }
+      }
+
+      // Parse phases dynamically from backend data
+      for (var i = 0; i < newPhases.length; i++) {
+        final phase = newPhases[i];
+        final stageData = templateData[phase.stage] ?? [];
+        phase.groups = _parseStageData(stageData);
+      }
+
+      // Parse defect categories
+      final parsedCategories = _parseDefectCategories(
+        templateData['defectCategories'] ?? [],
+      );
+
       setState(() {
-        // Parse stage1 (Phase 1)
-        _p1Groups = _parseStageData(templateData['stage1'] ?? []);
+        _phases = newPhases;
+        _hasUnsavedPhaseChanges = false;
+        _defectCategories = parsedCategories;
 
-        // Parse stage2 (Phase 2)
-        _p2Groups = _parseStageData(templateData['stage2'] ?? []);
-
-        // Parse stage3 (Phase 3)
-        _p3Groups = _parseStageData(templateData['stage3'] ?? []);
-
-        // Parse defect categories
-        _defectCategories = _parseDefectCategories(
-          templateData['defectCategories'] ?? [],
-        );
+        // Update tab controller if phase count changed
+        if (_tabController.length != _phases.length) {
+          _tabController.dispose();
+          _tabController = TabController(length: _phases.length, vsync: this);
+        }
 
         // Auto-load 41 default categories if none exist or only old useless ones
         if (_defectCategories.isEmpty || _defectCategories.length <= 4) {
-          print('?? Loading 41 default defect categories automatically...');
+          print('📦 Loading 41 default defect categories automatically...');
           _defectCategories = _getDefaultDefectCategories();
           // Save them to backend immediately
           _templateService
               .updateDefectCategories(_defectCategories)
               .then((_) {
-                print('? Default categories saved to backend');
+                print('✅ Default categories saved to backend');
               })
               .catchError((e) {
-                print('? Failed to save default categories: $e');
+                print('❌ Failed to save default categories: $e');
               });
         }
 
@@ -227,18 +287,139 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
 
   void _setGroupsForPhase(int index, List<TemplateGroup> groups) {
     setState(() {
-      switch (index) {
-        case 0:
-          _p1Groups = groups;
-          break;
-        case 1:
-          _p2Groups = groups;
-          break;
-        case 2:
-        default:
-          _p3Groups = groups;
+      if (index >= 0 && index < _phases.length) {
+        _phases[index].groups = groups;
       }
     });
+  }
+
+  /// Add a new phase
+  Future<void> _addPhase() async {
+    final name = await _promptPhaseName();
+    if (name == null || name.isEmpty) return;
+
+    final newPhaseIndex = _phases.length + 1;
+    final newPhase = PhaseModel(
+      id: 'p$newPhaseIndex',
+      name: name,
+      stage: 'stage$newPhaseIndex',
+      groups: [],
+    );
+
+    // Dispose old controller before creating new one
+    _tabController.dispose();
+    _phases.add(newPhase);
+
+    // Create new tab controller with updated length
+    _tabController = TabController(length: _phases.length, vsync: this);
+
+    setState(() {
+      _hasUnsavedPhaseChanges = true;
+    });
+
+    // Navigate to new phase using post-frame callback
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _phases.isNotEmpty) {
+        _tabController.animateTo(_phases.length - 1);
+      }
+    });
+  }
+
+  /// Rename an existing phase
+  Future<void> _renamePhase(PhaseModel phase) async {
+    final name = await _promptPhaseName(initial: phase.name);
+    if (name == null || name.isEmpty) return;
+
+    setState(() {
+      phase.name = name;
+      _hasUnsavedPhaseChanges = true;
+    });
+  }
+
+  /// Delete a phase
+  Future<void> _deletePhase(PhaseModel phase) async {
+    final confirm = await _confirmDelete(
+      title: 'Delete Phase?',
+      message:
+          'This will permanently delete "${phase.name}" and all its data. This action cannot be undone.',
+    );
+    if (confirm != true) return;
+
+    final phaseIndex = _phases.indexOf(phase);
+    final currentIndex = _tabController.index;
+
+    // Dispose old controller
+    _tabController.dispose();
+
+    _phases.removeAt(phaseIndex);
+
+    // Create new controller with updated length
+    _tabController = TabController(length: _phases.length, vsync: this);
+
+    // Adjust index if needed
+    if (_phases.isNotEmpty) {
+      _tabController.index = currentIndex >= _phases.length
+          ? _phases.length - 1
+          : currentIndex;
+    }
+
+    setState(() {
+      _hasUnsavedPhaseChanges = true;
+    });
+
+    // Auto-save after deletion
+    _savePhaseConfiguration();
+  }
+
+  /// Prompt for phase name
+  Future<String?> _promptPhaseName({String? initial}) async {
+    return await _textPrompt(
+      title: initial == null ? 'Add Phase' : 'Rename Phase',
+      label: 'Phase Name',
+      initial: initial,
+    );
+  }
+
+  /// Save phase configuration to backend
+  Future<void> _savePhaseConfiguration() async {
+    if (!_hasUnsavedPhaseChanges) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Build phase names map
+      final phaseNames = <String, String>{};
+      for (var phase in _phases) {
+        phaseNames[phase.stage] = phase.name;
+      }
+
+      // Save to backend via template service
+      await _templateService.updatePhaseNames(phaseNames);
+
+      setState(() {
+        _hasUnsavedPhaseChanges = false;
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Phase configuration saved successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving phases: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -266,6 +447,29 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
                       ),
                     ),
                   ),
+                  // Add Phase button
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2196F3),
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: _isLoading ? null : _addPhase,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Phase'),
+                  ),
+                  const SizedBox(width: 8),
+                  // Save Phases button (visible when there are unsaved changes)
+                  if (_hasUnsavedPhaseChanges)
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF9800),
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed: _isLoading ? null : _savePhaseConfiguration,
+                      icon: const Icon(Icons.save),
+                      label: const Text('Save Phases'),
+                    ),
+                  if (_hasUnsavedPhaseChanges) const SizedBox(width: 8),
                   // Reload button
                   IconButton(
                     icon: const Icon(Icons.refresh),
@@ -351,58 +555,81 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
                         ),
-                        tabs: const [
-                          Tab(text: 'Phase 1'),
-                          Tab(text: 'Phase 2'),
-                          Tab(text: 'Phase 3'),
-                        ],
-                      ),
-                      SizedBox(
-                        height: 12,
-                        child: Container(
-                          color: Colors.black12,
-                          width: double.infinity,
-                          height: 1,
-                        ),
+                        isScrollable: true,
+                        tabs: _phases.map((phase) {
+                          return Tab(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(phase.name),
+                                const SizedBox(width: 8),
+                                PopupMenuButton<String>(
+                                  icon: const Icon(Icons.more_vert, size: 16),
+                                  onSelected: (action) {
+                                    if (action == 'rename') {
+                                      _renamePhase(phase);
+                                    } else if (action == 'delete') {
+                                      _deletePhase(phase);
+                                    }
+                                  },
+                                  itemBuilder: (context) => [
+                                    const PopupMenuItem(
+                                      value: 'rename',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.edit, size: 18),
+                                          SizedBox(width: 8),
+                                          Text('Rename'),
+                                        ],
+                                      ),
+                                    ),
+                                    const PopupMenuItem(
+                                      value: 'delete',
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.delete,
+                                            size: 18,
+                                            color: Colors.red,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            'Delete',
+                                            style: TextStyle(color: Colors.red),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
                       ),
                       // Fill remaining space with TabBarView to avoid overflow
                       Expanded(
                         child: TabBarView(
                           controller: _tabController,
-                          children: [
-                            _PhaseEditor(
-                              key: const ValueKey('phase-1'),
-                              phaseIndex: 0,
-                              groups: _p1Groups,
-                              onChanged: (g) => _setGroupsForPhase(0, g),
+                          children: _phases.map((phase) {
+                            final phaseIndex = _phases.indexOf(phase);
+                            return _PhaseEditor(
+                              key: ValueKey(phase.id),
+                              phaseIndex: phaseIndex,
+                              stage: phase.stage,
+                              groups: phase.groups,
+                              onChanged: (g) =>
+                                  _setGroupsForPhase(phaseIndex, g),
                               templateService: _templateService,
                               onReload: _loadTemplate,
-                            ),
-                            _PhaseEditor(
-                              key: const ValueKey('phase-2'),
-                              phaseIndex: 1,
-                              groups: _p2Groups,
-                              onChanged: (g) => _setGroupsForPhase(1, g),
-                              templateService: _templateService,
-                              onReload: _loadTemplate,
-                            ),
-                            _PhaseEditor(
-                              key: const ValueKey('phase-3'),
-                              phaseIndex: 2,
-                              groups: _p3Groups,
-                              onChanged: (g) => _setGroupsForPhase(2, g),
-                              templateService: _templateService,
-                              onReload: _loadTemplate,
-                            ),
-                          ],
+                            );
+                          }).toList(),
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-
-            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -412,6 +639,7 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
 
 class _PhaseEditor extends StatefulWidget {
   final int phaseIndex;
+  final String stage; // Pass stage directly instead of calculating
   final List<TemplateGroup> groups;
   final ValueChanged<List<TemplateGroup>> onChanged;
   final TemplateService templateService;
@@ -420,6 +648,7 @@ class _PhaseEditor extends StatefulWidget {
   const _PhaseEditor({
     super.key,
     required this.phaseIndex,
+    required this.stage,
     required this.groups,
     required this.onChanged,
     required this.templateService,
@@ -434,7 +663,7 @@ class _PhaseEditorState extends State<_PhaseEditor> {
   late List<TemplateGroup> _groups;
   bool _isSaving = false;
 
-  String get _stage => 'stage${widget.phaseIndex + 1}';
+  String get _stage => widget.stage;
 
   @override
   void initState() {
@@ -465,12 +694,6 @@ class _PhaseEditorState extends State<_PhaseEditor> {
 
       // Reload to get updated data with MongoDB IDs
       await widget.onReload();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Checklist group added successfully')),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -499,11 +722,6 @@ class _PhaseEditorState extends State<_PhaseEditor> {
       );
 
       await widget.onReload();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Checklist group updated successfully')),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -581,11 +799,7 @@ class _PhaseEditorState extends State<_PhaseEditor> {
       });
       widget.onChanged(_groups);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Question deleted successfully')),
-        );
-      }
+      if (mounted) {}
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -634,12 +848,6 @@ class _PhaseEditorState extends State<_PhaseEditor> {
           widget.onChanged(_groups);
         }
       }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Section added successfully')),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -676,12 +884,6 @@ class _PhaseEditorState extends State<_PhaseEditor> {
         section.name = name;
       });
       widget.onChanged(_groups);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Section updated successfully')),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -720,12 +922,6 @@ class _PhaseEditorState extends State<_PhaseEditor> {
         group.sections.removeWhere((s) => s.id == section.id);
       });
       widget.onChanged(_groups);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Section deleted successfully')),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -807,12 +1003,6 @@ class _PhaseEditorState extends State<_PhaseEditor> {
           widget.onChanged(_groups);
         }
       }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Question added successfully')),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -853,12 +1043,6 @@ class _PhaseEditorState extends State<_PhaseEditor> {
         question.remarkHint = updated.remarkHint;
       });
       widget.onChanged(_groups);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Question updated successfully')),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

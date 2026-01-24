@@ -496,15 +496,18 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
     setState(() {});
   }
 
-  List<TeamMemberFiltered> _filter(String q) {
+  List<TeamMemberFiltered> _filter(String q, {Set<String> exclude = const {}}) {
     final members = widget.teamCtrl.members;
+    // Filter out members who are already assigned to other roles
+    final available = members.where((m) => !exclude.contains(m.id));
+
     if (q.trim().isEmpty) {
-      return members
+      return available
           .map((m) => TeamMemberFiltered(m.id, m.name, m.email))
           .toList();
     }
     final lower = q.toLowerCase();
-    return members
+    return available
         .where(
           (m) =>
               m.name.toLowerCase().contains(lower) ||
@@ -512,6 +515,40 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
         )
         .map((m) => TeamMemberFiltered(m.id, m.name, m.email))
         .toList();
+  }
+
+  /// Show warning when trying to select more than 1 SDH
+  Future<void> _showSDHLimitWarning() async {
+    return showAdminDialog(
+      context,
+      title: 'SDH Selection Limit',
+      width: 480,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Only one SDH (Senior Decision Handler) can be assigned per project.',
+            style: TextStyle(fontSize: 14),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Please deselect the current SDH before selecting a different one.',
+            style: TextStyle(fontSize: 14, color: Colors.grey),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _saveAll() async {
@@ -616,8 +653,10 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
     required TextEditingController ctrl,
     required Set<String> selected,
     required Function(String, bool) toggle,
+    bool isSDH = false,
+    Set<String> excludeIds = const {},
   }) {
-    final filtered = _filter(ctrl.text);
+    final filtered = _filter(ctrl.text, exclude: excludeIds);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(8.0),
@@ -651,8 +690,14 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
                         final checked = selected.contains(m.id);
                         return CheckboxListTile(
                           value: checked,
-                          onChanged: (v) =>
-                              setState(() => toggle(m.id, v == true)),
+                          onChanged: (v) async {
+                            // For SDH role, validate that only 1 is selected
+                            if (isSDH && v == true && selected.length >= 1) {
+                              await _showSDHLimitWarning();
+                              return;
+                            }
+                            setState(() => toggle(m.id, v == true));
+                          },
                           title: Text(m.name),
                           dense: true,
                           controlAffinity: ListTileControlAffinity.leading,
@@ -696,6 +741,8 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
             ctrl: _searchLeader,
             selected: d.teamLeaderIds,
             toggle: d.toggleTeamLeader,
+            isSDH: true,
+            excludeIds: {...d.executorIds, ...d.reviewerIds},
           ),
           const _DashedDivider(),
           _section(
@@ -703,6 +750,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
             ctrl: _searchExecutor,
             selected: d.executorIds,
             toggle: d.toggleExecutor,
+            excludeIds: {...d.teamLeaderIds, ...d.reviewerIds},
           ),
           const _DashedDivider(),
           _section(
@@ -710,6 +758,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
             ctrl: _searchReviewer,
             selected: d.reviewerIds,
             toggle: d.toggleReviewer,
+            excludeIds: {...d.teamLeaderIds, ...d.executorIds},
           ),
           const SizedBox(height: 12),
           _actionsRow(d),
@@ -728,6 +777,8 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
                 ctrl: _searchLeader,
                 selected: d.teamLeaderIds,
                 toggle: d.toggleTeamLeader,
+                isSDH: true,
+                excludeIds: {...d.executorIds, ...d.reviewerIds},
               ),
             ),
             const _VerticalDashedDivider(),
@@ -737,6 +788,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
                 ctrl: _searchExecutor,
                 selected: d.executorIds,
                 toggle: d.toggleExecutor,
+                excludeIds: {...d.teamLeaderIds, ...d.reviewerIds},
               ),
             ),
             const _VerticalDashedDivider(),
@@ -746,6 +798,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
                 ctrl: _searchReviewer,
                 selected: d.reviewerIds,
                 toggle: d.toggleReviewer,
+                excludeIds: {...d.teamLeaderIds, ...d.executorIds},
               ),
             ),
           ],
