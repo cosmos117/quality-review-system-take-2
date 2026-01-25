@@ -215,9 +215,15 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
   @override
   void initState() {
-    super.initState();    checklistCtrl = Get.isRegistered<ChecklistController>()
+    super.initState();
+    print('🔷 QuestionsScreen.initState() for project: ${widget.projectId}');
+    checklistCtrl = Get.isRegistered<ChecklistController>()
         ? Get.find<ChecklistController>()
-        : Get.put(ChecklistController());    // If caller provided an initial phase, honor it
+        : Get.put(ChecklistController());
+
+    print('✓ ChecklistController obtained: ${checklistCtrl.runtimeType}');
+
+    // If caller provided an initial phase, honor it
     if (widget.initialPhase != null &&
         widget.initialPhase! >= 1 &&
         widget.initialPhase! <= 3) {
@@ -235,7 +241,12 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       _approvalStatus = null;
       _compareStatus = null;
     });
-    final phase = _selectedPhase;    // Clear cache to force fresh load from backend
+    final phase = _selectedPhase;
+    print(
+      '🔄 Loading checklist data for project: ${widget.projectId} phase=$phase',
+    );
+
+    // Clear cache to force fresh load from backend
     checklistCtrl.clearProjectCache(widget.projectId);
 
     await Future.wait([
@@ -265,7 +276,12 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       widget.projectId,
       phase,
       'reviewer',
-    );    setState(() {
+    );
+
+    print('✓ Loaded ${executorSheet.length} executor answers');
+    print('✓ Loaded ${reviewerSheet.length} reviewer answers');
+
+    setState(() {
       executorAnswers.clear();
       executorAnswers.addAll(executorSheet);
 
@@ -457,7 +473,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
             tooltip: 'Reload checklist data',
             onPressed: _isLoadingData
                 ? null
-                : () {                    // Clear cache and reload
+                : () {
+                    print('🔄 Manual refresh triggered');
+                    // Clear cache and reload
                     checklistCtrl.clearProjectCache(widget.projectId);
                     _loadChecklistData();
                   },

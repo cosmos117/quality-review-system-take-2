@@ -101,6 +101,9 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
               final numB = int.tryParse(b.replaceAll('stage', '')) ?? 0;
               return numA.compareTo(numB);
             });
+
+      print('📋 Loading template with stages: ${stageKeys.join(", ")}');
+
       // Get custom stage names if available
       final stageNames =
           (templateData['stageNames'] as Map<String, dynamic>?) ?? {};
@@ -139,12 +142,17 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
 
         // Auto-load 41 default categories if none exist or only old useless ones
         if (_defectCategories.isEmpty || _defectCategories.length <= 4) {
+          print('📦 Loading 41 default defect categories automatically...');
           _defectCategories = _getDefaultDefectCategories();
           // Save them to backend immediately
           _templateService
               .updateDefectCategories(_defectCategories)
-              .then((_) {})
-              .catchError((e) {});
+              .then((_) {
+                print('✅ Default categories saved to backend');
+              })
+              .catchError((e) {
+                print('❌ Failed to save default categories: $e');
+              });
         }
 
         _isLoading = false;
@@ -360,6 +368,12 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
       });
 
       final newStage = 'stage$nextStageNum';
+
+      print('📋 Adding new stage: $newStage with name: "$stageName"');
+      print(
+        '   Existing stages: ${_templateData.keys.where((k) => k.toString().startsWith('stage')).toList()}',
+      );
+
       // Add stage to backend with custom name
       await _templateService.addStage(stage: newStage, stageName: stageName);
 
@@ -408,8 +422,13 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
     setState(() => _isLoading = true);
 
     try {
+      print('🗑️ Deleting phase: ${phase.name} (${phase.stage})');
+
       // Delete stage from backend
       await _templateService.deleteStage(stage: phase.stage);
+
+      print('✅ Phase deleted successfully from backend');
+
       // Reload template
       await _loadTemplate();
 
@@ -422,6 +441,7 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
         );
       }
     } catch (e) {
+      print('❌ Error deleting phase: $e');
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -42,6 +42,19 @@ class _EmployeeProjectsPageState extends State<EmployeeProjectsPage> {
       // Use the controller's byAssigneeId method for more reliable filtering
       final allProjects = projectsCtrl.byAssigneeId(widget.member.id);
 
+      // Debug logging
+      print(
+        '[EmployeeProjectsPage] Loaded projects for ${widget.member.name} (${widget.member.id}):',
+      );
+      print(
+        '[EmployeeProjectsPage] Total projects found: ${allProjects.length}',
+      );
+      for (final p in allProjects) {
+        print(
+          '[EmployeeProjectsPage]   - ${p.title} (assignedEmployees: ${p.assignedEmployees})',
+        );
+      }
+
       // Separate into current and completed
       bool isCompleted(Project p) => p.status.toLowerCase() == 'completed';
 
@@ -51,8 +64,13 @@ class _EmployeeProjectsPageState extends State<EmployeeProjectsPage> {
           _completed = allProjects.where(isCompleted).toList();
           _isLoading = false;
         });
+
+        print(
+          '[EmployeeProjectsPage] Current: ${_current.length}, Completed: ${_completed.length}',
+        );
       }
     } catch (e) {
+      print('[EmployeeProjectsPage] Error loading projects: $e');
       if (mounted) {
         setState(() {
           _current = [];

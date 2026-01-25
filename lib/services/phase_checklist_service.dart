@@ -22,7 +22,13 @@ class PhaseChecklistService {
     _ensureToken();
     final uri = Uri.parse(
       '${ApiConfig.checklistBaseUrl}/stages/$stageId/checklists',
-    );    final json = await http.getJson(uri);    final data = (json['data'] as List?) ?? [];    return data.cast<Map<String, dynamic>>();
+    );
+    print('📍 API Call: GET $uri');
+    final json = await http.getJson(uri);
+    print('📦 Response: $json');
+    final data = (json['data'] as List?) ?? [];
+    print('✓ Checklists parsed: ${data.length} items');
+    return data.cast<Map<String, dynamic>>();
   }
 
   // Create checklist for a stage
@@ -76,7 +82,13 @@ class PhaseChecklistService {
     _ensureToken();
     final uri = Uri.parse(
       '${ApiConfig.baseUrl}/checklists/$checklistId/checkpoints',
-    );    final json = await http.getJson(uri);    final data = (json['data'] as List?) ?? [];    return data.cast<Map<String, dynamic>>();
+    );
+    print('📍 API Call: GET $uri');
+    final json = await http.getJson(uri);
+    print('📦 Response: $json');
+    final data = (json['data'] as List?) ?? [];
+    print('✓ Checkpoints parsed: ${data.length} items');
+    return data.cast<Map<String, dynamic>>();
   }
 
   // Create a checkpoint (question) under a checklist
@@ -159,6 +171,10 @@ class PhaseChecklistService {
     _ensureToken();
     final uri = Uri.parse(
       '${ApiConfig.baseUrl}/checklists/$checklistId/defect-stats',
-    );    final json = await http.getJson(uri);    return (json['data'] as Map<String, dynamic>?) ?? {};
+    );
+    print('📍 API Call: GET $uri');
+    final json = await http.getJson(uri);
+    print('📦 Response: $json');
+    return (json['data'] as Map<String, dynamic>?) ?? {};
   }
 }

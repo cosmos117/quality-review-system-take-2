@@ -30,6 +30,9 @@ class ExportController extends GetxController {
     try {
       isExporting.value = true;
       exportError.value = null;
+
+      print('🚀 Starting export for project: $projectName');
+
       // Generate Excel file bytes
       final excelBytesList = await excelExportService.exportProjectToExcel(
         projectId,
@@ -46,7 +49,9 @@ class ExportController extends GetxController {
       // Try web download first
       try {
         _downloadFileWeb(excelBytes, filename);
+        print('✓ Web download initiated: $filename');
       } catch (webError) {
+        print('⚠️ Web download failed, trying native...');
         await _downloadFileNative(excelBytes, filename);
       }
 
@@ -58,7 +63,9 @@ class ExportController extends GetxController {
 
       isExporting.value = false;
       return true;
-    } catch (e, _) {
+    } catch (e, stackTrace) {
+      print('❌ Export error: $e');
+      print('Stack trace: $stackTrace');
       exportError.value = 'Export failed: $e';
       Get.snackbar(
         'Export Failed',
@@ -77,6 +84,9 @@ class ExportController extends GetxController {
     try {
       isExporting.value = true;
       exportError.value = null;
+
+      print('🚀 Starting master Excel export for all projects...');
+
       // Download master Excel from backend
       final fileBytes = await masterExcelExportService.downloadMasterExcel();
 
@@ -87,7 +97,9 @@ class ExportController extends GetxController {
       // Try web download first
       try {
         _downloadFileWeb(Uint8List.fromList(fileBytes), filename);
+        print('✓ Web download initiated: $filename');
       } catch (webError) {
+        print('⚠️ Web download failed, trying native...');
         await _downloadFileNative(Uint8List.fromList(fileBytes), filename);
       }
 
@@ -99,7 +111,9 @@ class ExportController extends GetxController {
 
       isExporting.value = false;
       return true;
-    } catch (e, _) {
+    } catch (e, stackTrace) {
+      print('❌ Master export error: $e');
+      print('Stack trace: $stackTrace');
       exportError.value = 'Master export failed: $e';
       Get.snackbar(
         'Master Export Failed',
@@ -129,7 +143,10 @@ class ExportController extends GetxController {
 
       html.Url.revokeObjectUrl(url);
       anchor.remove();
+
+      print('✓ Web file downloaded');
     } catch (e) {
+      print('❌ Web download error: $e');
       throw Exception('Web download failed: $e');
     }
   }
@@ -149,7 +166,10 @@ class ExportController extends GetxController {
       final filepath = '$downloadsPath${io.Platform.pathSeparator}$filename';
       final file = io.File(filepath);
       await file.writeAsBytes(bytes);
+
+      print('✓ Excel file saved to: $filepath');
     } catch (e) {
+      print('❌ Native download error: $e');
       throw Exception('Native download failed: $e');
     }
   }
@@ -167,7 +187,9 @@ class ExportController extends GetxController {
         final home = io.Platform.environment['HOME'] ?? '';
         return '$home/Downloads';
       }
-    } catch (e) {}
+    } catch (e) {
+      print('⚠️ Platform check failed: $e');
+    }
     return '/tmp';
   }
 }

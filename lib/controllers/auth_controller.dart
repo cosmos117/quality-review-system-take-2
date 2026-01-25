@@ -73,9 +73,14 @@ class AuthController extends GetxController {
         await Future.delayed(const Duration(milliseconds: 300));
 
         final userId = currentUser.value!.id;
-        projectsCtrl.byAssigneeId(userId);
+        final myProjects = projectsCtrl.byAssigneeId(userId);
+
+        print(
+          '[AuthController] Preloaded ${myProjects.length} projects for employee $userId',
+        );
       }
     } catch (e) {
+      print('[AuthController] Error preloading projects: $e');
     } finally {
       isPreloadingProjects.value = false;
     }
