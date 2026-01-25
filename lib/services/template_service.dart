@@ -24,12 +24,12 @@ class TemplateService {
   }
 
   /// Fetch the complete template with all stages
-  /// Optional [stage] parameter to filter by specific stage (stage1, stage2, stage3)
+  /// Optional [stage] parameter to filter by specific stage (stage1, stage2, stage3, stage4, etc.)
   Future<Map<String, dynamic>> fetchTemplate({String? stage}) async {
     try {
       _ensureToken();
       String urlString = _baseUrl;
-      if (stage != null && ['stage1', 'stage2', 'stage3'].contains(stage)) {
+      if (stage != null && _isValidStage(stage)) {
         urlString = '$urlString?stage=$stage';
       }
 
@@ -40,6 +40,12 @@ class TemplateService {
     } catch (e) {
       throw Exception('Error fetching template: $e');
     }
+  }
+
+  /// Validate if stage name is in correct format (stage1, stage2, stage3, stage4, etc.)
+  bool _isValidStage(String stage) {
+    // Match stage1, stage2, stage3, ..., stage99
+    return RegExp(r'^stage[1-9]\d*$').hasMatch(stage);
   }
 
   /// Create or update the template
@@ -59,8 +65,22 @@ class TemplateService {
     }
   }
 
+  /// Update phase names (custom phase metadata)
+  /// [phaseNames] is a map of stage identifiers to custom names
+  /// Example: {'stage1': 'Kickoff Review', 'stage2': 'Design Phase'}
+  Future<void> updatePhaseNames(Map<String, String> phaseNames) async {
+    try {
+      _ensureToken();
+      await http.patchJson(Uri.parse('$_baseUrl/phase-names'), {
+        'phaseNames': phaseNames,
+      });
+    } catch (e) {
+      throw Exception('Error updating phase names: $e');
+    }
+  }
+
   /// Add a checklist to a specific stage
-  /// [stage] must be one of: stage1, stage2, stage3
+  /// [stage] must be in format: stage1, stage2, stage3, stage4, etc.
   /// [checklistName] is the checklist group name
   Future<Map<String, dynamic>> addChecklist({
     required String stage,
@@ -68,8 +88,10 @@ class TemplateService {
   }) async {
     try {
       _ensureToken();
-      if (!['stage1', 'stage2', 'stage3'].contains(stage)) {
-        throw Exception('Invalid stage. Must be stage1, stage2, or stage3');
+      if (!_isValidStage(stage)) {
+        throw Exception(
+          'Invalid stage format. Must be stage1, stage2, stage3, etc.',
+        );
       }
 
       final response = await http.postJson(Uri.parse('$_baseUrl/checklists'), {
@@ -93,8 +115,8 @@ class TemplateService {
   }) async {
     try {
       _ensureToken();
-      if (!['stage1', 'stage2', 'stage3'].contains(stage)) {
-        throw Exception('Invalid stage');
+      if (!_isValidStage(stage)) {
+        throw Exception('Invalid stage format');
       }
 
       final response = await http.patchJson(
@@ -116,8 +138,8 @@ class TemplateService {
   }) async {
     try {
       _ensureToken();
-      if (!['stage1', 'stage2', 'stage3'].contains(stage)) {
-        throw Exception('Invalid stage');
+      if (!_isValidStage(stage)) {
+        throw Exception('Invalid stage format');
       }
 
       await http.deleteJson(Uri.parse('$_baseUrl/checklists/$checklistId'), {
@@ -143,8 +165,8 @@ class TemplateService {
   }) async {
     try {
       _ensureToken();
-      if (!['stage1', 'stage2', 'stage3'].contains(stage)) {
-        throw Exception('Invalid stage');
+      if (!_isValidStage(stage)) {
+        throw Exception('Invalid stage format');
       }
 
       // Build endpoint based on whether sectionId is provided
@@ -159,10 +181,7 @@ class TemplateService {
           'categoryId': categoryId,
       };
 
-      final response = await http.postJson(
-        Uri.parse(endpoint),
-        body,
-      );
+      final response = await http.postJson(Uri.parse(endpoint), body);
       return response['data'] as Map<String, dynamic>? ?? response;
     } catch (e) {
       throw Exception('Error adding checkpoint: $e');
@@ -185,8 +204,8 @@ class TemplateService {
   }) async {
     try {
       _ensureToken();
-      if (!['stage1', 'stage2', 'stage3'].contains(stage)) {
-        throw Exception('Invalid stage');
+      if (!_isValidStage(stage)) {
+        throw Exception('Invalid stage format');
       }
 
       // Choose endpoint based on section presence
@@ -202,10 +221,7 @@ class TemplateService {
           'categoryId': categoryId,
       };
 
-      final response = await http.patchJson(
-        Uri.parse(endpoint),
-        body,
-      );
+      final response = await http.patchJson(Uri.parse(endpoint), body);
       return response['data'] as Map<String, dynamic>? ?? response;
     } catch (e) {
       throw Exception('Error updating checkpoint: $e');
@@ -225,8 +241,8 @@ class TemplateService {
   }) async {
     try {
       _ensureToken();
-      if (!['stage1', 'stage2', 'stage3'].contains(stage)) {
-        throw Exception('Invalid stage');
+      if (!_isValidStage(stage)) {
+        throw Exception('Invalid stage format');
       }
 
       // Build endpoint based on whether sectionId is provided
@@ -268,8 +284,8 @@ class TemplateService {
   }) async {
     try {
       _ensureToken();
-      if (!['stage1', 'stage2', 'stage3'].contains(stage)) {
-        throw Exception('Invalid stage');
+      if (!_isValidStage(stage)) {
+        throw Exception('Invalid stage format');
       }
 
       final response = await http.postJson(
@@ -295,8 +311,8 @@ class TemplateService {
   }) async {
     try {
       _ensureToken();
-      if (!['stage1', 'stage2', 'stage3'].contains(stage)) {
-        throw Exception('Invalid stage');
+      if (!_isValidStage(stage)) {
+        throw Exception('Invalid stage format');
       }
 
       final response = await http.putJson(
@@ -320,8 +336,8 @@ class TemplateService {
   }) async {
     try {
       _ensureToken();
-      if (!['stage1', 'stage2', 'stage3'].contains(stage)) {
-        throw Exception('Invalid stage');
+      if (!_isValidStage(stage)) {
+        throw Exception('Invalid stage format');
       }
 
       await http.deleteJson(

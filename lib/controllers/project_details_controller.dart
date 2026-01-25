@@ -106,17 +106,51 @@ class ProjectDetailsController extends GetxController {
   }
 
   void toggleTeamLeader(String id, bool value) {
-    value ? teamLeaderIds.add(id) : teamLeaderIds.remove(id);
+    if (value) {
+      // Check if employee is already assigned to another role
+      if (executorIds.contains(id) || reviewerIds.contains(id)) {
+        throw Exception('Employee is already assigned as Executor or Reviewer');
+      }
+      // If trying to add more than 1 SDH, reject it
+      if (teamLeaderIds.length >= 1) {
+        throw Exception('Only one SDH can be assigned to a project');
+      }
+      teamLeaderIds.add(id);
+    } else {
+      teamLeaderIds.remove(id);
+    }
     _rebuildUnion();
   }
 
+  /// Check if SDH limit would be exceeded
+  bool canAddTeamLeader() => teamLeaderIds.length < 1;
+
+  /// Get the count of selected SDHs
+  int getTeamLeaderCount() => teamLeaderIds.length;
+
   void toggleExecutor(String id, bool value) {
-    value ? executorIds.add(id) : executorIds.remove(id);
+    if (value) {
+      // Check if employee is already assigned to another role
+      if (teamLeaderIds.contains(id) || reviewerIds.contains(id)) {
+        throw Exception('Employee is already assigned as SDH or Reviewer');
+      }
+      executorIds.add(id);
+    } else {
+      executorIds.remove(id);
+    }
     _rebuildUnion();
   }
 
   void toggleReviewer(String id, bool value) {
-    value ? reviewerIds.add(id) : reviewerIds.remove(id);
+    if (value) {
+      // Check if employee is already assigned to another role
+      if (teamLeaderIds.contains(id) || executorIds.contains(id)) {
+        throw Exception('Employee is already assigned as SDH or Executor');
+      }
+      reviewerIds.add(id);
+    } else {
+      reviewerIds.remove(id);
+    }
     _rebuildUnion();
   }
 

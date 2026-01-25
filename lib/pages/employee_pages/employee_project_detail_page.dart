@@ -8,6 +8,7 @@ import '../../services/project_service.dart';
 import '../../services/project_membership_service.dart';
 import '../../services/role_service.dart';
 import '../../models/role.dart';
+import '../../models/project_membership.dart';
 import 'phase1_checklist.dart';
 import '../../services/approval_service.dart';
 
@@ -30,6 +31,10 @@ class _EmployeeProjectDetailsPageState
     extends State<EmployeeProjectDetailPage> {
   late ProjectDetailsController _detailsCtrl;
   bool _isLoading = true;
+  bool _loadingAssignments = true;
+  List<ProjectMembership> _teamLeaders = [];
+  List<ProjectMembership> _executors = [];
+  List<ProjectMembership> _reviewers = [];
 
   @override
   void initState() {
@@ -41,6 +46,7 @@ class _EmployeeProjectDetailsPageState
     );
     _detailsCtrl.seed(widget.project);
     _fetchLatestProjectData();
+    _loadAssignments();
   }
 
   Future<void> _fetchLatestProjectData() async {
@@ -54,6 +60,36 @@ class _EmployeeProjectDetailsPageState
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _loadAssignments() async {
+    setState(() => _loadingAssignments = true);
+    try {
+      if (Get.isRegistered<ProjectMembershipService>()) {
+        final svc = Get.find<ProjectMembershipService>();
+        final memberships = await svc.getProjectMembers(widget.project.id);
+        final leaders = memberships
+            .where((m) => (m.roleName?.toLowerCase() ?? '') == 'sdh')
+            .toList();
+        final execs = memberships
+            .where((m) => (m.roleName?.toLowerCase() ?? '') == 'executor')
+            .toList();
+        final reviewers = memberships
+            .where((m) => (m.roleName?.toLowerCase() ?? '') == 'reviewer')
+            .toList();
+        if (mounted) {
+          setState(() {
+            _teamLeaders = leaders;
+            _executors = execs;
+            _reviewers = reviewers;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('[EmployeeProjectDetail] loadAssignments error: $e');
+    } finally {
+      if (mounted) setState(() => _loadingAssignments = false);
     }
   }
 
@@ -173,6 +209,24 @@ class _EmployeeProjectDetailsPageState
                         );
                       },
                     ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Assigned Team Members',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 12),
+                    _loadingAssignments
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(24.0),
+                              child: CircularProgressIndicator(),
+                            ),
+                          )
+                        : _AssignedTeamGrid(
+                            leaders: _teamLeaders,
+                            executors: _executors,
+                            reviewers: _reviewers,
+                          ),
                     const SizedBox(height: 24),
                     if (details.project.status == 'Not Started')
                       _RoleAssignmentSections(
@@ -358,6 +412,148 @@ class _Badge extends StatelessWidget {
   }
 }
 
+class _AssignedTeamGrid extends StatelessWidget {
+  final List<ProjectMembership> leaders;
+  final List<ProjectMembership> executors;
+  final List<ProjectMembership> reviewers;
+  const _AssignedTeamGrid({
+    required this.leaders,
+    required this.executors,
+    required this.reviewers,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: _RoleCard(title: 'SDH', color: Colors.blue, members: leaders),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _RoleCard(
+            title: 'Executors',
+            color: Colors.green,
+            members: executors,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _RoleCard(
+            title: 'Reviewers',
+            color: Colors.orange,
+            members: reviewers,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RoleCard extends StatelessWidget {
+  final String title;
+  final Color color;
+  final List<ProjectMembership> members;
+  const _RoleCard({
+    required this.title,
+    required this.color,
+    required this.members,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 1,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.people, color: color, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text('${members.length}'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (members.isEmpty)
+              Text(
+                'No members assigned yet',
+                style: TextStyle(color: Colors.grey.shade600),
+              )
+            else
+              Column(
+                children: members
+                    .map(
+                      (m) => Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 14,
+                              backgroundColor: color.withOpacity(0.14),
+                              child: Text(
+                                (m.userName ?? 'U')
+                                    .trim()
+                                    .padRight(1)
+                                    .substring(0, 1)
+                                    .toUpperCase(),
+                                style: TextStyle(color: color),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                m.userName ?? 'Unknown',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _RoleAssignmentSections extends StatefulWidget {
   final TeamController teamCtrl;
   final ProjectDetailsController details;
@@ -395,15 +591,18 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
     setState(() {});
   }
 
-  List<TeamMemberFiltered> _filter(String q) {
+  List<TeamMemberFiltered> _filter(String q, {Set<String> exclude = const {}}) {
     final members = widget.teamCtrl.members;
+    // Filter out members who are already assigned to other roles
+    final available = members.where((m) => !exclude.contains(m.id));
+
     if (q.trim().isEmpty) {
-      return members
+      return available
           .map((m) => TeamMemberFiltered(m.id, m.name, m.email))
           .toList();
     }
     final lower = q.toLowerCase();
-    return members
+    return available
         .where(
           (m) =>
               m.name.toLowerCase().contains(lower) ||
@@ -411,6 +610,37 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
         )
         .map((m) => TeamMemberFiltered(m.id, m.name, m.email))
         .toList();
+  }
+
+  /// Show warning when trying to select more than 1 SDH
+  Future<void> _showSDHLimitWarning() async {
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('SDH Selection Limit'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Only one SDH (Senior Decision Handler) can be assigned per project.',
+              style: TextStyle(fontSize: 14),
+            ),
+            SizedBox(height: 12),
+            Text(
+              'Please deselect the current SDH before selecting a different one.',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _saveAll() async {
@@ -513,8 +743,10 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
     required TextEditingController ctrl,
     required Set<String> selected,
     required Function(String, bool) toggle,
+    bool isSDH = false,
+    Set<String> excludeIds = const {},
   }) {
-    final filtered = _filter(ctrl.text);
+    final filtered = _filter(ctrl.text, exclude: excludeIds);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(8.0),
@@ -548,8 +780,14 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
                         final checked = selected.contains(m.id);
                         return CheckboxListTile(
                           value: checked,
-                          onChanged: (v) =>
-                              setState(() => toggle(m.id, v == true)),
+                          onChanged: (v) async {
+                            // For SDH role, validate that only 1 is selected
+                            if (isSDH && v == true && selected.length >= 1) {
+                              await _showSDHLimitWarning();
+                              return;
+                            }
+                            setState(() => toggle(m.id, v == true));
+                          },
                           title: Text(m.name),
                           dense: true,
                           controlAffinity: ListTileControlAffinity.leading,
@@ -592,6 +830,8 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
             ctrl: _searchLeader,
             selected: d.teamLeaderIds,
             toggle: d.toggleTeamLeader,
+            isSDH: true,
+            excludeIds: {...d.executorIds, ...d.reviewerIds},
           ),
           const _DashedDivider(),
           _section(
@@ -599,6 +839,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
             ctrl: _searchExecutor,
             selected: d.executorIds,
             toggle: d.toggleExecutor,
+            excludeIds: {...d.teamLeaderIds, ...d.reviewerIds},
           ),
           const _DashedDivider(),
           _section(
@@ -606,6 +847,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
             ctrl: _searchReviewer,
             selected: d.reviewerIds,
             toggle: d.toggleReviewer,
+            excludeIds: {...d.teamLeaderIds, ...d.executorIds},
           ),
           const SizedBox(height: 12),
           _actionsRow(d),
@@ -624,6 +866,8 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
                 ctrl: _searchLeader,
                 selected: d.teamLeaderIds,
                 toggle: d.toggleTeamLeader,
+                isSDH: true,
+                excludeIds: {...d.executorIds, ...d.reviewerIds},
               ),
             ),
             const _VerticalDashedDivider(),
@@ -633,6 +877,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
                 ctrl: _searchExecutor,
                 selected: d.executorIds,
                 toggle: d.toggleExecutor,
+                excludeIds: {...d.teamLeaderIds, ...d.reviewerIds},
               ),
             ),
             const _VerticalDashedDivider(),
@@ -642,6 +887,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
                 ctrl: _searchReviewer,
                 selected: d.reviewerIds,
                 toggle: d.toggleReviewer,
+                excludeIds: {...d.teamLeaderIds, ...d.executorIds},
               ),
             ),
           ],
