@@ -23,40 +23,22 @@ class ChecklistController extends GetxService {
 
   @override
   void onInit() {
-    super.onInit();
-    print('🎯 ChecklistController.onInit() called');
-    // Initialize service
+    super.onInit();    // Initialize service
     try {
       final http = Get.find<SimpleHttp>();
   _answerService = ChecklistAnswerService(http);
-  _approvalService = Get.find<ApprovalService>();
-      print('✓ ChecklistController initialized successfully');
-    } catch (e) {
-      print('❌ Error initializing ChecklistController: $e');
-      rethrow;
+  _approvalService = Get.find<ApprovalService>();    } catch (e) {      rethrow;
     }
   }
 
   /// Load answers from backend for a specific project/phase/role
-  Future<void> loadAnswers(String projectId, int phase, String role) async {
-    print(
-      '🔵 loadAnswers CALLED: projectId=$projectId, phase=$phase, role=$role',
-    );
-    final key = '$projectId-$phase-$role';
-    if (_isLoading[key] == true) {
-      print('⚠️ Already loading $key, skipping...');
-      return; // Already loading
+  Future<void> loadAnswers(String projectId, int phase, String role) async {    final key = '$projectId-$phase-$role';
+    if (_isLoading[key] == true) {      return; // Already loading
     }
 
-    _isLoading[key] = true;
-    print('📥 Loading answers for $role in project $projectId phase $phase...');
-
-    try {
+    _isLoading[key] = true;    try {
   // Direct load from checklist-answer API
-  final answers = await _answerService.getAnswers(projectId, phase, role);
-  print('✓ Received ${answers.length} answers from checklist-answer API for $role');
-
-      // Store in cache
+  final answers = await _answerService.getAnswers(projectId, phase, role);      // Store in cache
       final proj = _cache.putIfAbsent(projectId, () => {});
       final phaseMap = proj.putIfAbsent(phase, () => {});
       phaseMap[role] = answers;
@@ -64,9 +46,7 @@ class ChecklistController extends GetxService {
 
       // Also load submission status
       await _loadSubmissionStatus(projectId, phase, role);
-    } catch (e) {
-      print('❌ Error loading checklist answers: $e');
-    } finally {
+    } catch (e) {    } finally {
       _isLoading[key] = false;
     }
   }
@@ -122,12 +102,8 @@ class ChecklistController extends GetxService {
   /// Save all answers for a role to backend
   Future<bool> _saveToBackend(String projectId, int phase, String role) async {
     try {
-  final answers = getRoleSheet(projectId, phase, role);
-  print('💾 Saving ${answers.length} answers for $role via checklist-answer API...');
-      final ok = await _answerService.saveAnswers(projectId, phase, role, answers);
-      if (ok) {
-        print('✓ Saved checklist answers for $role');
-        // Editing clears submission status; update cache so UI enables resubmit
+  final answers = getRoleSheet(projectId, phase, role);      final ok = await _answerService.saveAnswers(projectId, phase, role, answers);
+      if (ok) {        // Editing clears submission status; update cache so UI enables resubmit
         final proj = _submissionCache.putIfAbsent(projectId, () => {});
         final phaseMap = proj.putIfAbsent(phase, () => {});
         phaseMap[role] = {
@@ -138,9 +114,7 @@ class ChecklistController extends GetxService {
         _submissionCache.refresh();
       }
       return true;
-    } catch (e) {
-      print('❌ Error saving checklist answers: $e');
-      return false;
+    } catch (e) {      return false;
     }
   }
 
@@ -162,17 +136,12 @@ class ChecklistController extends GetxService {
           'submitted_at': DateTime.now(),
           'answer_count': getRoleSheet(projectId, phase, role).length,
         };
-        _submissionCache.refresh();
-        print('✓ Submitted checklist for $role');
-
-  // If both roles are submitted and answers match, auto request SDH approval
+        _submissionCache.refresh();  // If both roles are submitted and answers match, auto request SDH approval
   await _maybeRequestApproval(projectId, phase);
       }
 
       return success;
-    } catch (e) {
-      print('Error submitting checklist: $e');
-      return false;
+    } catch (e) {      return false;
     }
   }
 
@@ -185,22 +154,15 @@ class ChecklistController extends GetxService {
 
       final execSubmitted = execStatus['is_submitted'] == true;
       final revSubmitted = revStatus['is_submitted'] == true;
-      if (!execSubmitted || !revSubmitted) {
-        print('ℹ️ Approval not requested: both roles not submitted yet');
-        return;
+      if (!execSubmitted || !revSubmitted) {        return;
       }
 
       // Compare answers on backend
       final cmp = await _approvalService.compare(projectId, phase);
       if (cmp['match'] == true) {
-        await _approvalService.request(projectId, phase);
-        print('📨 Approval requested for project=$projectId phase=$phase');
-      } else {
-        print('⚠️ Answers do not match; approval not requested');
+        await _approvalService.request(projectId, phase);      } else {
       }
-    } catch (e) {
-      print('Error while requesting approval: $e');
-    }
+    } catch (e) {    }
   }
 
   /// Get submission info from cache
@@ -225,9 +187,7 @@ class ChecklistController extends GetxService {
       final phaseMap = proj.putIfAbsent(phase, () => {});
       phaseMap[role] = status;
       _submissionCache.refresh();
-    } catch (e) {
-      print('Error loading submission status: $e');
-    }
+    } catch (e) {    }
   }
 
   /// Derive submission status from existing checklist data
@@ -239,9 +199,7 @@ class ChecklistController extends GetxService {
     try {
       final status = await _answerService.getSubmissionStatus(projectId, phase, role);
       return status;
-    } catch (e) {
-      print('Error deriving submission status: $e');
-      return {
+    } catch (e) {      return {
         'is_submitted': false,
         'submitted_at': null,
         'answer_count': 0,
@@ -255,18 +213,14 @@ class ChecklistController extends GetxService {
   }
 
   /// Clear cache for a specific project to force reload from backend
-  void clearProjectCache(String projectId) {
-    print('🗑️ Clearing cache for project: $projectId');
-    _cache.remove(projectId);
+  void clearProjectCache(String projectId) {    _cache.remove(projectId);
     _submissionCache.remove(projectId);
     _cache.refresh();
     _submissionCache.refresh();
   }
 
   /// Clear all cache
-  void clearAllCache() {
-    print('🗑️ Clearing all checklist cache');
-    _cache.clear();
+  void clearAllCache() {    _cache.clear();
     _submissionCache.clear();
     _cache.refresh();
     _submissionCache.refresh();

@@ -19,41 +19,17 @@ class ProjectMembershipService {
       final uri = Uri.parse(
         '${ApiConfig.baseUrl}/projects/members?project_id=$projectId',
       );
-      // ignore: avoid_print
-      print(
-        '[ProjectMembershipService] getProjectMembers -> GET $uri',
-      );
-      final json = await http.getJson(uri);
-      // ignore: avoid_print
-      print(
-        '[ProjectMembershipService] getProjectMembers <- response keys=${json.keys.join(', ')}',
-      );
-      if (json['error'] != null) {
-        // ignore: avoid_print
-        print(
-          '[ProjectMembershipService] getProjectMembers ERROR: ${json['error']}',
-        );
-      }
+      // ignore: avoid_print      final json = await http.getJson(uri);
+      // ignore: avoid_print      if (json['error'] != null) {
+        // ignore: avoid_print      }
 
       if (json['data'] is Map && json['data']['members'] is List) {
         final members = (json['data']['members'] as List).cast<dynamic>();
-        // ignore: avoid_print
-        print(
-          '[ProjectMembershipService] getProjectMembers parsed members count=${members.length}',
-        );
-        return members.map((e) => _fromApi(e as Map<String, dynamic>)).toList();
+        // ignore: avoid_print        return members.map((e) => _fromApi(e as Map<String, dynamic>)).toList();
       }
-      // ignore: avoid_print
-      print(
-        '[ProjectMembershipService] getProjectMembers parsed members count=0 (no data.members list)',
-      );
-      return [];
+      // ignore: avoid_print      return [];
     } catch (e) {
-      // ignore: avoid_print
-      print(
-        '[ProjectMembershipService] getProjectMembers failed for project=$projectId: $e',
-      );
-      // If fetching existing members fails (e.g., orphaned user references),
+      // ignore: avoid_print      // If fetching existing members fails (e.g., orphaned user references),
       // return empty list so we can still add new valid members
       return [];
     }
@@ -71,11 +47,7 @@ class ProjectMembershipService {
     // Remove or silence if too noisy after resolving the issue.
     // Prints the payload being sent to backend.
     // Note: Keeping this lightweight; no additional error handling here.
-    // ignore: avoid_print
-    print(
-      '[ProjectMembershipService] addMember -> project_id=$projectId user_id=$userId role_id=$roleId',
-    );
-    final json = await http.postJson(uri, {
+    // ignore: avoid_print    final json = await http.postJson(uri, {
       'project_id': projectId,
       'user_id': userId,
       'role_id': roleId,
@@ -106,11 +78,7 @@ class ProjectMembershipService {
     required String userId,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/projects/members');
-    // ignore: avoid_print
-    print(
-      '[ProjectMembershipService] removeMember -> project_id=$projectId user_id=$userId',
-    );
-    await http.deleteJson(uri, {'project_id': projectId, 'user_id': userId});
+    // ignore: avoid_print    await http.deleteJson(uri, {'project_id': projectId, 'user_id': userId});
   }
 
   /// Get all projects for a specific user

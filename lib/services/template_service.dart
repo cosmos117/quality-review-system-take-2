@@ -35,8 +35,13 @@ class TemplateService {
 
       final response = await http.getJson(Uri.parse(urlString));
       // API responses are wrapped in { statusCode, data, message }
-      // Return only the payload to callers
-      return response['data'] as Map<String, dynamic>? ?? response;
+      // Handle both single object and list responses
+      var data = response['data'];
+      if (data is List) {
+        // If it's a list, return the first item or empty map
+        return (data.isNotEmpty ? data[0] : {}) as Map<String, dynamic>;
+      }
+      return data as Map<String, dynamic>? ?? response;
     } catch (e) {
       throw Exception('Error fetching template: $e');
     }
@@ -356,13 +361,9 @@ class TemplateService {
       if (stageName != null && stageName.trim().isNotEmpty) {
         body['stageName'] = stageName.trim();
       }
-
-      print('🔵 POST /templates/stages - Body: $body');
       final response = await http.postJson(Uri.parse('$_baseUrl/stages'), body);
-      print('🟢 POST /templates/stages - Response: $response');
       return response['data'] as Map<String, dynamic>? ?? response;
     } catch (e) {
-      print('🔴 POST /templates/stages - Error: $e');
       throw Exception('Error adding stage: $e');
     }
   }

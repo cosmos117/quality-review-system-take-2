@@ -101,9 +101,6 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
               final numB = int.tryParse(b.replaceAll('stage', '')) ?? 0;
               return numA.compareTo(numB);
             });
-
-      print('📋 Loading template with stages: ${stageKeys.join(", ")}');
-
       // Get custom stage names if available
       final stageNames =
           (templateData['stageNames'] as Map<String, dynamic>?) ?? {};
@@ -142,17 +139,12 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
 
         // Auto-load 41 default categories if none exist or only old useless ones
         if (_defectCategories.isEmpty || _defectCategories.length <= 4) {
-          print('📦 Loading 41 default defect categories automatically...');
           _defectCategories = _getDefaultDefectCategories();
           // Save them to backend immediately
           _templateService
               .updateDefectCategories(_defectCategories)
-              .then((_) {
-                print('✅ Default categories saved to backend');
-              })
-              .catchError((e) {
-                print('❌ Failed to save default categories: $e');
-              });
+              .then((_) {})
+              .catchError((e) {});
         }
 
         _isLoading = false;
@@ -180,67 +172,120 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
   }
 
   /// Parse backend stage data into TemplateGroup list
-  List<TemplateGroup> _parseStageData(List<dynamic> stageData) {
-    return stageData.map((checklistData) {
-      final id = (checklistData['_id'] ?? '').toString();
-      final text = (checklistData['text'] ?? '').toString();
-      final checkpointsData =
-          checklistData['checkpoints'] as List<dynamic>? ?? [];
-      final sectionsData = checklistData['sections'] as List<dynamic>? ?? [];
+  List<TemplateGroup> _parseStageData(dynamic stageData) {
+    // Handle case where stageData is not a list
+    if (stageData is! List) {
+      if (stageData is Map) {
+        // Single object instead of array - wrap it
+        stageData = [stageData];
+      } else {
+        // Invalid data, return empty list
+        return [];
+      }
+    }
 
-      // Parse direct questions on the group
-      final questions = checkpointsData.map((cpData) {
-        return TemplateQuestion(
-          id: (cpData['_id'] ?? '').toString(),
-          text: (cpData['text'] ?? '').toString(),
-        );
-      }).toList();
+    return (stageData as List<dynamic>)
+        .map((checklistData) {
+          // Skip if not a map
+          if (checklistData is! Map<String, dynamic>) {
+            return null;
+          }
 
-      // Parse sections with their questions
-      final sections = sectionsData.map((sectionData) {
-        final sectionId = (sectionData['_id'] ?? '').toString();
-        final sectionText = (sectionData['text'] ?? '').toString();
-        final sectionCheckpoints =
-            sectionData['checkpoints'] as List<dynamic>? ?? [];
+          final id = (checklistData['_id'] ?? '').toString();
+          final text = (checklistData['text'] ?? '').toString();
+          final checkpointsData = _ensureList(checklistData['checkpoints']);
+          final sectionsData = _ensureList(checklistData['sections']);
 
-        final sectionQuestions = sectionCheckpoints.map((cpData) {
-          return TemplateQuestion(
-            id: (cpData['_id'] ?? '').toString(),
-            text: (cpData['text'] ?? '').toString(),
+          // Parse direct questions on the group
+          final questions = checkpointsData
+              .map((cpData) {
+                if (cpData is! Map<String, dynamic>) {
+                  return null;
+                }
+                return TemplateQuestion(
+                  id: (cpData['_id'] ?? '').toString(),
+                  text: (cpData['text'] ?? '').toString(),
+                );
+              })
+              .whereType<TemplateQuestion>()
+              .toList();
+          final sections = sectionsData
+              .map((sectionData) {
+                if (sectionData is! Map<String, dynamic>) {
+                  return null;
+                }
+                final sectionId = (sectionData['_id'] ?? '').toString();
+                final sectionText = (sectionData['text'] ?? '').toString();
+                final sectionCheckpoints = _ensureList(
+                  sectionData['checkpoints'],
+                );
+
+                final sectionQuestions = sectionCheckpoints
+                    .map((cpData) {
+                      if (cpData is! Map<String, dynamic>) {
+                        return null;
+                      }
+                      return TemplateQuestion(
+                        id: (cpData['_id'] ?? '').toString(),
+                        text: (cpData['text'] ?? '').toString(),
+                      );
+                    })
+                    .whereType<TemplateQuestion>()
+                    .toList();
+
+                return TemplateSection(
+                  id: sectionId,
+                  name: sectionText,
+                  questions: sectionQuestions,
+                  expanded: false,
+                );
+              })
+              .whereType<TemplateSection>()
+              .toList();
+
+          return TemplateGroup(
+            id: id,
+            name: text,
+            questions: questions,
+            sections: sections,
+            expanded: false,
           );
-        }).toList();
+        })
+        .whereType<TemplateGroup>()
+        .toList();
+  }
 
-        return TemplateSection(
-          id: sectionId,
-          name: sectionText,
-          questions: sectionQuestions,
-          expanded: false,
-        );
-      }).toList();
-
-      return TemplateGroup(
-        id: id,
-        name: text,
-        questions: questions,
-        sections: sections,
-        expanded: false,
-      );
-    }).toList();
+  /// Helper to ensure data is a list
+  List<dynamic> _ensureList(dynamic data) {
+    if (data is List) {
+      return data;
+    }
+    if (data is Map) {
+      return [data];
+    }
+    return [];
   }
 
   /// Parse defect categories from backend
-  List<DefectCategory> _parseDefectCategories(List<dynamic> categoriesData) {
-    return categoriesData.map((catData) {
-      return DefectCategory(
-        id: (catData['_id'] ?? '').toString(),
-        name: (catData['name'] ?? '').toString(),
-        keywords:
-            (catData['keywords'] as List<dynamic>?)
-                ?.map((k) => k.toString())
-                .toList() ??
-            [],
-      );
-    }).toList();
+  List<DefectCategory> _parseDefectCategories(dynamic categoriesData) {
+    final list = _ensureList(categoriesData);
+    return list
+        .map((catData) {
+          if (catData is! Map<String, dynamic>) {
+            return null;
+          }
+          return DefectCategory(
+            id: (catData['_id'] ?? '').toString(),
+            name: (catData['name'] ?? '').toString(),
+            keywords:
+                (catData['keywords'] as List<dynamic>?)
+                    ?.map((k) => k.toString())
+                    .toList() ??
+                [],
+          );
+        })
+        .whereType<DefectCategory>()
+        .toList();
   }
 
   /// Manage defect categories
@@ -315,12 +360,6 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
       });
 
       final newStage = 'stage$nextStageNum';
-
-      print('📋 Adding new stage: $newStage with name: "$stageName"');
-      print(
-        '   Existing stages: ${_templateData.keys.where((k) => k.toString().startsWith('stage')).toList()}',
-      );
-
       // Add stage to backend with custom name
       await _templateService.addStage(stage: newStage, stageName: stageName);
 
@@ -369,13 +408,8 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
     setState(() => _isLoading = true);
 
     try {
-      print('🗑️ Deleting phase: ${phase.name} (${phase.stage})');
-
       // Delete stage from backend
       await _templateService.deleteStage(stage: phase.stage);
-
-      print('✅ Phase deleted successfully from backend');
-
       // Reload template
       await _loadTemplate();
 
@@ -388,7 +422,6 @@ class _AdminChecklistTemplatePageState extends State<AdminChecklistTemplatePage>
         );
       }
     } catch (e) {
-      print('❌ Error deleting phase: $e');
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

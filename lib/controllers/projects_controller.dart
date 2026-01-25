@@ -222,14 +222,8 @@ class ProjectsController extends GetxController {
       if (userService != null) {
         try {
           backendUsers = await userService.getAll();
-          // ignore: avoid_print
-          print(
-            '[ProjectsController] Fetched ${backendUsers.length} users from backend',
-          );
-        } catch (e) {
-          // ignore: avoid_print
-          print('[ProjectsController] Failed to fetch users: $e');
-        }
+          // ignore: avoid_print        } catch (e) {
+          // ignore: avoid_print        }
       }
 
       // Resolve incoming memberIds to valid backend user IDs
@@ -272,71 +266,37 @@ class ProjectsController extends GetxController {
 
         if (matched.id.isNotEmpty) {
           normalizedDesired.add(matched.id);
-          // ignore: avoid_print
-          print(
-            '[ProjectsController] Resolved "$trimmed" → userId=${matched.id} (${matched.name})',
-          );
-        } else {
-          // ignore: avoid_print
-          print(
-            '[ProjectsController] WARNING: Could not resolve "$trimmed" to any backend user - SKIPPING',
-          );
-        }
+          // ignore: avoid_print        } else {
+          // ignore: avoid_print        }
       }
 
       // Fetch existing memberships from backend
-      // ignore: avoid_print
-      print(
-        '[ProjectsController] Fetching existing memberships for project=$projectId',
-      );
-      final existingMemberships = await membershipService.getProjectMembers(
+      // ignore: avoid_print      final existingMemberships = await membershipService.getProjectMembers(
         projectId,
       );
       final existingIds = existingMemberships.map((m) => m.userId).toSet();
       final desiredIds = normalizedDesired;
 
       // Debug logging to trace assignment diff calculations.
-      // ignore: avoid_print
-      print(
-        '[ProjectsController] setProjectAssignments project=$projectId\n  existingIds=$existingIds\n  incomingMemberIds=$memberIds\n  normalizedDesired=$desiredIds',
-      );
-
-      final toAdd = desiredIds.difference(existingIds);
+      // ignore: avoid_print      final toAdd = desiredIds.difference(existingIds);
       final toRemove = existingIds.difference(desiredIds);
 
-      // ignore: avoid_print
-      print(
-        '[ProjectsController] Diff result -> toAdd=$toAdd toRemove=$toRemove',
-      );
-
-      // Apply additions
+      // ignore: avoid_print      // Apply additions
       for (final userId in toAdd) {
-        // ignore: avoid_print
-        print(
-          '[ProjectsController] Adding userId=$userId roleId=$defaultRoleId',
-        );
-        try {
+        // ignore: avoid_print        try {
           await membershipService.addMember(
             projectId: projectId,
             userId: userId,
             roleId: defaultRoleId,
           );
-          // ignore: avoid_print
-          print('[ProjectsController] ✓ Successfully added userId=$userId');
-        } catch (addError) {
-          // ignore: avoid_print
-          print(
-            '[ProjectsController] ✗ FAILED to add userId=$userId: $addError',
-          );
-          rethrow;
+          // ignore: avoid_print        } catch (addError) {
+          // ignore: avoid_print          rethrow;
         }
       }
 
       // Apply removals
       for (final userId in toRemove) {
-        // ignore: avoid_print
-        print('[ProjectsController] Removing userId=$userId');
-        await membershipService.removeMember(
+        // ignore: avoid_print        await membershipService.removeMember(
           projectId: projectId,
           userId: userId,
         );
@@ -349,34 +309,19 @@ class ProjectsController extends GetxController {
           assignedEmployees: desiredIds.toList(),
         );
         projects[idx] = _normalize(updated);
-        // ignore: avoid_print
-        print(
-          '[ProjectsController] ✓✓✓ setProjectAssignments SUCCESS: Updated project "${projects[idx].title}" with assignedEmployees=${desiredIds.toList()}',
-        );
-      }
+        // ignore: avoid_print      }
     } catch (e) {
-      // ignore: avoid_print
-      print('[ProjectsController] ✗✗✗ setProjectAssignments FAILED: $e');
-      errorMessage.value = e.toString();
+      // ignore: avoid_print      errorMessage.value = e.toString();
       rethrow;
     }
   }
 
   Future<void> _hydrateAssignments() async {
     if (!Get.isRegistered<ProjectMembershipService>()) {
-      // ignore: avoid_print
-      print(
-        '[ProjectsController] _hydrateAssignments: ProjectMembershipService not registered',
-      );
-      return;
+      // ignore: avoid_print      return;
     }
     final membershipService = Get.find<ProjectMembershipService>();
-    // ignore: avoid_print
-    print(
-      '[ProjectsController] _hydrateAssignments: Starting for ${projects.length} projects',
-    );
-
-    // Process all projects in parallel for faster hydration
+    // ignore: avoid_print    // Process all projects in parallel for faster hydration
     await Future.wait(
       projects.map((project) async {
         try {
@@ -388,31 +333,16 @@ class ProjectsController extends GetxController {
               .where((id) => id.trim().isNotEmpty)
               .toList();
 
-          // ignore: avoid_print
-          print(
-            '[ProjectsController] Project "${project.title}" (${project.id}): Found ${memberships.length} memberships → userIds=$ids',
-          );
-
-          final idx = projects.indexWhere((p) => p.id == project.id);
+          // ignore: avoid_print          final idx = projects.indexWhere((p) => p.id == project.id);
           if (idx != -1) {
             projects[idx] = _normalize(
               projects[idx].copyWith(assignedEmployees: ids),
             );
-            // ignore: avoid_print
-            print(
-              '[ProjectsController] ✓ Updated project "${project.title}" assignedEmployees=$ids',
-            );
-          }
+            // ignore: avoid_print          }
         } catch (e) {
-          // ignore: avoid_print
-          print(
-            '[ProjectsController] ✗ Failed to hydrate assignments for project "${project.title}": $e',
-          );
-        }
+          // ignore: avoid_print        }
       }),
     );
 
-    // ignore: avoid_print
-    print('[ProjectsController] _hydrateAssignments: Complete');
-  }
+    // ignore: avoid_print  }
 }

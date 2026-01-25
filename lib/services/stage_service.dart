@@ -21,13 +21,7 @@ class StageService {
     _ensureToken();
     final uri = Uri.parse(
       '${ApiConfig.checklistBaseUrl}/projects/$projectId/stages',
-    );
-    print('📍 API Call: GET $uri');
-    final json = await http.getJson(uri);
-    print('📦 Response: $json');
-    final data = (json['data'] as List?) ?? [];
-    print('✓ Stages parsed: ${data.length} items');
-    return data.cast<Map<String, dynamic>>();
+    );    final json = await http.getJson(uri);    final data = (json['data'] as List?) ?? [];    return data.cast<Map<String, dynamic>>();
   }
 
   Future<Map<String, dynamic>> createStage(
@@ -62,10 +56,6 @@ class StageService {
     _ensureToken();
     final uri = Uri.parse(
       '${ApiConfig.baseUrl}/stages/$stageId/increment-loopback',
-    );
-    print('📍 API Call: PATCH $uri');
-    final json = await http.patchJson(uri, {});
-    print('📦 Response: $json');
-    return (json['data'] as Map<String, dynamic>?) ?? {};
+    );    final json = await http.patchJson(uri, {});    return (json['data'] as Map<String, dynamic>?) ?? {};
   }
 }

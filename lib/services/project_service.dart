@@ -87,8 +87,16 @@ class ProjectService {
   Future<List<Project>> getAll() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/projects');
     final json = await http.getJson(uri);
-    final data = (json['data'] as List).cast<dynamic>();
-    return data.map((e) => _fromApi(e as Map<String, dynamic>)).toList();
+    // Handle paginated response: { data: { projects: [...], pagination: {...} } }
+    var data = json['data'];
+    if (data is Map && data.containsKey('projects')) {
+      data = data['projects'];
+    }
+    if (data is! List) {
+      data = [];
+    }
+    final list = (data as List).cast<dynamic>();
+    return list.map((e) => _fromApi(e as Map<String, dynamic>)).toList();
   }
 
   Future<Project> getById(String id) async {

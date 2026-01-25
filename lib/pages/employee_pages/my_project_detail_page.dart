@@ -68,9 +68,7 @@ class _MyProjectDetailPageState extends State<MyProjectDetailPage> {
           setState(() => _isLoadingAssignments = false);
         }
       }
-    } catch (e) {
-      print('[MyProjectDetailPage] Error loading assignments: $e');
-      if (mounted) {
+    } catch (e) {      if (mounted) {
         setState(() => _isLoadingAssignments = false);
       }
     }
@@ -293,11 +291,7 @@ class _MyProjectDetailPageState extends State<MyProjectDetailPage> {
     final fallback =
         assignedContainsUser && _executors.isEmpty && _reviewers.isEmpty;
     // Debug trace
-    // ignore: avoid_print
-    print(
-      '[MyProjectDetailPage] _showStartButton status=${_project.status} executors=${_executors.length} reviewers=${_reviewers.length} userId=$userId isExecutor=$isExecutor isReviewer=$isReviewer assignedContainsUser=$assignedContainsUser fallback=$fallback',
-    );
-    return isExecutor || isReviewer || fallback;
+    // ignore: avoid_print    return isExecutor || isReviewer || fallback;
   }
 
   Widget _buildStartButton() {

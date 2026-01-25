@@ -12,10 +12,7 @@ class MasterExcelExportService {
   /// Download master Excel file for all projects
   /// Returns file bytes that can be downloaded
   Future<List<int>> downloadMasterExcel() async {
-    try {
-      print('📥 Downloading master Excel export...');
-
-      final uri = Uri.parse('${ApiConfig.baseUrl}/admin/export/master-excel');
+    try {      final uri = Uri.parse('${ApiConfig.baseUrl}/admin/export/master-excel');
 
       // Make GET request with auth header
       final response = await http.get(
@@ -30,13 +27,8 @@ class MasterExcelExportService {
         throw Exception(
           'Failed to download master Excel: HTTP ${response.statusCode}',
         );
-      }
-
-      print('✓ Master Excel downloaded successfully');
-      return response.bodyBytes;
-    } catch (e) {
-      print('❌ Error downloading master Excel: $e');
-      rethrow;
+      }      return response.bodyBytes;
+    } catch (e) {      rethrow;
     }
   }
 }

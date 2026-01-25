@@ -190,13 +190,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   @override
   void initState() {
     super.initState();
-    print('🔷 QuestionsScreen.initState() for project: ${widget.projectId}');
     checklistCtrl = Get.isRegistered<ChecklistController>()
         ? Get.find<ChecklistController>()
         : Get.put(ChecklistController());
-
-    print('✓ ChecklistController obtained: ${checklistCtrl.runtimeType}');
-
     if (widget.initialPhase != null &&
         widget.initialPhase! >= 1 &&
         widget.initialPhase! <= 5) {
@@ -242,10 +238,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     String? severity,
   }) async {
     try {
-      print(
-        '🔄 Assigning defect category: $checkpointId → $categoryId ($severity)',
-      );
-
       // Immediately update local state
       setState(() {
         _selectedDefectCategory[checkpointId] = categoryId;
@@ -257,16 +249,13 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       // Save to backend
       if (categoryId != null && categoryId.isNotEmpty) {
         final checklistService = Get.find<PhaseChecklistService>();
-        print('📡 Saving to backend...');
         await checklistService.assignDefectCategory(
           checkpointId,
           categoryId,
           severity: severity,
         );
-        print('✓ Saved successfully');
       }
     } catch (e) {
-      print('❌ Error: $e');
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -291,10 +280,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     final phase = _selectedPhase;
 
     try {
-      print(
-        '🔍 CHECKLIST PAGE: Loading data for Phase $phase, ProjectID: ${widget.projectId}',
-      );
-
       // Step 0: Load defect categories from template
       try {
         final templateService = Get.find<TemplateService>();
@@ -306,23 +291,16 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
             final id = (cat['_id'] ?? '').toString();
             if (id.isNotEmpty) {
               _defectCategories[id] = cat;
-              print('  📂 Category loaded: ID="$id", name="${cat['name']}"');
             }
           }
         }
-        print('✓ Defect categories loaded: ${_defectCategories.length}');
-      } catch (e) {
-        print('⚠️ Failed to load defect categories: $e');
-      }
+      } catch (e) {}
 
       // Step 1: Fetch stages
       final stageService = Get.find<StageService>();
 
       final stages = await stageService.listStages(widget.projectId);
-      print('✓ Stages fetched: ${stages.length} stages found');
-
       if (stages.isEmpty) {
-        print('❌ No stages found');
         if (!mounted) return;
         setState(() {
           checklist = [];
@@ -336,12 +314,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       // Step 2: Find stage for current phase
       final stage = stages.firstWhereOrNull((s) {
         final stageName = (s['stage_name'] ?? '').toString().toLowerCase();
-        print('  Checking stage: "$stageName" for phase $phase');
         return stageName.contains('phase $phase');
       });
 
       if (stage == null) {
-        print('❌ No stage found matching "Phase $phase"');
         if (!mounted) return;
         setState(() {
           checklist = [];
@@ -360,8 +336,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       setState(() {
         _loopbackCounter = loopbackCount;
       });
-      print('✓ Stage found: $stageId, Loopback Count: $loopbackCount');
-
       // Step 3: Try to fetch from new ProjectChecklist API first
       List<Question> loadedChecklist = [];
       try {
@@ -372,15 +346,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         final groups = projectChecklistData['groups'] as List<dynamic>? ?? [];
         if (groups.isNotEmpty) {
           loadedChecklist = Question.fromProjectChecklistGroups(groups);
-          print(
-            '✓ Loaded ${loadedChecklist.length} groups from ProjectChecklist (hierarchical structure)',
-          );
         }
-      } catch (e) {
-        print(
-          '⚠️ ProjectChecklist not available, falling back to old structure: $e',
-        );
-      }
+      } catch (e) {}
 
       // Step 4: Fallback to old checklist structure if needed
       if (loadedChecklist.isEmpty) {
@@ -389,12 +356,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           final checklistService = Get.find<PhaseChecklistService>();
           final res = await checklistService.listForStage(stageId);
           checklists = List<Map<String, dynamic>>.from(res as List);
-          print(
-            '✓ Checklists fetched: ${checklists.length} checklists found (old structure)',
-          );
         } catch (e) {
           final msg = e.toString();
-          print('❌ Error fetching checklists: $msg');
           if (!mounted) return;
           setState(() {
             checklist = [];
@@ -414,7 +377,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         }
 
         if (checklists.isEmpty) {
-          print('❌ No checklists returned for this stage');
           if (!mounted) return;
           setState(() {
             checklist = [];
@@ -430,25 +392,13 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         for (final cl in checklists) {
           final checklistId = (cl['_id'] ?? '').toString();
           final checklistName = (cl['checklist_name'] ?? '').toString();
-          print('  Processing checklist: $checklistName');
-
           final checkpoints = await checklistService.getCheckpoints(
             checklistId,
           );
-          print('    Checkpoints: ${checkpoints.length}');
-
           // Debug: Print first checkpoint structure to verify defect data
           if (checkpoints.isNotEmpty) {
             final firstCp = checkpoints.first;
-            print('    📋 First checkpoint structure:');
-            print('      _id: ${firstCp['_id']}');
-            print('      question: ${firstCp['question']}');
-            print('      defect: ${firstCp['defect']}');
-            if (firstCp['defect'] is Map) {
-              print('        - categoryId: ${firstCp['defect']['categoryId']}');
-              print('        - severity: ${firstCp['defect']['severity']}');
-              print('        - isDetected: ${firstCp['defect']['isDetected']}');
-            }
+            if (firstCp['defect'] is Map) {}
           }
 
           final cpObjs = checkpoints
@@ -466,9 +416,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                   _selectedDefectSeverity[cpId] = defectSeverity.isNotEmpty
                       ? defectSeverity
                       : null;
-                  print(
-                    '✓ Loaded defect: $cpId → $defectCatId ($defectSeverity)',
-                  );
                 }
 
                 return {
@@ -480,11 +427,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
               .where((m) => (m['text'] ?? '').isNotEmpty)
               .cast<Map<String, String>>()
               .toList();
-
-          print('    📝 Created ${cpObjs.length} question objects:');
-          cpObjs.forEach((obj) {
-            print('       • id=${obj['id']} | text=${obj['text']}');
-          });
+          cpObjs.forEach((obj) {});
 
           if (cpObjs.isNotEmpty) {
             loadedChecklist.add(
@@ -503,11 +446,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       setState(() {
         checklist = loadedChecklist;
       });
-      print(
-        '✅ Checklist loaded successfully: ${loadedChecklist.length} questions',
-      );
     } catch (e) {
-      print('❌ Error loading checklist: $e');
       if (!mounted) return;
       setState(() {
         checklist = [];
@@ -581,23 +520,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       _isLoadingData = false;
     });
 
-    // DEBUG: Print current state of defect maps
-    print('');
-    print('═══════════════════════════════════════════════════════════════');
-    print('🔍 DEBUG: Defect Category & Severity Maps After Loading');
-    print('═══════════════════════════════════════════════════════════════');
-    print(
-      '📍 Total checkpoints with categories: ${_selectedDefectCategory.length}',
-    );
-    _selectedDefectCategory.forEach((checkpointId, categoryId) {
-      final severity = _selectedDefectSeverity[checkpointId] ?? 'N/A';
-      print(
-        '   • Checkpoint: $checkpointId | Category: $categoryId | Severity: $severity',
-      );
-    });
-    print('═══════════════════════════════════════════════════════════════');
-    print('');
-
     // Compute active phase
     await _computeActivePhase();
 
@@ -649,15 +571,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
   void _recomputeDefects() {
     // Compute defects locally from current answers - much simpler and more reliable
-    print('🔍 Starting defect computation...');
-    print('📝 Executor answers: ${executorAnswers.length} entries');
-    print('📝 Reviewer answers: ${reviewerAnswers.length} entries');
-    if (executorAnswers.isNotEmpty) {
-      print('   Sample executor key: ${executorAnswers.keys.first}');
-    }
-    if (reviewerAnswers.isNotEmpty) {
-      print('   Sample reviewer key: ${reviewerAnswers.keys.first}');
-    }
+    if (executorAnswers.isNotEmpty) {}
+    if (reviewerAnswers.isNotEmpty) {}
 
     final counts = <String, int>{};
     final checkpointCounts = <String, int>{};
@@ -669,9 +584,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       int defectCount = 0;
       final subs = q.subQuestions;
       final checkpointCount = subs.length;
-
-      print('🔍 Checking "${q.mainQuestion}" - ${subs.length} questions');
-
       for (final sub in subs) {
         final textKey = (sub['text'] ?? '').toString();
         final idKey = (sub['id'] ?? '').toString();
@@ -680,27 +592,15 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         var execAnswer = executorAnswers[textKey]?['answer'];
         var reviAnswer = reviewerAnswers[textKey]?['answer'];
 
-        String usedKey = textKey;
         if (execAnswer == null && idKey.isNotEmpty) {
           execAnswer = executorAnswers[idKey]?['answer'];
           reviAnswer = reviewerAnswers[idKey]?['answer'];
-          usedKey = idKey;
         }
-
-        print(
-          '  Q: "${textKey.length > 50 ? '${textKey.substring(0, 50)}...' : textKey}"',
-        );
-        print(
-          '    Key used: "${usedKey.length > 30 ? '${usedKey.substring(0, 30)}...' : usedKey}"',
-        );
-        print('    Exec=$execAnswer, Revi=$reviAnswer');
-
         // Count as defect only if both have answered and answers differ
         if (execAnswer != null &&
             reviAnswer != null &&
             execAnswer != reviAnswer) {
           defectCount++;
-          print('    🔴 DEFECT!');
         }
       }
 
@@ -708,8 +608,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       checkpointCounts[checklistId] = checkpointCount;
       total += defectCount;
       totalCheckpoints += checkpointCount;
-
-      print('  ✓ Defects for this checklist: $defectCount/$checkpointCount');
     }
 
     if (mounted) {
@@ -733,10 +631,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         );
       });
     }
-
-    print(
-      '📊 TOTAL DEFECTS: $total out of $totalCheckpoints questions = ${totalCheckpoints > 0 ? (total / totalCheckpoints * 100).toStringAsFixed(2) : "0.00"}%',
-    );
   }
 
   /// Accumulate maximum defects from this session into cumulative defect rate
@@ -937,7 +831,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
             onPressed: _isLoadingData
                 ? null
                 : () {
-                    print('🔄 Manual refresh triggered');
                     // Clear cache and reload
                     checklistCtrl.clearProjectCache(widget.projectId);
                     _loadChecklistData();
@@ -992,11 +885,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                         await stageService.incrementLoopbackCounter(
                           _currentStageId!,
                         );
-                        print(
-                          '✓ Loopback counter incremented for stage: $_currentStageId',
-                        );
                       } catch (e) {
-                        print('⚠️ Failed to increment loopback counter: $e');
                         // Don't fail the revert if counter increment fails
                       }
                     }
@@ -1793,11 +1682,7 @@ class _RoleColumn extends StatelessWidget {
                                   final sevFromMap =
                                       selectedDefectSeverity[key];
                                   if (catFromMap != null ||
-                                      sevFromMap != null) {
-                                    print(
-                                      '🎯 Building SubQuestionCard: key=$key | category=$catFromMap | severity=$sevFromMap | role=$role',
-                                    );
-                                  }
+                                      sevFromMap != null) {}
 
                                   final widgets = <Widget>[];
 

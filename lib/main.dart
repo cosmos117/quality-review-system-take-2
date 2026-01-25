@@ -41,6 +41,3 @@ class _HomeRouter extends StatelessWidget {
     });
   }
 }
-
-// email : admin@gmail.com
-// pass : admin1

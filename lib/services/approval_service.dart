@@ -68,9 +68,7 @@ class ApprovalService {
       final json = await http.getJson(uri);
       final data = json['data'] as Map<String, dynamic>?;
       return data?['revertCount'] as int? ?? 0;
-    } catch (e) {
-      print('⚠️ Error fetching revert count: $e');
-      return 0;
+    } catch (e) {      return 0;
     }
   }
 
@@ -83,9 +81,7 @@ class ApprovalService {
       final json = await http.postJson(uri, {'phase': phase});
       final data = json['data'] as Map<String, dynamic>?;
       return data?['revertCount'] as int? ?? 0;
-    } catch (e) {
-      print('⚠️ Error incrementing revert count: $e');
-      return 0;
+    } catch (e) {      return 0;
     }
   }
 }

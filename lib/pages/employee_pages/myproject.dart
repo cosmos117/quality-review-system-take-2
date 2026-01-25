@@ -58,34 +58,20 @@ class _MyprojectState extends State<Myproject> {
 
         // Small delay to ensure hydration completes (race condition fix)
         await Future.delayed(const Duration(milliseconds: 300));
-      } else {
-        print('[MyProjects] Using preloaded projects (already hydrated)');
-      }
+      } else {}
 
       if (!mounted) return;
 
       // Use the controller's byAssigneeId method for more reliable filtering
       final myProjects = ctrl.byAssigneeId(userId);
 
-      // Debug logging
-      print('[MyProjects] Loaded projects for user $userId:');
-      print('[MyProjects] Total projects found: ${myProjects.length}');
-      for (final p in myProjects) {
-        print(
-          '[MyProjects]   - ${p.title} (assignedEmployees: ${p.assignedEmployees})',
-        );
-      }
-
       if (mounted) {
         setState(() {
           _cachedProjects = myProjects;
           _isInitialLoad = false;
         });
-
-        print('[MyProjects] Cached ${_cachedProjects.length} projects');
       }
     } catch (e) {
-      print('[MyProjects] Error loading projects: $e');
       if (mounted) {
         setState(() {
           _cachedProjects = [];
