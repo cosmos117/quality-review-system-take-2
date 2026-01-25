@@ -16,6 +16,9 @@ import '../../services/defect_categorization_service.dart';
 
 enum UploadStatus { pending, uploading, success, failed }
 
+// Special key used to persist reviewer submission summary alongside answers
+const String _reviewerSummaryKey = '_meta_reviewer_summary';
+
 class ImageUploadState {
   UploadStatus status;
   double progress;
@@ -157,10 +160,12 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   late final ChecklistController checklistCtrl;
   String? _currentStageId;
   bool _isLoadingData = true;
-  // UI phase numbering starts at 1 but maps to actual phases starting at 2
-  int _selectedPhase = 1; // UI phase 1 == actual phase 2
-  int _activePhase = 1; // UI active phase index
-  int _maxActualPhase = 7; // discovered from stage names; actual phases count
+  // Phase numbering: 1, 2, 3... directly maps to stage1, stage2, stage3...
+  int _selectedPhase = 1; // Currently selected phase (1 = first phase)
+  int _activePhase = 1; // Active phase index (enabled for editing)
+  int _maxActualPhase = 7; // Max phase number discovered from stages
+  List<Map<String, dynamic>> _stages = []; // Store stages with names
+  Map<String, dynamic> _stageMap = {}; // Map stageKey to stage data
   Map<String, dynamic>? _approvalStatus;
   Map<String, dynamic>? _compareStatus;
   final ScrollController _executorScroll = ScrollController();
@@ -181,6 +186,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   int _maxCheckpointsSeen = 0; // Highest checkpoint count seen
   // Session-level tracking: track highest defects seen, not just current
   int _maxDefectsSeenInSession = 0; // Highest defect count in this session
+  // Reviewer submission summaries per phase
+  final Map<int, Map<String, dynamic>> _reviewerSubmissionSummaries = {};
   int _totalCheckpointsInSession = 0; // Total checkpoints for this session
   // Revert tracking
   int _revertCount = 0; // Number of times checklist was reverted by SDH
@@ -290,8 +297,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       _selectedDefectSeverity.clear();
     });
 
-    // Map UI phase to actual phase by adding 1 (skipping actual phase 1)
-    final phase = _selectedPhase + 1;
+    // Get actual phase number from UI selection
+    // UI phases are 1, 2, 3 and these directly map to stage1, stage2, stage3
+    final phase = _selectedPhase;
 
     try {
       print(
@@ -324,17 +332,30 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       final stages = await stageService.listStages(widget.projectId);
       print('✓ Stages fetched: ${stages.length} stages found');
 
-      // Discover maximum actual phase number from stage names (e.g., "Phase 2", "Phase 3", ...)
+      // Build stage map and discover maximum actual phase number
       int discoveredMaxActual = 1;
+      final stageMap = <String, dynamic>{};
       for (final s in stages) {
-        final name = (s['stage_name'] ?? '').toString().toLowerCase();
-        final match = RegExp(r'phase\s*(\d+)').firstMatch(name);
+        final name = (s['stage_name'] ?? '').toString();
+        final stageKey = (s['stage_key'] ?? '').toString();
+        stageMap[stageKey] = {'name': name, ...s};
+        print('  📍 Stage: $stageKey => $name');
+
+        // Extract phase number from stage_key (e.g., "stage1" => 1, "stage2" => 2)
+        // This is reliable because stage_key is always in format "stageN"
+        final match = RegExp(
+          r'stage(\d+)',
+          caseSensitive: false,
+        ).firstMatch(stageKey);
         if (match != null) {
           final p = int.tryParse(match.group(1) ?? '') ?? 0;
           if (p > discoveredMaxActual) discoveredMaxActual = p;
         }
       }
+
       setState(() {
+        _stages = stages;
+        _stageMap = stageMap;
         _maxActualPhase = discoveredMaxActual;
       });
 
@@ -350,21 +371,29 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         return;
       }
 
-      // Step 2: Find stage for current phase
+      // Step 2: Find stage for current phase using stage_key
+      // _selectedPhase directly corresponds to actual phase number (1, 2, 3...)
+      // stage_key is in format "stage1", "stage2", etc. matching the actual phase numbers
+      final expectedStageKey = 'stage$phase';
       final stage = stages.firstWhereOrNull((s) {
-        final stageName = (s['stage_name'] ?? '').toString().toLowerCase();
-        print('  Checking stage: "$stageName" for phase $phase');
-        return stageName.contains('phase $phase');
+        final stageKey = (s['stage_key'] ?? '').toString().toLowerCase();
+        print(
+          '  Checking stage: "$stageKey" for expected key: "$expectedStageKey"',
+        );
+        return stageKey == expectedStageKey;
       });
 
       if (stage == null) {
-        print('❌ No stage found matching "Phase $phase"');
+        print('❌ No stage found with stage_key "$expectedStageKey"');
+        print(
+          '   Available stages: ${stages.map((s) => s['stage_key']).join(", ")}',
+        );
         if (!mounted) return;
         setState(() {
           checklist = [];
           _isLoadingData = false;
           _errorMessage =
-              'No stage found for Phase $phase. Make sure the template has Phase $phase and the project has stages.';
+              'No stage found for Phase $phase (looking for $expectedStageKey). Available stages: ${stages.map((s) => s['stage_key']).join(", ")}';
         });
         return;
       }
@@ -620,6 +649,51 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         phase,
         'reviewer',
       );
+      // Extract persisted reviewer summary (if any) from the answers map
+      Map<String, dynamic>? persistedReviewerSummary;
+      final metaSummary = reviewerSheet[_reviewerSummaryKey];
+      print('🔍 Looking for reviewer summary in phase $phase...');
+      print('   Meta summary found: ${metaSummary != null}');
+      if (metaSummary != null) {
+        print('   Meta summary type: ${metaSummary.runtimeType}');
+        print('   Meta summary content: $metaSummary');
+
+        // Extract the actual summary data from the meta answer structure
+        if (metaSummary is Map<String, dynamic>) {
+          // First check if there's a metadata field (from backend)
+          if (metaSummary.containsKey('metadata') &&
+              metaSummary['metadata'] is Map<String, dynamic>) {
+            final metadata = metaSummary['metadata'] as Map<String, dynamic>;
+            if (metadata.containsKey('_summaryData') &&
+                metadata['_summaryData'] is Map<String, dynamic>) {
+              persistedReviewerSummary = Map<String, dynamic>.from(
+                metadata['_summaryData'] as Map<String, dynamic>,
+              );
+              print(
+                '✅ Extracted summary from metadata._summaryData: $persistedReviewerSummary',
+              );
+            }
+          }
+          // Fallback: check direct _summaryData field (old structure)
+          else if (metaSummary.containsKey('_summaryData') &&
+              metaSummary['_summaryData'] is Map<String, dynamic>) {
+            persistedReviewerSummary = Map<String, dynamic>.from(
+              metaSummary['_summaryData'] as Map<String, dynamic>,
+            );
+            print(
+              '✅ Extracted summary from _summaryData: $persistedReviewerSummary',
+            );
+          } else {
+            // Last fallback: try to use the whole object
+            persistedReviewerSummary = Map<String, dynamic>.from(metaSummary);
+            print(
+              '✅ Using whole meta object as summary: $persistedReviewerSummary',
+            );
+          }
+        }
+      }
+      // Remove meta entry so it does not interfere with question rendering
+      reviewerSheet.remove(_reviewerSummaryKey);
 
       if (!mounted) return;
       setState(() {
@@ -627,6 +701,16 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         executorAnswers.addAll(executorSheet);
         reviewerAnswers.clear();
         reviewerAnswers.addAll(reviewerSheet);
+        if (persistedReviewerSummary != null) {
+          _reviewerSubmissionSummaries[_selectedPhase] =
+              persistedReviewerSummary;
+          print(
+            '✅ Reviewer summary SET for phase $_selectedPhase: $persistedReviewerSummary',
+          );
+        } else {
+          print('⚠️ No reviewer summary to set for phase $_selectedPhase');
+        }
+        print('📊 Current summaries map: $_reviewerSubmissionSummaries');
       });
       // Recompute defect counts after loading answers
       _recomputeDefects();
@@ -911,25 +995,26 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     } catch (_) {}
     if (!mounted) return;
     setState(() {
-      // Convert actual active phase to UI phase: UI = max(1, actual-1)
-      _activePhase = active <= 1 ? 1 : active - 1;
+      // active represents the next phase that's now active
+      // active = 1 means phase 1 is active, active = 2 means phase 2 is active, etc.
+      _activePhase = active;
       // Clamp selected UI phase within [1, _activePhase]
       if (_selectedPhase > _activePhase) _selectedPhase = _activePhase;
       if (_selectedPhase < 1) _selectedPhase = 1;
     });
     // Refresh approval/compare for the currently selected phase
     try {
-      // Use actual phase when comparing approval status
+      // Use phase number when comparing approval status
       final status = await _approvalService.compare(
         widget.projectId,
-        _selectedPhase + 1,
+        _selectedPhase,
       );
       if (mounted) setState(() => _compareStatus = status);
     } catch (_) {}
     try {
       final appr = await _approvalService.getStatus(
         widget.projectId,
-        _selectedPhase + 1,
+        _selectedPhase,
       );
       if (mounted) setState(() => _approvalStatus = appr);
     } catch (_) {}
@@ -958,7 +1043,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
             .contains(currentUserName.trim().toLowerCase());
 
     // Editing only allowed on active phase; older phases view-only for all
-    final phaseEditable = _selectedPhase >= _activePhase;
+    final phaseEditable = _selectedPhase == _activePhase;
 
     // Check if executor checklist for this phase has been submitted
     final executorSubmitted =
@@ -998,60 +1083,80 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
               alignment: Alignment.center,
               dropdownColor: Colors.white,
               icon: const Icon(Icons.expand_more, color: Colors.white),
-              // Build UI phase list dynamically from actual phases [2.._maxActualPhase]
+              // Build UI phase list dynamically from actual phases [1.._maxActualPhase]
               items:
                   List<int>.generate(
-                        (_maxActualPhase - 1).clamp(1, 10),
-                        (i) => i + 1, // UI phases start at 1
-                      )
-                      .map(
-                        (p) => DropdownMenuItem(
-                          value: p,
-                          enabled: p <= _activePhase,
-                          child: Row(
-                            children: [
-                              // Show UI phase number, but represents actual phase = p+1
-                              Text('Phase $p'),
-                              const SizedBox(width: 8),
-                              if (p < _activePhase)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black12,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: const Text(
-                                    'View only',
-                                    style: TextStyle(fontSize: 10),
-                                  ),
-                                )
-                              else if (p == _activePhase)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.shade200,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: const Text(
-                                    'Active',
-                                    style: TextStyle(fontSize: 10),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      )
-                      .toList(),
+                    _maxActualPhase.clamp(1, 10),
+                    (i) => i + 1, // UI phases: 1, 2, 3, ...
+                  ).map((p) {
+                    // Get stage name from stageMap
+                    final stageKey = 'stage$p';
+                    final stageData =
+                        _stageMap[stageKey] as Map<String, dynamic>?;
+                    final stageName = stageData?['name'] ?? 'Phase $p';
+
+                    return DropdownMenuItem(
+                      value: p,
+                      enabled: isSDH ? true : (p <= _activePhase),
+                      child: Row(
+                        children: [
+                          // Show actual stage name from template
+                          Text(stageName),
+                          const SizedBox(width: 8),
+                          if (p < _activePhase)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black12,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Text(
+                                'View only',
+                                style: TextStyle(fontSize: 10),
+                              ),
+                            )
+                          else if (p == _activePhase)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade200,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Text(
+                                'Active',
+                                style: TextStyle(fontSize: 10),
+                              ),
+                            )
+                          else if (p > _activePhase && isSDH)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade300,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Text(
+                                'Pending',
+                                style: TextStyle(fontSize: 10),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
               onChanged: (val) async {
                 if (val == null) return;
-                // Restrict jumping ahead of active phase
-                if (val > _activePhase) {
+                // SDH can navigate to any phase for review
+                // Others can only go up to active phase
+                if (!isSDH && val > _activePhase) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text(
@@ -1098,14 +1203,28 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                   try {
                     await _approvalService.approve(
                       widget.projectId,
-                      _selectedPhase + 1, // actual phase
+                      _selectedPhase, // phase number
                     );
+
+                    // Clear cache
+                    checklistCtrl.clearProjectCache(widget.projectId);
+
+                    // Recompute active phase to get newly activated phase
+                    await _computeActivePhase();
+
+                    // Stay on current phase (don't auto-jump)
+                    // This allows SDH to see all phases and current phase details
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Approved. Next phase created.'),
+                      SnackBar(
+                        content: Text(
+                          'Phase ${_selectedPhase} approved! Next phase is now active.',
+                        ),
+                        backgroundColor: Colors.green,
                       ),
                     );
-                    _loadChecklistData();
+
+                    // Reload to show current phase in view-only mode + next phase as active
+                    await _loadChecklistData();
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Approve failed: $e')),
@@ -1115,55 +1234,26 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                   try {
                     await _approvalService.revert(
                       widget.projectId,
-                      _selectedPhase + 1, // actual phase
+                      _selectedPhase, // phase number
                     );
 
                     // Clear submission cache to force reload from backend
                     checklistCtrl.clearProjectCache(widget.projectId);
 
-                    // Increment loopback counter for the current stage
-                    if (_currentStageId != null &&
-                        _currentStageId!.isNotEmpty) {
-                      try {
-                        final stageService = Get.find<StageService>();
-                        await stageService.incrementLoopbackCounter(
-                          _currentStageId!,
-                        );
-                        print(
-                          '✓ Loopback counter incremented for stage: $_currentStageId',
-                        );
-                      } catch (e) {
-                        print('⚠️ Failed to increment loopback counter: $e');
-                        // Don't fail the revert if counter increment fails
-                      }
-                    }
+                    // Recompute active phase (should go back to current phase)
+                    await _computeActivePhase();
 
-                    // Also increment revert count in DB
-                    try {
-                      final updatedCount = await _approvalService
-                          .incrementRevertCount(
-                            widget.projectId,
-                            _selectedPhase,
-                          );
-                      setState(() {
-                        _revertCount = updatedCount;
-                        debugPrint(
-                          '🔄 Checklist reverted. Revert count updated to: $_revertCount for phase $_selectedPhase',
-                        );
-                      });
-                    } catch (e) {
-                      debugPrint('⚠️ Error updating revert count: $e');
-                      // Fallback: increment locally if DB update fails
-                      setState(() {
-                        _revertCount++;
-                      });
-                    }
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Reverted to current stage.'),
+                      SnackBar(
+                        content: Text(
+                          'Phase ${_selectedPhase} reverted. Executor and Reviewer can edit again.',
+                        ),
+                        backgroundColor: Colors.orange,
                       ),
                     );
-                    _loadChecklistData();
+
+                    // Reload the checklist data to show updated state
+                    await _loadChecklistData();
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Revert failed: $e')),
@@ -1256,6 +1346,46 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                           // Loopback Counter on the right
                           _LoopbackCounterBar(loopbackCount: _loopbackCounter),
                         ],
+                      ),
+                    ),
+                  // Show reviewer submission summary for SDH
+                  if (isSDH &&
+                      _reviewerSubmissionSummaries[_selectedPhase] != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8.0,
+                        vertical: 8.0,
+                      ),
+                      child: _ReviewerSubmissionSummaryCard(
+                        summary: _reviewerSubmissionSummaries[_selectedPhase]!,
+                        availableCategories: _getAvailableCategories(),
+                      ),
+                    ),
+                  // Debug: Show if SDH but no summary
+                  if (isSDH &&
+                      _reviewerSubmissionSummaries[_selectedPhase] == null)
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: Colors.grey.shade600,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'No reviewer submission summary available for Phase $_selectedPhase',
+                              style: TextStyle(color: Colors.grey.shade700),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   if (_editMode)
@@ -1429,12 +1559,62 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                             if (!canEditReviewerPhase) return;
                             // Accumulate current defects before submission
                             _accumulateDefects();
+
+                            // Show defect summary dialog
+                            final summaryData =
+                                await _showReviewerSubmissionDialog(context);
+                            if (summaryData == null) return; // User cancelled
+
+                            // Persist reviewer summary as a meta-answer so SDH can view later
+                            print('💾 Saving reviewer summary: $summaryData');
+
+                            // First update the local cache
+                            setState(() {
+                              _reviewerSubmissionSummaries[_selectedPhase] =
+                                  summaryData;
+                            });
+
+                            // Create a valid answer structure with the summary in the remark field
+                            final metaAnswer = {
+                              'answer': null, // Valid null answer
+                              'remark': summaryData
+                                  .toString(), // Serialized summary
+                              'images': [],
+                              '_isMeta':
+                                  true, // Flag to identify this as metadata
+                              '_summaryData': summaryData, // Original summary
+                            };
+
+                            setState(() {
+                              reviewerAnswers[_reviewerSummaryKey] = metaAnswer;
+                            });
+
+                            // Force immediate save to backend (no debounce)
+                            await checklistCtrl.setAnswer(
+                              widget.projectId,
+                              _selectedPhase,
+                              'reviewer',
+                              _reviewerSummaryKey,
+                              metaAnswer,
+                            );
+
+                            // Wait for debounced save to complete
+                            await Future.delayed(
+                              const Duration(milliseconds: 600),
+                            );
+                            print(
+                              '✅ Reviewer summary saved to cache and backend',
+                            );
+
                             final success = await checklistCtrl.submitChecklist(
                               widget.projectId,
                               _selectedPhase,
                               'reviewer',
                             );
                             if (success && mounted) {
+                              print(
+                                '✅ Checklist submitted. Summary in map: ${_reviewerSubmissionSummaries[_selectedPhase]}',
+                              );
                               setState(() {});
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -1460,6 +1640,211 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     final u = userName.trim().toLowerCase();
     if (u.contains('sdh')) return true;
     return widget.leaders.map((e) => e.trim().toLowerCase()).contains(u);
+  }
+
+  // Show defect summary dialog when reviewer submits checklist
+  Future<Map<String, dynamic>?> _showReviewerSubmissionDialog(
+    BuildContext context,
+  ) async {
+    final remarkCtrl = TextEditingController();
+    String? selectedCategory;
+    String? selectedSeverity;
+    final categories = _getAvailableCategories();
+    List<Map<String, dynamic>> suggestedCategories = [];
+    bool isLoadingSuggestions = false;
+    Timer? debounceTimer;
+
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          // Auto-suggest on remark change
+          void onRemarkChanged(String text) {
+            debounceTimer?.cancel();
+            if (text.trim().length < 3) {
+              setDialogState(() {
+                suggestedCategories = [];
+                isLoadingSuggestions = false;
+              });
+              return;
+            }
+            setDialogState(() => isLoadingSuggestions = true);
+            debounceTimer = Timer(const Duration(milliseconds: 500), () async {
+              try {
+                final matched = categories
+                    .where((cat) {
+                      final name = (cat['name'] ?? '').toString().toLowerCase();
+                      final keywords =
+                          (cat['keywords'] as List<dynamic>?)
+                              ?.map((k) => k.toString().toLowerCase())
+                              .toList() ??
+                          [];
+                      final searchText = text.toLowerCase();
+                      return name.contains(searchText) ||
+                          keywords.any((k) => k.contains(searchText));
+                    })
+                    .take(5)
+                    .toList();
+                setDialogState(() {
+                  suggestedCategories = matched;
+                  isLoadingSuggestions = false;
+                });
+              } catch (e) {
+                setDialogState(() => isLoadingSuggestions = false);
+              }
+            });
+          }
+
+          return AlertDialog(
+            title: const Text('Reviewer Checklist Submission Summary'),
+            content: SingleChildScrollView(
+              child: SizedBox(
+                width: 450,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: remarkCtrl,
+                      onChanged: onRemarkChanged,
+                      decoration: const InputDecoration(
+                        labelText: 'Remark (type to auto-suggest category)',
+                        hintText: 'Enter defect remarks',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 3,
+                    ),
+                    if (isLoadingSuggestions)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8.0),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Fetching suggestions...',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (suggestedCategories.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Suggested Categories:',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: suggestedCategories.map((cat) {
+                                final id = (cat['_id'] ?? '').toString();
+                                final name = (cat['name'] ?? '').toString();
+                                final isSelected = selectedCategory == id;
+                                return FilterChip(
+                                  label: Text(name),
+                                  selected: isSelected,
+                                  onSelected: (_) {
+                                    setDialogState(() => selectedCategory = id);
+                                  },
+                                  backgroundColor: Colors.blue.shade50,
+                                  selectedColor: Colors.blue.shade200,
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Assigned Defect Category',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: selectedCategory,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: 'Select category',
+                      ),
+                      items: [
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text('None'),
+                        ),
+                        ...categories.map((cat) {
+                          final id = (cat['_id'] ?? '').toString();
+                          final name = (cat['name'] ?? 'Unknown').toString();
+                          return DropdownMenuItem(value: id, child: Text(name));
+                        }),
+                      ],
+                      onChanged: (val) =>
+                          setDialogState(() => selectedCategory = val),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Severity',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: selectedSeverity,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: 'Select severity',
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: null, child: Text('None')),
+                        DropdownMenuItem(
+                          value: 'Critical',
+                          child: Text('Critical'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Non-Critical',
+                          child: Text('Non-Critical'),
+                        ),
+                      ],
+                      onChanged: (val) =>
+                          setDialogState(() => selectedSeverity = val),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(null),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop({
+                    'remark': remarkCtrl.text.trim(),
+                    'category': selectedCategory,
+                    'severity': selectedSeverity,
+                    'timestamp': DateTime.now().toIso8601String(),
+                  });
+                },
+                child: const Text('Submit'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 }
 
@@ -2281,6 +2666,153 @@ class _LoopbackCounterBar extends StatelessWidget {
   }
 }
 
+class _ReviewerSubmissionSummaryCard extends StatelessWidget {
+  final Map<String, dynamic> summary;
+  final List<Map<String, dynamic>> availableCategories;
+
+  const _ReviewerSubmissionSummaryCard({
+    required this.summary,
+    required this.availableCategories,
+  });
+
+  String _getCategoryName(String? categoryId) {
+    if (categoryId == null || categoryId.isEmpty) return 'None';
+    try {
+      final cat = availableCategories.firstWhere(
+        (c) => (c['_id'] ?? '').toString() == categoryId,
+        orElse: () => {},
+      );
+      return (cat['name'] ?? 'Unknown').toString();
+    } catch (e) {
+      return 'Unknown';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final remark = summary['remark']?.toString() ?? '';
+    final category = summary['category']?.toString();
+    final severity = summary['severity']?.toString();
+    final categoryName = _getCategoryName(category);
+
+    return Card(
+      elevation: 3,
+      color: Colors.orange.shade50,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: Colors.orange.shade300, width: 2),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.assignment_turned_in,
+                  color: Colors.orange.shade700,
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Reviewer Submission Summary',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 20),
+            if (remark.isNotEmpty) ...[
+              const Text(
+                'Remark:',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(remark, style: const TextStyle(fontSize: 14)),
+              const SizedBox(height: 12),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Defect Category:',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade100,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          categoryName,
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Severity:',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: severity == 'Critical'
+                              ? Colors.red.shade100
+                              : Colors.yellow.shade100,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          severity ?? 'None',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: severity == 'Critical'
+                                ? Colors.red.shade900
+                                : Colors.orange.shade900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class ApprovalBanner extends StatelessWidget {
   final Map<String, dynamic>? approvalStatus;
   final Map<String, dynamic>? compareStatus;
@@ -2565,9 +3097,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: Colors.grey.shade100,
-                  hintText: widget.role == 'reviewer'
-                      ? "Remark (type to auto-suggest category)"
-                      : "Remark",
+                  hintText: "Remark",
                   border: const OutlineInputBorder(borderSide: BorderSide.none),
                 ),
                 enabled: widget.editable,
@@ -2580,225 +3110,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
             ),
           ],
         ),
-        if (widget.role == 'reviewer' && _loadingSuggestion)
-          Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: Row(
-              children: [
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  'Fetching suggestions...',
-                  style: TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-        if (widget.role == 'reviewer' && _localSuggestions.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Suggested Categories:',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: _localSuggestions.map((suggestion) {
-                    final categoryName = (suggestion['categoryName'] ?? '')
-                        .toString();
-                    final categoryId = (suggestion['suggestedCategoryId'] ?? '')
-                        .toString();
-                    final isSelected = selectedCategory == categoryId;
-                    return FilterChip(
-                      label: Text(categoryName),
-                      selected: isSelected,
-                      onSelected: (_) => _acceptLocalSuggestion(suggestion),
-                      backgroundColor: Colors.blue.shade50,
-                      selectedColor: Colors.blue.shade200,
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-          ),
-        if (widget.role == 'reviewer' &&
-            _showSuggestion &&
-            _categorySuggestion != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.blue.shade50,
-              ),
-              padding: const EdgeInsets.all(10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'AI Suggestion:',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.blue,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          (_categorySuggestion?['categoryName'] ??
-                                  'No suggestion')
-                              .toString(),
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _acceptSuggestion,
-                    child: const Text('Accept', style: TextStyle(fontSize: 12)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        // Added: Defect Category Assignment Dropdown
-        // Show if categories are available and checkpoint has defect or category already assigned
-        // ONLY visible for REVIEWER role
-        if (widget.role == 'reviewer' &&
-            widget.availableCategories.isNotEmpty &&
-            widget.checkpointId != null &&
-            (currentCat != null || _isDefectDetected()))
-          Padding(
-            padding: const EdgeInsets.only(top: 12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Assigned Defect Category',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                if (widget.editable)
-                  // Edit mode - show dropdown
-                  DropdownButton<String?>(
-                    isExpanded: true,
-                    value: currentCat,
-                    hint: const Text('Select category'),
-                    items: [
-                      const DropdownMenuItem(value: null, child: Text('None')),
-                      ...widget.availableCategories.map((cat) {
-                        final id = (cat['_id'] ?? '').toString();
-                        final name = (cat['name'] ?? 'Unnamed').toString();
-                        return DropdownMenuItem<String?>(
-                          value: id,
-                          child: Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        );
-                      }),
-                    ],
-                    onChanged: (val) {
-                      setState(() => selectedCategory = val);
-                      if (val != null &&
-                          widget.checkpointId != null &&
-                          widget.onCategoryAssigned != null) {
-                        widget.onCategoryAssigned!(
-                          widget.checkpointId!,
-                          val,
-                          severity: selectedSeverity,
-                        );
-                      }
-                    },
-                  )
-                else if (currentCat != null)
-                  // View mode - show selected category
-                  Text(
-                    _getCategoryName(currentCat) ?? 'Unknown',
-                    style: const TextStyle(fontSize: 14),
-                  )
-                else
-                  const Text(
-                    'No category assigned',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Severity',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                if (widget.editable)
-                  DropdownButton<String?>(
-                    isExpanded: true,
-                    value: selectedSeverity,
-                    hint: const Text('Select severity'),
-                    items: const [
-                      DropdownMenuItem(value: null, child: Text('None')),
-                      DropdownMenuItem(
-                        value: 'Critical',
-                        child: Text('Critical'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'Non-Critical',
-                        child: Text('Non-Critical'),
-                      ),
-                    ],
-                    onChanged: (val) {
-                      setState(() => selectedSeverity = val);
-                      if (widget.checkpointId != null &&
-                          widget.onCategoryAssigned != null &&
-                          currentCat != null) {
-                        widget.onCategoryAssigned!(
-                          widget.checkpointId!,
-                          currentCat,
-                          severity: val,
-                        );
-                      }
-                    },
-                  )
-                else if (selectedSeverity != null)
-                  Text(
-                    selectedSeverity == 'Critical'
-                        ? '⚠️ Critical'
-                        : 'ℹ️ Non-Critical',
-                    style: TextStyle(
-                      color: selectedSeverity == 'Critical'
-                          ? Colors.red
-                          : Colors.orange,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  )
-                else
-                  const Text(
-                    'Not specified',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-              ],
-            ),
-          ),
         if (_images.isNotEmpty)
           SizedBox(
             height: 100,

@@ -30,6 +30,16 @@ class MyProjectDetailPage extends GetView<MyProjectDetailController> {
       );
     }
     final c = Get.find<MyProjectDetailController>();
+    // If the controller was already registered (navigated from another project),
+    // make sure we update its state to reflect the newly selected project.
+    // This prevents showing details from a previously opened project.
+    if (c.project.value.id != project.id ||
+        c.project.value.title != project.title) {
+      c.project.value = project;
+      c.description.value = description;
+      // Reload assigned members for the new project context
+      c.loadAssignments();
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -44,13 +54,76 @@ class MyProjectDetailPage extends GetView<MyProjectDetailController> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Project info (title/description may change)
+            // Project info with action buttons on the right
             Obx(() {
               final p = c.project.value;
-              return ProjectDetailInfo(
-                project: p,
-                descriptionOverride: c.description.value ?? p.description,
-                showAssignedEmployees: false,
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: ProjectDetailInfo(
+                      project: p,
+                      descriptionOverride: c.description.value ?? p.description,
+                      showAssignedEmployees: false,
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  // Action buttons column on the right
+                  SizedBox(
+                    width: 220,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 48), // Align with card content
+                        // Start button (only for assigned members when project not started)
+                        if (c.showStartButton) ...[
+                          _StartButton(),
+                          const SizedBox(height: 16),
+                        ],
+                        // Checklist button or info message
+                        Obx(() {
+                          final status = c.project.value.status;
+                          final isAccessible =
+                              status.toLowerCase().contains('progress') ||
+                              status.toLowerCase().contains('review') ||
+                              status.toLowerCase().contains('execution') ||
+                              status.toLowerCase().contains('started');
+
+                          if (isAccessible) {
+                            return _ChecklistButton();
+                          } else {
+                            return Card(
+                              color: Colors.blue.shade50,
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
+                                  children: [
+                                    Icon(
+                                      Icons.info,
+                                      color: Colors.blue.shade600,
+                                      size: 32,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Checklists will be available when project is in progress',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.blue.shade800,
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+                        }),
+                      ],
+                    ),
+                  ),
+                ],
               );
             }),
             const SizedBox(height: 24),
@@ -70,41 +143,6 @@ class MyProjectDetailPage extends GetView<MyProjectDetailController> {
                     )
                   : _AssignedEmployeesSection(),
             ),
-            const SizedBox(height: 32),
-            // Start button visibility (computed getter; button itself is reactive)
-            if (c.showStartButton) _StartButton(),
-            const SizedBox(height: 16),
-            // Checklist button or info card based on accessibility
-            Obx(() {
-              // Bind to reactive project status to establish dependency
-              final _status = c.project.value.status;
-              return _status.toLowerCase().contains('progress') ||
-                      _status.toLowerCase().contains('review') ||
-                      _status.toLowerCase().contains('execution') ||
-                      _status.toLowerCase().contains('started')
-                  ? _ChecklistButton()
-                  : Card(
-                      color: Colors.blue.shade50,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info, color: Colors.blue.shade600),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'Checklists will be available when the project is in progress or under review.',
-                                style: TextStyle(
-                                  color: Colors.blue.shade800,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-            }),
             const SizedBox(height: 16),
           ],
         ),
@@ -283,8 +321,9 @@ class _StartButton extends GetView<MyProjectDetailController> {
   @override
   Widget build(BuildContext context) {
     return Obx(
-      () => Align(
-        alignment: Alignment.centerLeft,
+      () => SizedBox(
+        width: double.infinity,
+        height: 50,
         child: ElevatedButton.icon(
           onPressed: controller.starting.value
               ? null
@@ -376,13 +415,17 @@ class _StartButton extends GetView<MyProjectDetailController> {
                 },
           icon: controller.starting.value
               ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation(Colors.white),
+                  ),
                 )
-              : const Icon(Icons.play_arrow),
+              : const Icon(Icons.play_circle_fill, size: 24),
           label: Text(
             controller.starting.value ? 'Starting...' : 'Start Project',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.green.shade600,
@@ -398,9 +441,10 @@ class _StartButton extends GetView<MyProjectDetailController> {
 class _ChecklistButton extends GetView<MyProjectDetailController> {
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: OutlinedButton.icon(
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: ElevatedButton.icon(
         onPressed: () async {
           // Preflight: ensure template/checklists exist before navigating
           if (Get.isRegistered<TemplateService>()) {
@@ -479,8 +523,16 @@ class _ChecklistButton extends GetView<MyProjectDetailController> {
             ),
           );
         },
-        icon: const Icon(Icons.checklist),
-        label: const Text('Open Checklist'),
+        icon: const Icon(Icons.checklist_rtl, size: 26),
+        label: const Text(
+          'Open Checklist',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.blue.shade600,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        ),
       ),
     );
   }

@@ -704,19 +704,36 @@ class PhaseEditor extends StatelessWidget {
                                     final confirm = await _confirmDelete(
                                       title: 'Remove Checklist Group?',
                                       message:
-                                          'This will delete "${group.name}" and its questions.',
+                                          'This will delete "${group.name}" plus all its sections and questions.',
                                     );
                                     if (confirm != true) return;
                                     try {
+                                      print(
+                                        '🗑️ UI: Deleting checklist group - ID: ${group.id}, Stage: $stage',
+                                      );
                                       await c.templateService.deleteChecklist(
                                         checklistId: group.id,
                                         stage: stage,
                                       );
+                                      print(
+                                        '✅ UI: Checklist deleted, reloading template...',
+                                      );
                                       await c.loadTemplate();
+                                      print('✅ UI: Template reloaded');
+                                      Get.snackbar(
+                                        'Deleted',
+                                        'Checklist group "${group.name}" has been deleted',
+                                        snackPosition: SnackPosition.BOTTOM,
+                                        backgroundColor: Colors.green,
+                                        colorText: Colors.white,
+                                      );
                                     } catch (e) {
+                                      print(
+                                        '❌ UI: Error deleting checklist - $e',
+                                      );
                                       Get.snackbar(
                                         'Error',
-                                        '$e',
+                                        'Failed to delete: $e',
                                         backgroundColor: Colors.red,
                                         colorText: Colors.white,
                                       );

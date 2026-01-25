@@ -128,10 +128,16 @@ class TemplateService {
         throw Exception('Invalid stage format');
       }
 
-      await http.deleteJson(Uri.parse('$_baseUrl/checklists/$checklistId'), {
-        'stage': stage,
-      });
+      print(
+        '🗑️ DELETE checklist - ID: $checklistId, Stage: $stage, URL: $_baseUrl/checklists/$checklistId',
+      );
+      final response = await http.deleteJson(
+        Uri.parse('$_baseUrl/checklists/$checklistId'),
+        {'stage': stage},
+      );
+      print('✅ DELETE checklist response: $response');
     } catch (e) {
+      print('❌ DELETE checklist error: $e');
       throw Exception('Error deleting checklist: $e');
     }
   }
