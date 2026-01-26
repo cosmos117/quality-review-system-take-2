@@ -44,3 +44,14 @@ class _HomeRouter extends StatelessWidget {
 
 // email : admin@gmail.com
 // pass : admin1
+
+// Below roles are subjective to projects, but use them for demo
+
+// Executor : executor@gmail.com
+// pass : executor1
+
+// Reviewer : reviewer@gmail.com
+// pass : reviewer1
+
+// SDH : vinit@gmail.com
+// pass : vinit1

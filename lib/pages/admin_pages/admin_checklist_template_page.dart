@@ -117,6 +117,13 @@ class AdminChecklistTemplateController extends GetxController {
   final errorMessage = RxnString();
   Map<String, dynamic> _templateData = {};
 
+  // Track expansion states to preserve them across reloads
+  final Map<String, bool> _groupExpansionStates = {};
+  final Map<String, bool> _sectionExpansionStates = {};
+
+  // Track current tab index to preserve it across reloads
+  final RxInt currentTabIndex = 0.obs;
+
   // Hide phase index 0
   List<int> get visiblePhaseIndexes =>
       List.generate(phases.length, (i) => i).where((i) => i != 0).toList();
@@ -131,6 +138,9 @@ class AdminChecklistTemplateController extends GetxController {
     isLoading.value = true;
     errorMessage.value = null;
     try {
+      // Save current expansion states before reloading
+      _saveExpansionStates();
+
       final templateData = await templateService.fetchTemplate();
       _templateData = templateData;
 
@@ -268,6 +278,21 @@ class AdminChecklistTemplateController extends GetxController {
 
   void refreshPhases() => phases.refresh();
 
+  // Save expansion states before reloading
+  void _saveExpansionStates() {
+    _groupExpansionStates.clear();
+    _sectionExpansionStates.clear();
+
+    for (var phase in phases) {
+      for (var group in phase.groups) {
+        _groupExpansionStates[group.id] = group.expanded;
+        for (var section in group.sections) {
+          _sectionExpansionStates[section.id] = section.expanded;
+        }
+      }
+    }
+  }
+
   // Parsing helpers
   List<TemplateGroup> _parseStageData(dynamic stageData) {
     if (stageData is! List) {
@@ -320,7 +345,8 @@ class AdminChecklistTemplateController extends GetxController {
                   id: sectionId,
                   name: sectionText,
                   questions: sectionQuestions,
-                  expanded: false,
+                  // Restore expansion state or default to false
+                  expanded: _sectionExpansionStates[sectionId] ?? false,
                 );
               })
               .whereType<TemplateSection>()
@@ -331,7 +357,8 @@ class AdminChecklistTemplateController extends GetxController {
             name: text,
             questions: questions,
             sections: sections,
-            expanded: false,
+            // Restore expansion state or default to false
+            expanded: _groupExpansionStates[id] ?? false,
           );
         })
         .whereType<TemplateGroup>()
@@ -473,101 +500,165 @@ class AdminChecklistTemplatePage
               Expanded(
                 child: Obx(() {
                   final visible = c.visiblePhaseIndexes;
-                  return DefaultTabController(
-                    length: visible.length,
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.black12),
-                      ),
-                      child: Column(
-                        children: [
-                          TabBar(
-                            labelColor: const Color(0xFF2196F3),
-                            unselectedLabelColor: Colors.black87,
-                            indicatorColor: const Color(0xFF2196F3),
-                            isScrollable: true,
-                            labelStyle: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            unselectedLabelStyle: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            tabs: visible.map((i) {
-                              final phase = c.phases[i];
-                              return Tab(
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(phase.name),
-                                    const SizedBox(width: 8),
-                                    PopupMenuButton<String>(
-                                      icon: const Icon(
-                                        Icons.more_vert,
-                                        size: 16,
-                                      ),
-                                      onSelected: (action) async {
-                                        if (action == 'delete') {
-                                          final confirm = await _confirmDelete(
-                                            title: 'Delete Phase?',
-                                            message:
-                                                'This will permanently delete "${phase.name}" and all its data. This action cannot be undone.',
-                                          );
-                                          if (confirm == true)
-                                            c.deletePhase(phase);
-                                        }
-                                      },
-                                      itemBuilder: (context) => const [
-                                        PopupMenuItem(
-                                          value: 'delete',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.delete,
-                                                size: 18,
-                                                color: Colors.red,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text(
-                                                'Delete',
-                                                style: TextStyle(
-                                                  color: Colors.red,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                          Expanded(
-                            child: TabBarView(
-                              children: visible.map((i) {
-                                final phase = c.phases[i];
-                                return PhaseEditor(
-                                  phaseIndex: i,
-                                  stage: phase.stage,
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
+                  if (visible.isEmpty) {
+                    return const Center(child: Text('No phases available'));
+                  }
+
+                  // Ensure current tab index is within bounds
+                  if (c.currentTabIndex.value >= visible.length) {
+                    c.currentTabIndex.value = 0;
+                  }
+
+                  return _PhaseTabView(visible: visible, controller: c);
                 }),
               ),
             ],
           );
         }),
+      ),
+    );
+  }
+}
+
+// Stateful widget to manage TabController properly
+class _PhaseTabView extends StatefulWidget {
+  final List<int> visible;
+  final AdminChecklistTemplateController controller;
+
+  const _PhaseTabView({required this.visible, required this.controller});
+
+  @override
+  State<_PhaseTabView> createState() => _PhaseTabViewState();
+}
+
+class _PhaseTabViewState extends State<_PhaseTabView>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(
+      length: widget.visible.length,
+      vsync: this,
+      initialIndex: widget.controller.currentTabIndex.value.clamp(
+        0,
+        widget.visible.length - 1,
+      ),
+    );
+    _tabController.addListener(_handleTabChange);
+  }
+
+  @override
+  void didUpdateWidget(_PhaseTabView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.visible.length != widget.visible.length) {
+      final newIndex = widget.controller.currentTabIndex.value.clamp(
+        0,
+        widget.visible.length - 1,
+      );
+      _tabController.dispose();
+      _tabController = TabController(
+        length: widget.visible.length,
+        vsync: this,
+        initialIndex: newIndex,
+      );
+      _tabController.addListener(_handleTabChange);
+    }
+  }
+
+  void _handleTabChange() {
+    if (_tabController.indexIsChanging) {
+      widget.controller.currentTabIndex.value = _tabController.index;
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.removeListener(_handleTabChange);
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.controller;
+    final visible = widget.visible;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Column(
+        children: [
+          TabBar(
+            controller: _tabController,
+            labelColor: const Color(0xFF2196F3),
+            unselectedLabelColor: Colors.black87,
+            indicatorColor: const Color(0xFF2196F3),
+            isScrollable: true,
+            labelStyle: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+            unselectedLabelStyle: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+            tabs: visible.map((i) {
+              final phase = c.phases[i];
+              return Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(phase.name),
+                    const SizedBox(width: 8),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert, size: 16),
+                      onSelected: (action) async {
+                        if (action == 'delete') {
+                          final confirm = await _confirmDelete(
+                            title: 'Delete Phase?',
+                            message:
+                                'This will permanently delete "${phase.name}" and all its data. This action cannot be undone.',
+                          );
+                          if (confirm == true) c.deletePhase(phase);
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete, size: 18, color: Colors.red),
+                              SizedBox(width: 8),
+                              Text(
+                                'Delete',
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: visible.map((i) {
+                final phase = c.phases[i];
+                return PhaseEditor(phaseIndex: i, stage: phase.stage);
+              }).toList(),
+            ),
+          ),
+        ],
       ),
     );
   }
