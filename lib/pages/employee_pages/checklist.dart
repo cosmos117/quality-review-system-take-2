@@ -177,14 +177,13 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       {}; // Track checkpoints per checklist
   int _defectsTotal = 0;
   int _totalCheckpoints = 0; // Total number of checkpoints
-  int _loopbackCounter = 0; // Track loopback count for current phase
+  int _loopbackCounter =
+      0; // Track loopback count for current phase (SDH reverts)
+  int _conflictCounter =
+      0; // Track conflict count for current phase (Reviewer reverts to Executor)
   Map<String, Map<String, dynamic>> _defectCategories = {};
   final Map<String, String?> _selectedDefectCategory = {};
   final Map<String, String?> _selectedDefectSeverity = {};
-  // Cumulative defect tracking
-  double _cumulativeDefectRate = 0.0; // Accumulated defect rate percentage
-  int _cumulativeDefectCount = 0; // Total defects found so far
-  int _maxCheckpointsSeen = 0; // Highest checkpoint count seen
   // Session-level tracking: track highest defects seen, not just current
   int _maxDefectsSeenInSession = 0; // Highest defect count in this session
   // Reviewer submission summaries per phase
@@ -261,6 +260,75 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+      }
+    }
+  }
+
+  Future<void> _handleReviewerRevert() async {
+    // Check if current user is a reviewer
+    String? currentUserName;
+    if (Get.isRegistered<AuthController>()) {
+      final auth = Get.find<AuthController>();
+      currentUserName = auth.currentUser.value?.name;
+    }
+    final canEditReviewer =
+        currentUserName != null &&
+        widget.reviewers
+            .map((e) => e.trim().toLowerCase())
+            .contains(currentUserName.trim().toLowerCase());
+
+    if (!canEditReviewer) return;
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Revert to Executor'),
+        content: const Text(
+          'Are you sure you want to send this phase back to the executor? '
+          'The executor will need to review and resubmit their work.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Revert'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await _approvalService.revertToExecutor(widget.projectId, _selectedPhase);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Phase reverted to executor successfully'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+
+        // Reload checklist data to reflect the revert
+        await _loadChecklistData();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to revert: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -366,19 +434,20 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       final stageId = (stage['_id'] ?? '').toString();
       _currentStageId = stageId;
 
-      // Load loopback counter from the dedicated API endpoint instead of stage data
-      // This ensures we always get the latest persisted value from the backend
+      // Load loopback counter and conflict counter from stage data
+      // loopback_count: SDH reverts (executor + reviewer)
+      // conflict_count: Reviewer reverts to executor only
       try {
-        final loopbackCount = await _approvalService.getRevertCount(
-          widget.projectId,
-          phase,
-        );
+        final loopbackCount = stage['loopback_count'] as int? ?? 0;
+        final conflictCount = stage['conflict_count'] as int? ?? 0;
         setState(() {
           _loopbackCounter = loopbackCount;
+          _conflictCounter = conflictCount;
         });
       } catch (e) {
         setState(() {
           _loopbackCounter = 0;
+          _conflictCounter = 0;
         });
       }
 
@@ -781,10 +850,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         _checkpointsByChecklist = checkpointCounts;
         _defectsTotal = total;
         _totalCheckpoints = totalCheckpoints;
-        // Update max checkpoints if needed
-        if (totalCheckpoints > _maxCheckpointsSeen) {
-          _maxCheckpointsSeen = totalCheckpoints;
-        }
         // Track the highest defects seen in this session
         // Even if conflicts are fixed later, we remember the max we saw
         if (total > _maxDefectsSeenInSession) {
@@ -795,17 +860,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     }
   }
 
-  /// Accumulate maximum defects from this session into cumulative defect rate
+  /// Accumulate maximum defects from this session
   /// This ensures that even if conflicts are fixed before submission,
   /// the maximum defects encountered are still counted
   void _accumulateDefects() {
     if (_totalCheckpointsInSession > 0 && _maxDefectsSeenInSession > 0) {
-      // Calculate rate based on max defects in session
-      final sessionDefectRate =
-          (_maxDefectsSeenInSession / _totalCheckpointsInSession) * 100.0;
-      _cumulativeDefectRate += sessionDefectRate;
-      _cumulativeDefectCount += _maxDefectsSeenInSession;
-
       // Reset session tracking for next submission
       _maxDefectsSeenInSession = 0;
       _totalCheckpointsInSession = 0;
@@ -1023,28 +1082,19 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
               onPressed: (reviewerSubmitted && !phaseAlreadyApproved)
                   ? () async {
                       try {
+                        // Revert the phase - this will increment loopback_count in backend
                         await _approvalService.revert(
-                          widget.projectId,
-                          _selectedPhase,
-                        );
-
-                        // Increment loopback counter on backend
-                        await _approvalService.incrementRevertCount(
                           widget.projectId,
                           _selectedPhase,
                         );
 
                         checklistCtrl.clearProjectCache(widget.projectId);
 
+                        // Reload data - loopback counter will be fetched from stage
+                        await _loadChecklistData();
+
                         // Recompute active phase
                         await _computeActivePhase();
-
-                        // Force UI update
-                        if (mounted) {
-                          setState(() {
-                            // UI will rebuild with updated state
-                          });
-                        }
 
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -1056,9 +1106,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                             ),
                           );
                         }
-
-                        // Reload data - loopback counter will be fetched from API
-                        await _loadChecklistData();
                       } catch (e) {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -1317,16 +1364,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Defect Rate on the left
-                          _DefectSummaryBar(
-                            totalDefects: _defectsTotal,
-                            totalCheckpoints: _totalCheckpoints,
-                            cumulativeDefectRate: _cumulativeDefectRate,
-                            cumulativeDefectCount: _cumulativeDefectCount,
-                            maxDefectsInSession: _maxDefectsSeenInSession,
-                            totalCheckpointsInSession:
-                                _totalCheckpointsInSession,
-                          ),
+                          // Conflict Count on the left
+                          _ConflictCountBar(conflictCount: _conflictCounter),
                           const Spacer(),
                           // Loopback Counter on the right
                           _LoopbackCounterBar(loopbackCount: _loopbackCounter),
@@ -1540,6 +1579,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                             );
                             _recomputeDefects();
                           },
+                          onRevert: _handleReviewerRevert,
                           onSubmit: () async {
                             if (!canEditReviewerPhase) return;
                             // Accumulate current defects before submission
@@ -1986,6 +2026,7 @@ class _RoleColumn extends StatelessWidget {
   final Function(int) onExpand;
   final Function(String, Map<String, dynamic>) onAnswer;
   final Future<void> Function() onSubmit;
+  final Future<void> Function()? onRevert; // New: revert callback for reviewer
   final Map<String, int>? defectsByChecklist;
   final Map<String, int>? checkpointsByChecklist;
   final bool showDefects;
@@ -2013,6 +2054,7 @@ class _RoleColumn extends StatelessWidget {
     required this.onExpand,
     required this.onAnswer,
     required this.onSubmit,
+    this.onRevert,
     this.editMode = false,
     this.onRefresh,
     this.defectsByChecklist,
@@ -2070,11 +2112,15 @@ class _RoleColumn extends StatelessWidget {
             projectId: projectId,
             phase: phase,
             onSubmit: onSubmit,
+            onRevert: onRevert,
             submissionInfo: checklistCtrl.submissionInfo(
               projectId,
               phase,
               role,
             ),
+            executorSubmissionInfo: role == 'reviewer'
+                ? checklistCtrl.submissionInfo(projectId, phase, 'executor')
+                : null,
             canEdit: canEdit,
           ),
           Expanded(
@@ -2509,38 +2555,20 @@ class _DefectChip extends StatelessWidget {
   }
 }
 
-class _DefectSummaryBar extends StatelessWidget {
-  final int totalDefects;
-  final int totalCheckpoints;
-  final double cumulativeDefectRate;
-  final int cumulativeDefectCount;
-  final int maxDefectsInSession;
-  final int totalCheckpointsInSession;
-  const _DefectSummaryBar({
-    required this.totalDefects,
-    required this.totalCheckpoints,
-    required this.cumulativeDefectRate,
-    required this.cumulativeDefectCount,
-    required this.maxDefectsInSession,
-    required this.totalCheckpointsInSession,
-  });
+class _ConflictCountBar extends StatelessWidget {
+  final int conflictCount;
+  const _ConflictCountBar({required this.conflictCount});
 
   @override
   Widget build(BuildContext context) {
-    // Match older version: use current phase defect ratio only
-    final hasDefects = totalDefects > 0;
-    final rate = totalCheckpoints > 0
-        ? ((totalDefects / totalCheckpoints) * 100)
-        : 0.0;
-    final defectRateDisplay = rate.toStringAsFixed(2);
-
+    final hasConflicts = conflictCount > 0;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: hasDefects ? Colors.red.shade50 : Colors.green.shade50,
+        color: hasConflicts ? Colors.orange.shade50 : Colors.green.shade50,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: hasDefects ? Colors.redAccent : Colors.green,
+          color: hasConflicts ? Colors.orange : Colors.green,
           width: 1.2,
         ),
       ),
@@ -2548,38 +2576,29 @@ class _DefectSummaryBar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            hasDefects ? Icons.error_outline : Icons.check_circle_outline,
-            size: 18,
-            color: hasDefects ? Colors.red : Colors.green,
+            hasConflicts ? Icons.sync_problem : Icons.check_circle_outline,
+            size: 22,
+            color: hasConflicts ? Colors.orange.shade700 : Colors.green,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           const Text(
-            'Defect Rate',
+            'Conflict Count',
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
           const SizedBox(width: 12),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: hasDefects ? Colors.redAccent : Colors.green,
+              color: hasConflicts ? Colors.orange : Colors.green,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '$defectRateDisplay%',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                Text(
-                  '(${totalDefects}/${totalCheckpoints})',
-                  style: const TextStyle(fontSize: 10, color: Colors.white),
-                ),
-              ],
+            child: Text(
+              '$conflictCount',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             ),
           ),
         ],
@@ -2817,7 +2836,10 @@ class _SubmitBar extends StatelessWidget {
   final String projectId;
   final int phase;
   final Future<void> Function() onSubmit;
+  final Future<void> Function()? onRevert; // New: revert callback for reviewer
   final Map<String, dynamic>? submissionInfo;
+  final Map<String, dynamic>?
+  executorSubmissionInfo; // New: to check if executor submitted
   final bool canEdit;
 
   const _SubmitBar({
@@ -2825,7 +2847,9 @@ class _SubmitBar extends StatelessWidget {
     required this.projectId,
     required this.phase,
     required this.onSubmit,
+    this.onRevert,
     required this.submissionInfo,
+    this.executorSubmissionInfo,
     this.canEdit = true,
   });
 
@@ -2838,6 +2862,15 @@ class _SubmitBar extends StatelessWidget {
               ? submittedAt.toString().split('.')[0]
               : submittedAt.toString())
         : null;
+
+    // Check if executor has submitted (for reviewer to enable revert)
+    final executorSubmitted = executorSubmissionInfo?['is_submitted'] == true;
+    final showRevertButton =
+        role == 'reviewer' &&
+        !submitted &&
+        executorSubmitted &&
+        onRevert != null;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       color: Colors.white,
@@ -2855,12 +2888,28 @@ class _SubmitBar extends StatelessWidget {
               ],
             )
           else
-            ElevatedButton.icon(
-              onPressed: canEdit ? onSubmit : null,
-              icon: const Icon(Icons.send),
-              label: Text(
-                'Submit ${role[0].toUpperCase()}${role.substring(1)} Checklist',
-              ),
+            Row(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: canEdit ? onSubmit : null,
+                  icon: const Icon(Icons.send),
+                  label: Text(
+                    'Submit ${role[0].toUpperCase()}${role.substring(1)} Checklist',
+                  ),
+                ),
+                if (showRevertButton) ...[
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    onPressed: onRevert,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                    ),
+                    icon: const Icon(Icons.undo),
+                    label: const Text('Revert to Executor'),
+                  ),
+                ],
+              ],
             ),
           const Spacer(),
           Text(role.toUpperCase(), style: TextStyle(color: Colors.grey[700])),

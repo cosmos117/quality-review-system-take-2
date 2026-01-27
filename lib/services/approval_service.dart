@@ -52,6 +52,21 @@ class ApprovalService {
     return (json['data'] as Map<String, dynamic>).cast<String, dynamic>();
   }
 
+  Future<Map<String, dynamic>> revertToExecutor(
+    String projectId,
+    int phase, {
+    String? notes,
+  }) async {
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/projects/$projectId/approval/revert-to-executor',
+    );
+    final json = await http.postJson(uri, {
+      'phase': phase,
+      if (notes != null) 'notes': notes,
+    });
+    return (json['data'] as Map<String, dynamic>).cast<String, dynamic>();
+  }
+
   Future<Map<String, dynamic>?> getStatus(String projectId, int phase) async {
     final uri = Uri.parse(
       '${ApiConfig.baseUrl}/projects/$projectId/approval/status?phase=$phase',
