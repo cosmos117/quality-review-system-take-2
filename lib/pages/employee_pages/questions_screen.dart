@@ -288,7 +288,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
           // Load loopback counter for this phase
           final loopbackCount = s['loopback_count'] as int? ?? 0;
+          final conflictCount = s['conflict_count'] as int? ?? 0;
           loopbackCountersMap[p] = loopbackCount;
+          debugPrint(
+            '✓ Phase $p counters loaded: loopback=$loopbackCount, conflict=$conflictCount from stage data',
+          );
         }
       }
 
@@ -338,10 +342,12 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       // conflict_count: Reviewer reverts to executor only
       try {
         final conflictCount = stage['conflict_count'] as int? ?? 0;
+        debugPrint('✓ Conflict count loaded for phase $phase: $conflictCount');
         setState(() {
           _conflictCounter = conflictCount;
         });
       } catch (e) {
+        debugPrint('⚠️ Error loading conflict count: $e');
         setState(() {
           _conflictCounter = 0;
         });
@@ -352,6 +358,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         setState(() {
           _loopbackCounters[phase] = 0;
         });
+      } else {
+        debugPrint(
+          '✓ Loopback count for phase $phase: ${_loopbackCounters[phase]}',
+        );
       }
 
       // Step 3: Try to fetch from new ProjectChecklist API first
@@ -1485,7 +1495,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                             );
                             _recomputeDefects();
                           },
-                          onRevert: _handleReviewerRevert,
+                          onRevert:
+                              _handleReviewerRevert, // Only reviewer can revert to executor
                           onSubmit: () async {
                             if (!canEditReviewerPhase) return;
                             // Accumulate current defects before submission

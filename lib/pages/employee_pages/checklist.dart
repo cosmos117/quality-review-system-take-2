@@ -1138,8 +1138,14 @@ class _SubmitBar extends StatelessWidget {
 
     // Check if executor has submitted (for reviewer to enable revert)
     final executorSubmitted = executorSubmissionInfo?['is_submitted'] == true;
-    // Reviewer can revert to executor when executor submitted
-    // Reviewer can revert even after submitting their own checklist (before phase approval)
+
+    // Show revert button when:
+    // 1. Role is reviewer
+    // 2. Current logged-in user is actually a reviewer (not an executor viewing the reviewer section)
+    // 3. Reviewer hasn't submitted yet (can still make changes)
+    // 4. Executor has submitted (there's work to review)
+    // 5. onRevert callback is provided
+    // This allows reviewer to send work back to executor for corrections
     final showRevertButton =
         role == 'reviewer' &&
         isCurrentUserReviewer &&

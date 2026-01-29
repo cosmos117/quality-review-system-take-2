@@ -247,8 +247,7 @@ class _MyprojectState extends State<Myproject> {
                 child: TextField(
                   controller: _searchCtrl,
                   decoration: const InputDecoration(
-                    hintText:
-                        'Search by title, status, priority, created by...',
+                    hintText: 'Search by title, status, priority, executor...',
                     prefixIcon: Icon(Icons.search),
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.symmetric(
@@ -398,7 +397,7 @@ class _MyprojectState extends State<Myproject> {
                                         ),
                                       ),
                                       Expanded(
-                                        flex: 2,
+                                        flex: 1,
                                         child: _HeaderCell(
                                           label: 'Priority',
                                           active: _sortKey == 'priority',
@@ -407,7 +406,7 @@ class _MyprojectState extends State<Myproject> {
                                         ),
                                       ),
                                       Expanded(
-                                        flex: 2,
+                                        flex: 1,
                                         child: _HeaderCell(
                                           label: 'Status',
                                           active: _sortKey == 'status',
@@ -418,7 +417,7 @@ class _MyprojectState extends State<Myproject> {
                                       Expanded(
                                         flex: 2,
                                         child: _HeaderCell(
-                                          label: 'Created By',
+                                          label: 'Executor',
                                           active: _sortKey == 'executor',
                                           ascending: _ascending,
                                           onTap: () => _toggleSort('executor'),
@@ -457,18 +456,14 @@ class _MyprojectState extends State<Myproject> {
                                           ),
                                           decoration: BoxDecoration(
                                             color: hovered
-                                                ? _getHoverColor(project.status)
-                                                : _getStatusColor(
-                                                    project.status,
-                                                  ),
+                                                ? const Color(0xFFF7F9FC)
+                                                : Colors.white,
                                             borderRadius: BorderRadius.circular(
                                               6,
                                             ),
                                             border: Border.all(
                                               color: hovered
-                                                  ? _getBorderColor(
-                                                      project.status,
-                                                    )
+                                                  ? Colors.blue.shade200
                                                   : Colors.black12,
                                             ),
                                             boxShadow: hovered
@@ -514,31 +509,19 @@ class _MyprojectState extends State<Myproject> {
                                                 ),
                                               ),
                                               Expanded(
-                                                flex: 2,
-                                                child: Align(
-                                                  alignment:
-                                                      Alignment.centerLeft,
-                                                  child: _priorityChip(
-                                                    project.priority,
-                                                  ),
+                                                flex: 1,
+                                                child: _priorityChip(
+                                                  project.priority,
                                                 ),
                                               ),
                                               Expanded(
-                                                flex: 2,
-                                                child: Align(
-                                                  alignment:
-                                                      Alignment.centerLeft,
-                                                  child: Text(project.status),
-                                                ),
+                                                flex: 1,
+                                                child: Text(project.status),
                                               ),
                                               Expanded(
                                                 flex: 2,
-                                                child: Align(
-                                                  alignment:
-                                                      Alignment.centerLeft,
-                                                  child: Text(
-                                                    project.executor ?? '--',
-                                                  ),
+                                                child: Text(
+                                                  project.executor ?? '--',
                                                 ),
                                               ),
                                             ],
@@ -559,46 +542,6 @@ class _MyprojectState extends State<Myproject> {
         ),
       ),
     );
-  }
-
-  // Helper methods to get status-based colors
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'not started':
-        return const Color(0xFFFFF9E6); // Light yellow/amber
-      case 'in progress':
-        return const Color(0xFFE3F2FD); // Light blue
-      case 'completed':
-        return const Color(0xFFE8F5E9); // Light green
-      default:
-        return Colors.white;
-    }
-  }
-
-  Color _getHoverColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'not started':
-        return const Color(0xFFFFF3CD); // Slightly darker yellow on hover
-      case 'in progress':
-        return const Color(0xFFBBDEFB); // Slightly darker blue on hover
-      case 'completed':
-        return const Color(0xFFC8E6C9); // Slightly darker green on hover
-      default:
-        return const Color(0xFFF7F9FC);
-    }
-  }
-
-  Color _getBorderColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'not started':
-        return Colors.amber.shade200;
-      case 'in progress':
-        return Colors.blue.shade200;
-      case 'completed':
-        return Colors.green.shade200;
-      default:
-        return Colors.blue.shade200;
-    }
   }
 }
 

@@ -11,15 +11,8 @@ import '../../controllers/team_controller.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../services/excel_import_service.dart';
 
-class AdminDashboardPage extends StatefulWidget {
+class AdminDashboardPage extends StatelessWidget {
   const AdminDashboardPage({super.key});
-
-  @override
-  State<AdminDashboardPage> createState() => _AdminDashboardPageState();
-}
-
-class _AdminDashboardPageState extends State<AdminDashboardPage> {
-  int? _hoverIndex;
 
   List<Project> _visibleProjects(
     List<Project> source,
@@ -469,7 +462,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                             ),
                           ),
                           Expanded(
-                            flex: 2,
+                            flex: 1,
                             child: _HeaderCell(
                               label: 'Priority',
                               active: sortKey == 'priority',
@@ -478,7 +471,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                             ),
                           ),
                           Expanded(
-                            flex: 2,
+                            flex: 1,
                             child: _HeaderCell(
                               label: 'Status',
                               active: sortKey == 'status',
@@ -499,10 +492,10 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                       itemBuilder: (context, index) {
                         final proj = projects[index];
                         // Executor value removed per requirement
-                        final hovered = _hoverIndex == index;
+                        final hovered = ui.hoverIndex.value == index;
                         return MouseRegion(
-                          onEnter: (_) => setState(() => _hoverIndex = index),
-                          onExit: (_) => setState(() => _hoverIndex = null),
+                          onEnter: (_) => ui.setHover(index),
+                          onExit: (_) => ui.clearHover(),
                           child: GestureDetector(
                             onTap: () => Get.to(
                               () => AdminProjectDetailsPage(
@@ -564,18 +557,12 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                     ),
                                   ),
                                   Expanded(
-                                    flex: 2,
-                                    child: Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: priorityChip(proj.priority),
-                                    ),
+                                    flex: 1,
+                                    child: priorityChip(proj.priority),
                                   ),
                                   Expanded(
-                                    flex: 2,
-                                    child: Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text((proj.status).toString()),
-                                    ),
+                                    flex: 1,
+                                    child: Text((proj.status).toString()),
                                   ),
                                   // Executor cell removed
                                   // Edit/Delete removed from dashboard; now only in details page.
