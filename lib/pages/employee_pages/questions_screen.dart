@@ -85,7 +85,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   // Counters and metrics
   // Store loopback counter per phase (key: phase number, value: loopback count)
   final Map<int, int> _loopbackCounters = {};
-  int _conflictCounter = 0;
+  // Store conflict counter per phase (key: phase number, value: conflict count)
+  final Map<int, int> _conflictCounters = {};
   int _revertCount = 0;
   int _defectsTotal = 0;
   int _totalCheckpoints = 0;
@@ -267,15 +268,19 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       final stages = await stageService.listStages(widget.projectId);
 
       // Build stage map and discover maximum actual phase number
-      // Also load loopback counters for all phases
+      // Also load loopback counters and conflict counters for all phases
       int discoveredMaxActual = 1;
       final stageMap = <String, dynamic>{};
       final loopbackCountersMap = <int, int>{};
+      final conflictCountersMap = <int, int>{};
 
       for (final s in stages) {
         final name = (s['stage_name'] ?? '').toString();
         final stageKey = (s['stage_key'] ?? '').toString();
         stageMap[stageKey] = {'name': name, ...s};
+
+        print('\n🔍 Processing stage: $stageKey');
+        print('   Full stage data: $s');
 
         // Extract phase number from stage_key (e.g., "stage1" => 1, "stage2" => 2)
         // This is reliable because stage_key is always in format "stageN"
@@ -287,12 +292,30 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           final p = int.tryParse(match.group(1) ?? '') ?? 0;
           if (p > discoveredMaxActual) discoveredMaxActual = p;
 
-          // Load loopback counter for this phase
-          final loopbackCount = s['loopback_count'] as int? ?? 0;
-          final conflictCount = s['conflict_count'] as int? ?? 0;
+          // Load loopback counter for this phase - handle both int and double
+          final loopbackValue = s['loopback_count'];
+          print(
+            '   🔢 Phase $p - loopbackValue from stage: $loopbackValue (type: ${loopbackValue.runtimeType})',
+          );
+          final loopbackCount = loopbackValue is int
+              ? loopbackValue
+              : (loopbackValue is double ? loopbackValue.toInt() : 0);
           loopbackCountersMap[p] = loopbackCount;
           debugPrint(
-            '✓ Phase $p counters loaded: loopback=$loopbackCount, conflict=$conflictCount from stage data',
+            '✓ Phase $p: Loaded loopback counter = $loopbackCount (from: $loopbackValue, type: ${loopbackValue.runtimeType})',
+          );
+
+          // Load conflict counter for this phase - handle both int and double
+          final conflictValue = s['conflict_count'];
+          print(
+            '   🔢 Phase $p - conflictValue from stage: $conflictValue (type: ${conflictValue.runtimeType})',
+          );
+          final conflictCount = conflictValue is int
+              ? conflictValue
+              : (conflictValue is double ? conflictValue.toInt() : 0);
+          conflictCountersMap[p] = conflictCount;
+          debugPrint(
+            '✓ Phase $p: Loaded conflict counter = $conflictCount (from: $conflictValue, type: ${conflictValue.runtimeType})',
           );
         }
       }
@@ -301,8 +324,14 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         _stages = stages;
         _stageMap = stageMap;
         _maxActualPhase = discoveredMaxActual;
-        // Update loopback counters for all phases
+        // Clear and update loopback counters for all phases
+        _loopbackCounters.clear();
         _loopbackCounters.addAll(loopbackCountersMap);
+        // Clear and update conflict counters for all phases
+        _conflictCounters.clear();
+        _conflictCounters.addAll(conflictCountersMap);
+        debugPrint('✓ Loopback counters updated: $_loopbackCounters');
+        debugPrint('✓ Conflict counters updated: $_conflictCounters');
       });
 
       if (stages.isEmpty) {
@@ -339,22 +368,13 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       final stageId = (stage['_id'] ?? '').toString();
       _currentStageId = stageId;
 
-      // Load conflict counter from current stage data
-      // conflict_count: Reviewer reverts to executor only
-      try {
-        final conflictCount = stage['conflict_count'] as int? ?? 0;
-        debugPrint('✓ Conflict count loaded for phase $phase: $conflictCount');
-        setState(() {
-          _conflictCounter = conflictCount;
-        });
-      } catch (e) {
-        debugPrint('⚠️ Error loading conflict count: $e');
-        setState(() {
-          _conflictCounter = 0;
-        });
-      }
+      // Debug: Log the complete stage object to verify fields
+      debugPrint('📦 Current stage object: $stage');
+      debugPrint(
+        '📊 Stage fields - loopback_count: ${stage['loopback_count']}, conflict_count: ${stage['conflict_count']}',
+      );
 
-      // Ensure loopback counter exists for this phase (already loaded above)
+      // Ensure counters exist for this phase (already loaded above in the loop)
       if (!_loopbackCounters.containsKey(phase)) {
         debugPrint(
           '⚠️ Loopback counter not found for phase $phase, initializing to 0',
@@ -366,6 +386,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         debugPrint(
           '✓ Loopback count for phase $phase: ${_loopbackCounters[phase]}',
         );
+      }
+      if (!_conflictCounters.containsKey(phase)) {
+        setState(() {
+          _conflictCounters[phase] = 0;
+        });
       }
 
       // Step 3: Try to fetch from new ProjectChecklist API first
@@ -1288,18 +1313,28 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                         horizontal: 8.0,
                         vertical: 8.0,
                       ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Conflict Count on the left
-                          ConflictCountBar(conflictCount: _conflictCounter),
-                          const Spacer(),
-                          // Loopback Counter on the right - show counter for current phase
-                          LoopbackCounterBar(
-                            loopbackCount:
-                                _loopbackCounters[_selectedPhase] ?? 0,
-                          ),
-                        ],
+                      child: Builder(
+                        builder: (context) {
+                          final currentLoopback =
+                              _loopbackCounters[_selectedPhase] ?? 0;
+                          final currentConflict =
+                              _conflictCounters[_selectedPhase] ?? 0;
+                          debugPrint(
+                            '🎯 Displaying counters - Phase: $_selectedPhase, Loopback: $currentLoopback, Conflict: $currentConflict',
+                          );
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Conflict Count on the left
+                              ConflictCountBar(conflictCount: currentConflict),
+                              const Spacer(),
+                              // Loopback Counter on the right - show counter for current phase
+                              LoopbackCounterBar(
+                                loopbackCount: currentLoopback,
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                   // Show reviewer submission summary for SDH
@@ -1310,9 +1345,16 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                         horizontal: 8.0,
                         vertical: 8.0,
                       ),
-                      child: ReviewerSubmissionSummaryCard(
-                        summary: _reviewerSubmissionSummaries[_selectedPhase]!,
-                        availableCategories: _getAvailableCategories(),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: ReviewerSubmissionSummaryCard(
+                              summary:
+                                  _reviewerSubmissionSummaries[_selectedPhase]!,
+                              availableCategories: _getAvailableCategories(),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   // Debug: Show if SDH but no summary
@@ -1516,13 +1558,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                             );
                             _recomputeDefects();
                           },
-                          onRevert:
-                              _handleReviewerRevert, // Only reviewer can revert to executor
+                          // Only show revert button to actual reviewers
+                          onRevert: canEditReviewer
+                              ? _handleReviewerRevert
+                              : null,
                           onSubmit: () async {
-                            if (!canEditReviewerPhase) return;
-                            // Accumulate current defects before submission
-                            _accumulateDefects();
-
                             // Show defect summary dialog
                             final summaryData =
                                 await _showReviewerSubmissionDialog(context);
