@@ -6,23 +6,9 @@ import 'package:quality_review/pages/employee_pages/checklist_controller.dart';
 import 'package:quality_review/services/approval_service.dart';
 import 'package:quality_review/services/phase_checklist_service.dart';
 import 'package:quality_review/services/template_service.dart';
-import 'package:flutter/material.dart';
-import 'dart:typed_data';
-import 'package:file_picker/file_picker.dart';
 import 'dart:async';
-import 'package:flutter/foundation.dart';
-import 'package:get/get.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-// import 'package:url_launcher/url_launcher.dart';
-import 'checklist_controller.dart';
-import '../../controllers/auth_controller.dart';
-import '../../services/approval_service.dart';
 import '../../services/stage_service.dart';
-import '../../services/phase_checklist_service.dart';
 import '../../services/project_checklist_service.dart';
-import '../../services/template_service.dart';
-import '../../services/defect_categorization_service.dart';
 
 class QuestionsScreen extends StatefulWidget {
   final String projectId;
@@ -103,6 +89,29 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     _approvalService = Get.find<ApprovalService>();
     // Initial load
     _loadChecklistData();
+  }
+
+  // Ensure each answer has a well-formed images array: List of maps with fileId
+  Map<String, Map<String, dynamic>> _sanitizeAnswersMap(
+    Map<String, Map<String, dynamic>> source,
+  ) {
+    final result = <String, Map<String, dynamic>>{};
+    source.forEach((key, val) {
+      final v = Map<String, dynamic>.from(val);
+      final imgs = v['images'];
+      if (imgs is List) {
+        v['images'] = imgs
+            .where((e) => e is Map)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .where((m) => (m['fileId'] ?? '').toString().isNotEmpty)
+            .toList();
+      } else {
+        // Normalize non-list or null images to an empty list
+        v['images'] = <Map<String, dynamic>>[];
+      }
+      result[key] = v;
+    });
+    return result;
   }
 
   List<Map<String, dynamic>> _getAvailableCategories() {
@@ -565,9 +574,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       if (!mounted) return;
       setState(() {
         executorAnswers.clear();
-        executorAnswers.addAll(executorSheet);
+        executorAnswers.addAll(_sanitizeAnswersMap(executorSheet));
         reviewerAnswers.clear();
-        reviewerAnswers.addAll(reviewerSheet);
+        reviewerAnswers.addAll(_sanitizeAnswersMap(reviewerSheet));
         if (persistedReviewerSummary != null) {
           _reviewerSubmissionSummaries[_selectedPhase] =
               persistedReviewerSummary;
