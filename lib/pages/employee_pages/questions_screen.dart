@@ -1725,6 +1725,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   ) async {
     final remarkCtrl = TextEditingController();
     String? selectedCategory;
+    String? selectedCategoryName; // Store the category name too
     String? selectedSeverity;
     final categories = _getAvailableCategories();
     List<Map<String, dynamic>> suggestedCategories = [];
@@ -1835,7 +1836,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                                   label: Text(name),
                                   selected: isSelected,
                                   onSelected: (_) {
-                                    setDialogState(() => selectedCategory = id);
+                                    setDialogState(() {
+                                      selectedCategory = id;
+                                      selectedCategoryName = name;
+                                    });
                                   },
                                   backgroundColor: Colors.blue.shade50,
                                   selectedColor: Colors.blue.shade200,
@@ -1868,8 +1872,22 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                           return DropdownMenuItem(value: id, child: Text(name));
                         }),
                       ],
-                      onChanged: (val) =>
-                          setDialogState(() => selectedCategory = val),
+                      onChanged: (val) {
+                        setDialogState(() {
+                          selectedCategory = val;
+                          // Find and store the category name
+                          if (val != null) {
+                            final cat = categories.firstWhere(
+                              (c) => (c['_id'] ?? '').toString() == val,
+                              orElse: () => {},
+                            );
+                            selectedCategoryName = (cat['name'] ?? '')
+                                .toString();
+                          } else {
+                            selectedCategoryName = null;
+                          }
+                        });
+                      },
                     ),
                     const SizedBox(height: 16),
                     const Text(
@@ -1911,6 +1929,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                   Navigator.of(ctx).pop({
                     'remark': remarkCtrl.text.trim(),
                     'category': selectedCategory,
+                    'categoryName': selectedCategoryName, // Save the name too
                     'severity': selectedSeverity,
                     'timestamp': DateTime.now().toIso8601String(),
                   });
