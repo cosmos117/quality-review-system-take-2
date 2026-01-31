@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 import '../../controllers/projects_controller.dart';
 import '../../models/team_member.dart';
 import '../../models/project.dart';
+import '../../services/project_membership_service.dart';
+import '../../models/project_membership.dart';
 
 class EmployeeProjectsPage extends StatefulWidget {
   final TeamMember member;
@@ -16,6 +18,7 @@ class _EmployeeProjectsPageState extends State<EmployeeProjectsPage> {
   bool _isLoading = true;
   List<Project> _current = [];
   List<Project> _completed = [];
+  Map<String, List<String>> _projectRoles = {}; // projectId -> list of roles
 
   @override
   void initState() {
@@ -58,10 +61,33 @@ class _EmployeeProjectsPageState extends State<EmployeeProjectsPage> {
       // Separate into current and completed
       bool isCompleted(Project p) => p.status.toLowerCase() == 'completed';
 
+      // Fetch roles for each project
+      final membershipService = Get.find<ProjectMembershipService>();
+      final rolesMap = <String, List<String>>{};
+
+      for (final project in allProjects) {
+        try {
+          final memberships = await membershipService.getProjectMembers(
+            project.id,
+          );
+          final userRoles = memberships
+              .where((m) => m.userId == widget.member.id)
+              .map((m) => m.roleName ?? 'Unknown')
+              .toList();
+          rolesMap[project.id] = userRoles;
+        } catch (e) {
+          print(
+            '[EmployeeProjectsPage] Error fetching roles for project ${project.id}: $e',
+          );
+          rolesMap[project.id] = [];
+        }
+      }
+
       if (mounted) {
         setState(() {
           _current = allProjects.where((p) => !isCompleted(p)).toList();
           _completed = allProjects.where(isCompleted).toList();
+          _projectRoles = rolesMap;
           _isLoading = false;
         });
 
@@ -124,6 +150,7 @@ class _EmployeeProjectsPageState extends State<EmployeeProjectsPage> {
                             child: _ProjectListSection(
                               title: 'Current Projects',
                               projects: _current,
+                              projectRoles: _projectRoles,
                             ),
                           ),
                           const SizedBox(width: 24),
@@ -131,6 +158,7 @@ class _EmployeeProjectsPageState extends State<EmployeeProjectsPage> {
                             child: _ProjectListSection(
                               title: 'Completed Projects',
                               projects: _completed,
+                              projectRoles: _projectRoles,
                             ),
                           ),
                         ],
@@ -141,11 +169,13 @@ class _EmployeeProjectsPageState extends State<EmployeeProjectsPage> {
                           _ProjectListSection(
                             title: 'Current Projects',
                             projects: _current,
+                            projectRoles: _projectRoles,
                           ),
                           const SizedBox(height: 24),
                           _ProjectListSection(
                             title: 'Completed Projects',
                             projects: _completed,
+                            projectRoles: _projectRoles,
                           ),
                         ],
                       );
@@ -178,7 +208,13 @@ class _EmployeeProjectsPageState extends State<EmployeeProjectsPage> {
 class _ProjectListSection extends StatelessWidget {
   final String title;
   final List<Project> projects;
-  const _ProjectListSection({required this.title, required this.projects});
+  final Map<String, List<String>> projectRoles;
+
+  const _ProjectListSection({
+    required this.title,
+    required this.projects,
+    required this.projectRoles,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -215,7 +251,10 @@ class _ProjectListSection extends StatelessWidget {
               const Text('None')
             else
               Column(
-                children: [for (final p in projects) _ProjectTile(project: p)],
+                children: [
+                  for (final p in projects)
+                    _ProjectTile(project: p, roles: projectRoles[p.id] ?? []),
+                ],
               ),
           ],
         ),
@@ -226,7 +265,9 @@ class _ProjectListSection extends StatelessWidget {
 
 class _ProjectTile extends StatelessWidget {
   final Project project;
-  const _ProjectTile({required this.project});
+  final List<String> roles;
+
+  const _ProjectTile({required this.project, required this.roles});
 
   @override
   Widget build(BuildContext context) {
@@ -249,9 +290,49 @@ class _ProjectTile extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  project.status,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                Row(
+                  children: [
+                    Text(
+                      project.status,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    if (roles.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      const Text(
+                        '•',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: roles
+                              .map(
+                                (role) => Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _getRoleColor(role),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    role,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -260,5 +341,15 @@ class _ProjectTile extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Color _getRoleColor(String role) {
+    final roleLower = role.toLowerCase();
+    if (roleLower.contains('executor')) return Colors.blue;
+    if (roleLower.contains('reviewer')) return Colors.green;
+    if (roleLower.contains('teamleader') || roleLower.contains('team leader')) {
+      return Colors.orange;
+    }
+    return Colors.grey;
   }
 }

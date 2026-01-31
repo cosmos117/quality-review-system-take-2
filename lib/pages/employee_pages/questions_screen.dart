@@ -1162,40 +1162,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                         ),
                       ),
                     ),
-                  // TeamLeader view-only info banner
-                  if (isTeamLeader)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8.0,
-                        vertical: 8.0,
-                      ),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue.shade200),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              color: Colors.blue.shade700,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'View-Only Mode: Phases are automatically approved when Reviewer submits. You can view progress but cannot approve or revert.',
-                                style: TextStyle(
-                                  color: Colors.blue.shade900,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
                   // Show reviewer submission summary for TeamLeader
                   if (isTeamLeader &&
                       _reviewerSubmissionSummaries[_selectedPhase] != null)
