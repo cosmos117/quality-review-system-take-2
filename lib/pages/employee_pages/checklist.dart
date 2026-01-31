@@ -415,6 +415,11 @@ class RoleColumn extends StatelessWidget {
                         role == 'executor' ? 'reviewer' : 'executor',
                         key,
                       )?['answer'];
+
+                  // Only show as different if BOTH have provided answers AND they differ
+                  // If either side hasn't answered (null), don't consider it as differing
+                  if (a == null || b == null) return false;
+
                   return (a is String ? a.trim().toLowerCase() : a) !=
                       (b is String ? b.trim().toLowerCase() : b);
                 });

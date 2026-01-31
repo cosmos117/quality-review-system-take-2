@@ -66,30 +66,58 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
   }
 
   Future<void> _loadAssignments() async {
+    if (!mounted) return;
     setState(() => _loadingAssignments = true);
     try {
-      if (Get.isRegistered<ProjectMembershipService>()) {
-        final svc = Get.find<ProjectMembershipService>();
-        final memberships = await svc.getProjectMembers(widget.project.id);
-        final leaders = memberships
-            .where((m) => (m.roleName?.toLowerCase() ?? '') == 'teamleader')
-            .toList();
-        final execs = memberships
-            .where((m) => (m.roleName?.toLowerCase() ?? '') == 'executor')
-            .toList();
-        final reviewers = memberships
-            .where((m) => (m.roleName?.toLowerCase() ?? '') == 'reviewer')
-            .toList();
-        if (mounted) {
-          setState(() {
-            _teamLeaders = leaders;
-            _executors = execs;
-            _reviewers = reviewers;
-          });
-        }
+      if (!Get.isRegistered<ProjectMembershipService>()) {
+        debugPrint(
+          '[AdminProjectDetail] ProjectMembershipService not registered',
+        );
+        if (mounted) setState(() => _loadingAssignments = false);
+        return;
       }
-    } catch (e) {
+
+      final svc = Get.find<ProjectMembershipService>();
+      debugPrint(
+        '[AdminProjectDetail] Loading assignments for project ${widget.project.id}',
+      );
+
+      final memberships = await svc.getProjectMembers(widget.project.id);
+      debugPrint(
+        '[AdminProjectDetail] Loaded ${memberships.length} memberships',
+      );
+
+      final leaders = memberships
+          .where((m) => (m.roleName?.toLowerCase() ?? '') == 'teamleader')
+          .toList();
+      final execs = memberships
+          .where((m) => (m.roleName?.toLowerCase() ?? '') == 'executor')
+          .toList();
+      final reviewers = memberships
+          .where((m) => (m.roleName?.toLowerCase() ?? '') == 'reviewer')
+          .toList();
+
+      debugPrint(
+        '[AdminProjectDetail] Found: ${leaders.length} leaders, ${execs.length} executors, ${reviewers.length} reviewers',
+      );
+
+      if (mounted) {
+        setState(() {
+          _teamLeaders = leaders;
+          _executors = execs;
+          _reviewers = reviewers;
+        });
+      }
+    } catch (e, stackTrace) {
       debugPrint('[AdminProjectDetail] loadAssignments error: $e');
+      debugPrint('[AdminProjectDetail] Stack trace: $stackTrace');
+      if (mounted) {
+        setState(() {
+          _teamLeaders = [];
+          _executors = [];
+          _reviewers = [];
+        });
+      }
     } finally {
       if (mounted) setState(() => _loadingAssignments = false);
     }
@@ -193,9 +221,21 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
                     const SizedBox(height: 24),
                     PhaseOverviewWidget(project: details.project),
                     const SizedBox(height: 24),
-                    Text(
-                      'Assigned Team Members',
-                      style: Theme.of(context).textTheme.headlineSmall,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Assigned Team Members',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.refresh),
+                          tooltip: 'Refresh team members',
+                          onPressed: _loadingAssignments
+                              ? null
+                              : _loadAssignments,
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     _loadingAssignments
