@@ -1368,27 +1368,35 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
             if (widget.categoryInfo != null) ...[],
           ],
         ),
-        RadioListTile<String>(
-          title: const Text("Yes"),
-          value: "Yes",
-          groupValue: selectedOption,
-          onChanged: widget.editable
-              ? (val) async {
-                  setState(() => selectedOption = val);
-                  await _updateAnswer();
-                }
-              : null,
-        ),
-        RadioListTile<String>(
-          title: const Text("No"),
-          value: "No",
-          groupValue: selectedOption,
-          onChanged: widget.editable
-              ? (val) async {
-                  setState(() => selectedOption = val);
-                  await _updateAnswer();
-                }
-              : null,
+        Row(
+          children: [
+            Expanded(
+              child: RadioListTile<String>(
+                title: const Text("Yes"),
+                value: "Yes",
+                groupValue: selectedOption,
+                onChanged: widget.editable
+                    ? (val) async {
+                        setState(() => selectedOption = val);
+                        await _updateAnswer();
+                      }
+                    : null,
+              ),
+            ),
+            Expanded(
+              child: RadioListTile<String>(
+                title: const Text("No"),
+                value: "No",
+                groupValue: selectedOption,
+                onChanged: widget.editable
+                    ? (val) async {
+                        setState(() => selectedOption = val);
+                        await _updateAnswer();
+                      }
+                    : null,
+              ),
+            ),
+          ],
         ),
         // Allow clearing an existing answer when editable
         if (widget.editable && selectedOption != null)
