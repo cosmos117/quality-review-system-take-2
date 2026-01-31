@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../controllers/team_controller.dart';
+import '../../controllers/projects_controller.dart';
 import 'employee_projects_page.dart';
 import '../../models/team_member.dart';
 import '../../components/admin_dialog.dart';
+import '../../services/project_membership_service.dart';
 
 class EmployeePage extends StatelessWidget {
   const EmployeePage({super.key});
@@ -334,17 +336,93 @@ class EmployeePage extends StatelessWidget {
     TeamController ctrl,
     TeamMember m,
   ) async {
+    // Check if employee has projects in progress
+    bool hasActiveProjects = false;
+    Map<String, List<String>> projectRoles =
+        {}; // projectTitle -> list of roles
+
+    try {
+      final projectsCtrl = Get.find<ProjectsController>();
+      final membershipService = Get.find<ProjectMembershipService>();
+
+      // Refresh projects first
+      await projectsCtrl.refreshProjects();
+
+      // Get all projects assigned to this employee
+      final employeeProjects = projectsCtrl.byAssigneeId(m.id);
+
+      // Check each project to see if employee has any role in an in-progress project
+      for (final project in employeeProjects) {
+        if (project.status.toLowerCase() != 'completed') {
+          // Get memberships for this project
+          try {
+            final memberships = await membershipService.getProjectMembers(
+              project.id,
+            );
+
+            // Get all roles for this employee in this project
+            final employeeRoles = memberships
+                .where((membership) => membership.userId == m.id)
+                .map((membership) => membership.roleName ?? 'Unknown')
+                .toList();
+
+            if (employeeRoles.isNotEmpty) {
+              hasActiveProjects = true;
+              projectRoles[project.title] = employeeRoles;
+            }
+          } catch (e) {
+            print('[EmployeePage] Error checking project ${project.id}: $e');
+          }
+        }
+      }
+    } catch (e) {
+      print('[EmployeePage] Error checking active projects: $e');
+    }
+
+    final String warningMessage = hasActiveProjects
+        ? 'Warning: "${m.name}" is currently assigned to ${projectRoles.length} in-progress project(s):\n\n${projectRoles.entries.map((e) => '• ${e.key} (${e.value.join(', ')})').join('\n')}\n\nDeleting this employee may affect these projects. Are you sure you want to proceed?'
+        : 'Are you sure you want to delete "${m.name}"? This action cannot be undone.';
+
+    final String deleteButtonText = hasActiveProjects
+        ? 'Acknowledge and Delete'
+        : 'Delete Member';
+
     final confirmed = await showAdminDialog<bool>(
       context,
       title: 'Delete Member',
-      width: 480,
+      width: 520,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'Are you sure you want to delete "${m.name}"? This action cannot be undone.',
-          ),
+          if (hasActiveProjects)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.orange.shade700,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      warningMessage,
+                      style: TextStyle(color: Colors.orange.shade900),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Text(warningMessage),
           const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -359,7 +437,7 @@ class EmployeePage extends StatelessWidget {
                   backgroundColor: Colors.redAccent,
                 ),
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Delete Member'),
+                child: Text(deleteButtonText),
               ),
             ],
           ),
