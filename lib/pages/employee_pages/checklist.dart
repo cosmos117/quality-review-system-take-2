@@ -36,11 +36,13 @@ class Question {
   // { 'id': '<checkpointId>', 'text': '<question text>', 'categoryId': '<optional>', 'sectionName': '<optional>' }
   final List<Map<String, String>> subQuestions;
   final String? checklistId; // MongoDB ID for backend checklist or group
+  final int defectCount; // Number of defects for this group
 
   Question({
     required this.mainQuestion,
     required this.subQuestions,
     this.checklistId,
+    this.defectCount = 0,
   });
 
   static List<Question> fromChecklist(
@@ -80,6 +82,7 @@ class Question {
 
       final groupId = (group['_id'] ?? '').toString();
       final groupName = (group['groupName'] ?? '').toString();
+      final defectCount = (group['defectCount'] ?? 0) as int;
       final subQuestions = <Map<String, String>>[];
 
       // Add direct questions in group
@@ -99,14 +102,13 @@ class Question {
         if (section is! Map<String, dynamic>) continue;
         final sectionName = (section['sectionName'] ?? '').toString();
         final sectionQuestions = section['questions'] as List<dynamic>? ?? [];
-
         for (final q in sectionQuestions) {
           if (q is! Map<String, dynamic>) continue;
           subQuestions.add({
             'id': (q['_id'] ?? '').toString(),
             'text': (q['text'] ?? '').toString(),
-            'categoryId': '',
-            'sectionName': sectionName, // Tag with section name
+            'categoryId': '', // Can be added later if needed
+            'sectionName': sectionName,
           });
         }
       }
@@ -117,6 +119,7 @@ class Question {
             mainQuestion: groupName,
             subQuestions: subQuestions,
             checklistId: groupId,
+            defectCount: defectCount,
           ),
         );
       }
@@ -438,18 +441,12 @@ class RoleColumn extends StatelessWidget {
                         title: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            if (showDefects && role == 'executor')
+                            if (role == 'executor')
                               _DefectChip(
-                                defectCount:
-                                    defectsByChecklist?[q.checklistId ??
-                                        q.mainQuestion] ??
-                                    0,
-                                checkpointCount:
-                                    checkpointsByChecklist?[q.checklistId ??
-                                        q.mainQuestion] ??
-                                    0,
+                                defectCount: q.defectCount,
+                                checkpointCount: q.subQuestions.length,
                               ),
-                            const SizedBox(width: 12),
+                            if (role == 'executor') const SizedBox(width: 12),
                             Expanded(
                               child: Text(
                                 q.mainQuestion,
@@ -813,13 +810,27 @@ class _DefectChip extends StatelessWidget {
         color: has ? Colors.redAccent : Colors.grey.shade400,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
-        '$percentage%',
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Defects: $defectCount',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '($percentage%)',
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: Colors.white,
+            ),
+          ),
+        ],
       ),
     );
   }

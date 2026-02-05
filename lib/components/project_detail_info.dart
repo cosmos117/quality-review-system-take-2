@@ -53,7 +53,7 @@ class ProjectDetailInfo extends StatelessWidget {
                 DetailRow(label: 'Priority', value: project.priority),
                 DetailRow(label: 'Status', value: project.status),
                 DetailRow(
-                  label: 'Executor',
+                  label: 'Created By',
                   value: (project.executor?.trim().isNotEmpty ?? false)
                       ? project.executor!.trim()
                       : '--',

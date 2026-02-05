@@ -34,13 +34,13 @@ class ProjectQuestion {
 
   /// Convert to JSON for API requests
   Map<String, dynamic> toJson() => {
-        '_id': id,
-        'text': text,
-        'executorAnswer': executorAnswer,
-        'executorRemark': executorRemark,
-        'reviewerStatus': reviewerStatus,
-        'reviewerRemark': reviewerRemark,
-      };
+    '_id': id,
+    'text': text,
+    'executorAnswer': executorAnswer,
+    'executorRemark': executorRemark,
+    'reviewerStatus': reviewerStatus,
+    'reviewerRemark': reviewerRemark,
+  };
 
   /// Create a copy with modified fields
   ProjectQuestion copyWith({
@@ -67,14 +67,12 @@ class ProjectSection {
   final String sectionName;
   final List<ProjectQuestion> questions;
 
-  ProjectSection({
-    required this.sectionName,
-    required this.questions,
-  });
+  ProjectSection({required this.sectionName, required this.questions});
 
   /// Create from JSON response from backend
   factory ProjectSection.fromJson(Map<String, dynamic> json) {
-    final questionsList = (json['questions'] as List<dynamic>?)
+    final questionsList =
+        (json['questions'] as List<dynamic>?)
             ?.map((q) => ProjectQuestion.fromJson(q as Map<String, dynamic>))
             .toList() ??
         [];
@@ -86,9 +84,9 @@ class ProjectSection {
 
   /// Convert to JSON for API requests
   Map<String, dynamic> toJson() => {
-        'sectionName': sectionName,
-        'questions': questions.map((q) => q.toJson()).toList(),
-      };
+    'sectionName': sectionName,
+    'questions': questions.map((q) => q.toJson()).toList(),
+  };
 
   /// Create a copy with modified fields
   ProjectSection copyWith({
@@ -106,23 +104,28 @@ class ProjectSection {
 class ProjectChecklistGroup {
   final String id;
   final String groupName;
-  final List<ProjectQuestion> questions; // Direct questions in group (not in sections)
+  final List<ProjectQuestion>
+  questions; // Direct questions in group (not in sections)
   final List<ProjectSection> sections; // Optional subsections
+  final int defectCount; // Number of defects in this group
 
   ProjectChecklistGroup({
     required this.id,
     required this.groupName,
     required this.questions,
     required this.sections,
+    this.defectCount = 0,
   });
 
   /// Create from JSON response from backend
   factory ProjectChecklistGroup.fromJson(Map<String, dynamic> json) {
-    final questionsList = (json['questions'] as List<dynamic>?)
+    final questionsList =
+        (json['questions'] as List<dynamic>?)
             ?.map((q) => ProjectQuestion.fromJson(q as Map<String, dynamic>))
             .toList() ??
         [];
-    final sectionsList = (json['sections'] as List<dynamic>?)
+    final sectionsList =
+        (json['sections'] as List<dynamic>?)
             ?.map((s) => ProjectSection.fromJson(s as Map<String, dynamic>))
             .toList() ??
         [];
@@ -131,16 +134,18 @@ class ProjectChecklistGroup {
       groupName: json['groupName'] as String? ?? '',
       questions: questionsList,
       sections: sectionsList,
+      defectCount: json['defectCount'] as int? ?? 0,
     );
   }
 
   /// Convert to JSON for API requests
   Map<String, dynamic> toJson() => {
-        '_id': id,
-        'groupName': groupName,
-        'questions': questions.map((q) => q.toJson()).toList(),
-        'sections': sections.map((s) => s.toJson()).toList(),
-      };
+    '_id': id,
+    'groupName': groupName,
+    'questions': questions.map((q) => q.toJson()).toList(),
+    'sections': sections.map((s) => s.toJson()).toList(),
+    'defectCount': defectCount,
+  };
 
   /// Create a copy with modified fields
   ProjectChecklistGroup copyWith({
@@ -148,12 +153,14 @@ class ProjectChecklistGroup {
     String? groupName,
     List<ProjectQuestion>? questions,
     List<ProjectSection>? sections,
+    int? defectCount,
   }) {
     return ProjectChecklistGroup(
       id: id ?? this.id,
       groupName: groupName ?? this.groupName,
       questions: questions ?? this.questions,
       sections: sections ?? this.sections,
+      defectCount: defectCount ?? this.defectCount,
     );
   }
 
@@ -184,7 +191,9 @@ class ProjectChecklistGroup {
 
   /// Update a question by ID (returns new group with updated question)
   ProjectChecklistGroup updateQuestion(
-      String questionId, ProjectQuestion updatedQuestion) {
+    String questionId,
+    ProjectQuestion updatedQuestion,
+  ) {
     // Try updating direct questions
     final updatedDirectQuestions = questions.map((q) {
       if (q.id == questionId) {
@@ -238,8 +247,11 @@ class ProjectChecklist {
 
   /// Create from JSON response from backend
   factory ProjectChecklist.fromJson(Map<String, dynamic> json) {
-    final groupsList = (json['groups'] as List<dynamic>?)
-            ?.map((g) => ProjectChecklistGroup.fromJson(g as Map<String, dynamic>))
+    final groupsList =
+        (json['groups'] as List<dynamic>?)
+            ?.map(
+              (g) => ProjectChecklistGroup.fromJson(g as Map<String, dynamic>),
+            )
             .toList() ??
         [];
     return ProjectChecklist(
@@ -259,14 +271,14 @@ class ProjectChecklist {
 
   /// Convert to JSON for API requests
   Map<String, dynamic> toJson() => {
-        '_id': id,
-        'projectId': projectId,
-        'stageId': stageId,
-        'stage': stage,
-        'groups': groups.map((g) => g.toJson()).toList(),
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    '_id': id,
+    'projectId': projectId,
+    'stageId': stageId,
+    'stage': stage,
+    'groups': groups.map((g) => g.toJson()).toList(),
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 
   /// Create a copy with modified fields
   ProjectChecklist copyWith({

@@ -221,28 +221,13 @@ class _ProjectChecklistExecutionWidgetState
         final group = _checklist!.groups[index];
         final isExpanded = _expandedGroups.contains(group.id);
 
-        // Calculate defect count and rate for the group
+        // Use defectCount from backend
         int totalItems = group.questions.length;
         for (final section in group.sections) {
           totalItems += section.questions.length;
         }
 
-        int defectCount = 0;
-        // Count rejections in direct questions
-        for (final q in group.questions) {
-          if (q.reviewerStatus == 'Rejected') {
-            defectCount++;
-          }
-        }
-        // Count rejections in section questions
-        for (final section in group.sections) {
-          for (final q in section.questions) {
-            if (q.reviewerStatus == 'Rejected') {
-              defectCount++;
-            }
-          }
-        }
-
+        int defectCount = group.defectCount;
         double defectRate = totalItems > 0
             ? (defectCount / totalItems) * 100
             : 0;
@@ -270,24 +255,40 @@ class _ProjectChecklistExecutionWidgetState
                   ),
                   decoration: BoxDecoration(
                     color: defectCount > 0
-                        ? Colors.orange.shade100
-                        : Colors.blue.shade100,
+                        ? Colors.red.shade100
+                        : Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: defectCount > 0
-                          ? Colors.orange.shade300
-                          : Colors.blue.shade300,
+                          ? Colors.red.shade400
+                          : Colors.grey.shade400,
                     ),
                   ),
-                  child: Text(
-                    '${defectRate.toStringAsFixed(1)}% (${defectCount}/${totalItems})',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: defectCount > 0
-                          ? Colors.orange.shade800
-                          : Colors.blue.shade800,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Defects: $defectCount',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: defectCount > 0
+                              ? Colors.red.shade900
+                              : Colors.grey.shade700,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '(${defectRate.toStringAsFixed(1)}%)',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: defectCount > 0
+                              ? Colors.red.shade800
+                              : Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

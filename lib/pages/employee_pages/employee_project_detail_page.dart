@@ -176,7 +176,7 @@ class _EmployeeProjectDetailsPageState
                             _row('Priority', details.project.priority),
                             _row('Status', details.project.status),
                             _row(
-                              'Executor',
+                              'Created By',
                               (details.project.executor?.trim().isNotEmpty ??
                                       false)
                                   ? details.project.executor!.trim()

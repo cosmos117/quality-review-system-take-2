@@ -1020,14 +1020,23 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          "Checklist - ${widget.projectTitle}",
-          style: const TextStyle(color: Colors.white),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                widget.projectTitle,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
         backgroundColor: Colors.blue,
         actions: [
-          // Spacer to push all content to the right side
-          const Spacer(),
           // TeamLeader can only view - no approve/revert buttons needed anymore
           // Reviewer submission now auto-approves the phase
 
