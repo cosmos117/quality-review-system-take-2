@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
+import '../controllers/notification_controller.dart';
 
 class EmployeeSidebar extends StatelessWidget {
   final void Function()? onCreate;
@@ -53,12 +54,18 @@ class EmployeeSidebar extends StatelessWidget {
             active: selectedIndex == 0,
             onTap: () => onItemSelected?.call(0),
           ),
-          SidebarItem(
-            icon: Icons.group,
-            label: "My Projects",
-            active: selectedIndex == 1,
-            onTap: () => onItemSelected?.call(1),
-          ),
+          Obx(() {
+            final notifCtrl = Get.find<NotificationController>();
+            final count = notifCtrl.executorNotificationCount.value;
+
+            return SidebarItem(
+              icon: Icons.group,
+              label: "My Projects",
+              active: selectedIndex == 1,
+              onTap: () => onItemSelected?.call(1),
+              badgeCount: count,
+            );
+          }),
           const Spacer(),
 
           const SizedBox(height: 16),
@@ -108,12 +115,15 @@ class SidebarItem extends StatelessWidget {
   final String label;
   final bool active;
   final VoidCallback? onTap;
+  final int badgeCount;
+
   const SidebarItem({
     super.key,
     required this.icon,
     required this.label,
     this.active = false,
     this.onTap,
+    this.badgeCount = 0,
   });
 
   @override
@@ -136,13 +146,40 @@ class SidebarItem extends StatelessWidget {
                 color: active ? const Color(0xFF135BEC) : Colors.grey[700],
               ),
               const SizedBox(width: 12),
-              Text(
-                label,
-                style: TextStyle(
-                  color: active ? const Color(0xFF135BEC) : Colors.black87,
-                  fontWeight: FontWeight.w500,
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: active ? const Color(0xFF135BEC) : Colors.black87,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
+              if (badgeCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade600,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 20,
+                    minHeight: 20,
+                  ),
+                  child: Center(
+                    child: Text(
+                      badgeCount.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../models/project.dart';
 import '../../controllers/projects_controller.dart';
 import '../../controllers/auth_controller.dart';
+import '../../controllers/notification_controller.dart';
 import 'my_project_detail_page.dart';
 import '../../widgets/phase_overview_widget.dart';
 
@@ -18,15 +21,16 @@ class _MyprojectState extends State<Myproject> {
   String _searchQuery = '';
   String _sortKey = 'started';
   bool _ascending = false;
-  int? _hoverIndex;
   List<Project> _cachedProjects = [];
   bool _isInitialLoad = true;
   final Set<String> _selectedStatuses = {};
+  Timer? _notificationTimer;
 
   @override
   void initState() {
     super.initState();
     _loadProjects();
+    _startNotificationPolling();
   }
 
   Future<void> _loadProjects({bool forceRefresh = false}) async {
@@ -67,6 +71,10 @@ class _MyprojectState extends State<Myproject> {
 
       // Use the controller's byAssigneeId method for more reliable filtering
       final myProjects = ctrl.byAssigneeId(userId);
+
+      // Update notifications for all projects
+      final notifCtrl = Get.find<NotificationController>();
+      await notifCtrl.updateMultipleProjects(myProjects);
 
       // Debug logging
       print('[MyProjects] Loaded projects for user $userId:');
@@ -111,8 +119,22 @@ class _MyprojectState extends State<Myproject> {
 
   @override
   void dispose() {
+    _notificationTimer?.cancel();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _startNotificationPolling() {
+    _notificationTimer?.cancel();
+    _notificationTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
+      if (!mounted || _cachedProjects.isEmpty) return;
+      try {
+        final notifCtrl = Get.find<NotificationController>();
+        await notifCtrl.updateMultipleProjects(_cachedProjects);
+      } catch (_) {
+        // Ignore transient notification refresh errors.
+      }
+    });
   }
 
   List<Project> _getMyProjects() {
@@ -435,130 +457,7 @@ class _MyprojectState extends State<Myproject> {
                                   itemCount: projects.length,
                                   itemBuilder: (context, index) {
                                     final project = projects[index];
-                                    final hovered = _hoverIndex == index;
-
-                                    return MouseRegion(
-                                      onEnter: (_) =>
-                                          setState(() => _hoverIndex = index),
-                                      onExit: (_) =>
-                                          setState(() => _hoverIndex = null),
-                                      child: GestureDetector(
-                                        onTap: () => Get.to(
-                                          () => MyProjectDetailPage(
-                                            project: project,
-                                          ),
-                                        ),
-                                        child: Container(
-                                          margin: const EdgeInsets.only(
-                                            bottom: 6,
-                                          ),
-                                          padding: const EdgeInsets.all(16),
-                                          decoration: BoxDecoration(
-                                            color: hovered
-                                                ? _getHoverColor(project.status)
-                                                : _getStatusColor(
-                                                    project.status,
-                                                  ),
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                            border: Border.all(
-                                              color: hovered
-                                                  ? _getBorderColor(
-                                                      project.status,
-                                                    )
-                                                  : Colors.black12,
-                                            ),
-                                            boxShadow: hovered
-                                                ? const [
-                                                    BoxShadow(
-                                                      color: Colors.black12,
-                                                      blurRadius: 6,
-                                                      offset: Offset(0, 2),
-                                                    ),
-                                                  ]
-                                                : null,
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Row(
-                                                children: [
-                                                  Expanded(
-                                                    flex: 2,
-                                                    child: Text(
-                                                      (project.projectNo
-                                                                  ?.trim()
-                                                                  .isNotEmpty ??
-                                                              false)
-                                                          ? project.projectNo!
-                                                                .trim()
-                                                          : '--',
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                  ),
-                                                  Expanded(
-                                                    flex: 3,
-                                                    child: Text(
-                                                      project.title,
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                  ),
-                                                  Expanded(
-                                                    flex: 2,
-                                                    child: Text(
-                                                      '${project.started.year}-${project.started.month.toString().padLeft(2, '0')}-${project.started.day.toString().padLeft(2, '0')}',
-                                                    ),
-                                                  ),
-                                                  Expanded(
-                                                    flex: 2,
-                                                    child: Align(
-                                                      alignment:
-                                                          Alignment.centerLeft,
-                                                      child: _priorityChip(
-                                                        project.priority,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Expanded(
-                                                    flex: 2,
-                                                    child: Align(
-                                                      alignment:
-                                                          Alignment.centerLeft,
-                                                      child: Text(
-                                                        project.status,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Expanded(
-                                                    flex: 2,
-                                                    child: Align(
-                                                      alignment:
-                                                          Alignment.centerLeft,
-                                                      child: Text(
-                                                        project.executor ??
-                                                            '--',
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 12),
-                                              PhaseOverviewWidget(
-                                                project: project,
-                                                compact: true,
-                                                showTitle: false,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    );
+                                    return _MyProjectCard(project: project);
                                   },
                                 ),
                               ],
@@ -573,16 +472,38 @@ class _MyprojectState extends State<Myproject> {
       ),
     );
   }
+}
 
-  // Helper methods to get status-based colors
+class _MyProjectCard extends StatefulWidget {
+  final Project project;
+
+  const _MyProjectCard({required this.project});
+
+  @override
+  State<_MyProjectCard> createState() => _MyProjectCardState();
+}
+
+class _MyProjectCardState extends State<_MyProjectCard> {
+  bool _isHovered = false;
+
+  Widget _priorityChip(String p) {
+    Color bg = const Color(0xFFEFF3F7);
+    if (p == 'High') bg = const Color(0xFFFBEFEF);
+    if (p == 'Low') bg = const Color(0xFFF5F7FA);
+    return Chip(
+      label: Text(p, style: const TextStyle(fontSize: 12)),
+      backgroundColor: bg,
+    );
+  }
+
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'not started':
-        return const Color(0xFFFFF9E6); // Light yellow/amber
+        return const Color(0xFFFFF9E6);
       case 'in progress':
-        return const Color(0xFFE3F2FD); // Light blue
+        return const Color(0xFFE3F2FD);
       case 'completed':
-        return const Color(0xFFE8F5E9); // Light green
+        return const Color(0xFFE8F5E9);
       default:
         return Colors.white;
     }
@@ -591,11 +512,11 @@ class _MyprojectState extends State<Myproject> {
   Color _getHoverColor(String status) {
     switch (status.toLowerCase()) {
       case 'not started':
-        return const Color(0xFFFFF3CD); // Slightly darker yellow on hover
+        return const Color(0xFFFFF3CD);
       case 'in progress':
-        return const Color(0xFFBBDEFB); // Slightly darker blue on hover
+        return const Color(0xFFBBDEFB);
       case 'completed':
-        return const Color(0xFFC8E6C9); // Slightly darker green on hover
+        return const Color(0xFFC8E6C9);
       default:
         return const Color(0xFFF7F9FC);
     }
@@ -604,14 +525,182 @@ class _MyprojectState extends State<Myproject> {
   Color _getBorderColor(String status) {
     switch (status.toLowerCase()) {
       case 'not started':
-        return Colors.amber.shade200;
+        return Colors.amber.shade300;
       case 'in progress':
-        return Colors.blue.shade200;
+        return Colors.blue.shade300;
       case 'completed':
-        return Colors.green.shade200;
+        return Colors.green.shade300;
       default:
-        return Colors.blue.shade200;
+        return Colors.blue.shade300;
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final notifCtrl = Get.find<NotificationController>();
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: () => Get.to(() => MyProjectDetailPage(project: widget.project)),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _isHovered
+                ? _getHoverColor(widget.project.status)
+                : _getStatusColor(widget.project.status),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: _isHovered
+                  ? _getBorderColor(widget.project.status)
+                  : Colors.grey.shade300,
+              width: _isHovered ? 1.5 : 1,
+            ),
+            boxShadow: _isHovered
+                ? [
+                    BoxShadow(
+                      color: _getBorderColor(
+                        widget.project.status,
+                      ).withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          transform: _isHovered
+              ? (Matrix4.identity()..translate(0.0, -2.0))
+              : Matrix4.identity(),
+          child: Obx(() {
+            final notification = notifCtrl.getNotification(widget.project.id);
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        (widget.project.projectNo?.trim().isNotEmpty ?? false)
+                            ? widget.project.projectNo!.trim()
+                            : '--',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        widget.project.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        '${widget.project.started.year}-${widget.project.started.month.toString().padLeft(2, '0')}-${widget.project.started.day.toString().padLeft(2, '0')}',
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _priorityChip(widget.project.priority),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(widget.project.status),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(widget.project.executor ?? '--'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Notification badge - positioned above phase overview (executor revert only)
+                if ((notification?.hasPendingAction ?? false) &&
+                    notification?.actionType == 'revert')
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: notification?.actionType == 'revert'
+                                ? Colors.red.shade50
+                                : Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: notification?.actionType == 'revert'
+                                  ? Colors.red.shade400
+                                  : Colors.orange.shade400,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                notification?.actionType == 'revert'
+                                    ? Icons.refresh
+                                    : Icons.rate_review,
+                                color: notification?.actionType == 'revert'
+                                    ? Colors.red.shade700
+                                    : Colors.orange.shade700,
+                                size: 14,
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  notification?.actionType == 'revert'
+                                      ? 'Reverted: ${notification?.stageName ?? 'Phase ${notification?.phaseNumber ?? 0}'}'
+                                      : 'Pending Review: ${notification?.stageName ?? 'Phase ${notification?.phaseNumber ?? 0}'}',
+                                  style: TextStyle(
+                                    color: notification?.actionType == 'revert'
+                                        ? Colors.red.shade700
+                                        : Colors.orange.shade700,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                PhaseOverviewWidget(
+                  project: widget.project,
+                  compact: true,
+                  showTitle: false,
+                ),
+              ],
+            );
+          }),
+        ),
+      ),
+    );
   }
 }
 
