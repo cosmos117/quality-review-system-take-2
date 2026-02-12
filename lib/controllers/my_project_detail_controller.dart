@@ -2,9 +2,11 @@ import 'package:get/get.dart';
 import '../models/project.dart';
 import '../models/project_membership.dart';
 import '../services/project_membership_service.dart';
+import '../services/template_service.dart';
 import '../controllers/auth_controller.dart';
 import '../controllers/projects_controller.dart';
 import 'package:flutter/material.dart';
+import '../widgets/incomplete_template_dialog.dart';
 
 class MyProjectDetailController extends GetxController {
   MyProjectDetailController({required Project project, String? description})
@@ -82,8 +84,51 @@ class MyProjectDetailController extends GetxController {
     return isExecutor || isReviewer || fallback;
   }
 
+  /// Validate template completeness before starting project
+  /// Returns true if user wants to proceed, false otherwise
+  Future<bool> _validateTemplate() async {
+    try {
+      if (!Get.isRegistered<TemplateService>()) {
+        // If template service is not available, proceed without validation
+        return true;
+      }
+
+      final templateService = Get.find<TemplateService>();
+      final validation = await templateService.validateTemplateCompleteness();
+
+      final isComplete = validation['isComplete'] as bool? ?? true;
+      final incompletePhases =
+          (validation['incompletePhases'] as List?)?.cast<String>() ?? [];
+
+      if (!isComplete && incompletePhases.isNotEmpty) {
+        // Show warning dialog and get user confirmation
+        final proceed = await Get.dialog<bool>(
+          IncompleteTemplateDialog(incompletePhases: incompletePhases),
+          barrierDismissible: false,
+        );
+
+        return proceed ?? false;
+      }
+
+      return true;
+    } catch (e) {
+      // If validation fails, log error and let user proceed
+      // ignore: avoid_print
+      print('[MyProjectDetailController] Template validation error: $e');
+      return true;
+    }
+  }
+
   Future<void> startProject() async {
     if (!Get.isRegistered<ProjectsController>()) return;
+
+    // Validate template before starting
+    final shouldProceed = await _validateTemplate();
+    if (!shouldProceed) {
+      // User cancelled, don't start the project
+      return;
+    }
+
     starting.value = true;
     final projectsCtrl = Get.find<ProjectsController>();
     final original = project.value;

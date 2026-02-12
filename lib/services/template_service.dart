@@ -404,4 +404,73 @@ class TemplateService {
       throw Exception('Error fetching stages: $e');
     }
   }
+
+  /// Validate template completeness
+  /// Returns a map with 'isComplete' boolean and 'incompletePhases' list
+  /// Each phase should have at least one checklist with at least one question
+  Future<Map<String, dynamic>> validateTemplateCompleteness() async {
+    try {
+      _ensureToken();
+      final template = await fetchTemplate();
+      final incompletePhases = <String>[];
+
+      // Get phase names
+      final phaseNames = template['phaseNames'] as Map<String, dynamic>? ?? {};
+
+      // Get all stage keys (stage1, stage2, etc.)
+      final stageKeys =
+          template.keys.where((key) => _isValidStage(key)).toList()
+            ..sort((a, b) {
+              final numA = int.tryParse(a.replaceAll('stage', '')) ?? 0;
+              final numB = int.tryParse(b.replaceAll('stage', '')) ?? 0;
+              return numA.compareTo(numB);
+            });
+
+      for (final stageKey in stageKeys) {
+        final phaseName = phaseNames[stageKey] ?? stageKey;
+        final checklists = template[stageKey] as List? ?? [];
+
+        // Check if phase has checklists with questions
+        bool hasQuestions = false;
+
+        for (final checklist in checklists) {
+          if (checklist is Map<String, dynamic>) {
+            final checkpoints = checklist['checkpoints'] as List? ?? [];
+            final sections = checklist['sections'] as List? ?? [];
+
+            // Check if there are direct checkpoints
+            if (checkpoints.isNotEmpty) {
+              hasQuestions = true;
+              break;
+            }
+
+            // Check if there are checkpoints in sections
+            for (final section in sections) {
+              if (section is Map<String, dynamic>) {
+                final sectionCheckpoints =
+                    section['checkpoints'] as List? ?? [];
+                if (sectionCheckpoints.isNotEmpty) {
+                  hasQuestions = true;
+                  break;
+                }
+              }
+            }
+
+            if (hasQuestions) break;
+          }
+        }
+
+        if (!hasQuestions) {
+          incompletePhases.add(phaseName);
+        }
+      }
+
+      return {
+        'isComplete': incompletePhases.isEmpty,
+        'incompletePhases': incompletePhases,
+      };
+    } catch (e) {
+      throw Exception('Error validating template: $e');
+    }
+  }
 }
