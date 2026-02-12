@@ -7,7 +7,6 @@ import '../../controllers/projects_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/notification_controller.dart';
 import 'my_project_detail_page.dart';
-import '../../widgets/phase_overview_widget.dart';
 
 class Myproject extends StatefulWidget {
   const Myproject({super.key});
@@ -51,25 +50,17 @@ class _MyprojectState extends State<Myproject> {
         return;
       }
 
-      // Check if projects are already loaded (from login preload)
-      final hasProjects = ctrl.projects.isNotEmpty;
-      final alreadyHydrated = ctrl.projects.any(
-        (p) => (p.assignedEmployees ?? []).isNotEmpty,
-      );
-
-      if (!hasProjects || !alreadyHydrated || forceRefresh) {
-        // Need to refresh if no projects or not hydrated yet
-        await ctrl.refreshProjects();
-
-        // Small delay to ensure hydration completes (race condition fix)
-        // Removed delay for faster loading
-      } else {
-        print('[MyProjects] Using preloaded projects (already hydrated)');
+      // Use optimized user-specific endpoint (includes memberships, no hydration needed)
+      if (_isInitialLoad || forceRefresh) {
+        print(
+          '[MyProjects] Loading projects for user $userId using optimized endpoint',
+        );
+        await ctrl.loadUserProjects(userId);
       }
 
       if (!mounted) return;
 
-      // Use the controller's byAssigneeId method for more reliable filtering
+      // Filter projects for this user
       final myProjects = ctrl.byAssigneeId(userId);
 
       // Update notifications for all projects
@@ -690,11 +681,6 @@ class _MyProjectCardState extends State<_MyProjectCard> {
                       ],
                     ),
                   ),
-                PhaseOverviewWidget(
-                  project: widget.project,
-                  compact: true,
-                  showTitle: false,
-                ),
               ],
             );
           }),

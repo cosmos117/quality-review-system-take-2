@@ -185,6 +185,22 @@ class ProjectsController extends GetxController {
     }
   }
 
+  /// Load projects for a specific user (optimized - no hydration needed)
+  Future<void> loadUserProjects(String userId) async {
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+      final projectsList = await _service.getForUser(userId);
+      projects.assignAll(projectsList.map(_normalize));
+      isLoading.value = false;
+      // No hydration needed - data already included from backend
+    } catch (e) {
+      errorMessage.value = e.toString();
+      isLoading.value = false;
+      rethrow;
+    }
+  }
+
   /// Bulk set project assignments (adds/removes memberships remotely then updates local state)
   Future<void> setProjectAssignments(
     String projectId,

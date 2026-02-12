@@ -26,7 +26,7 @@ class MyApp extends StatelessWidget {
       defaultTransition: Transition.noTransition,
       transitionDuration: Duration.zero,
       initialBinding: AppBindings(),
-      // Pick initial screen based on restored auth state (reactive)F
+      // Pick initial screen based on restored auth state (reactive)
       home: _HomeRouter(),
     );
   }

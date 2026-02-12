@@ -8,6 +8,7 @@ import '../../components/project_detail_info.dart';
 import '../../controllers/my_project_detail_controller.dart';
 import '../../services/template_service.dart';
 import '../../services/project_service.dart';
+import '../../widgets/phase_overview_widget.dart';
 
 class MyProjectDetailPage extends GetView<MyProjectDetailController> {
   final Project project;
@@ -142,6 +143,8 @@ class MyProjectDetailPage extends GetView<MyProjectDetailController> {
                 ],
               );
             }),
+            const SizedBox(height: 24),
+            Obx(() => PhaseOverviewWidget(project: c.project.value)),
             const SizedBox(height: 24),
             Text(
               'Assigned Team Members',

@@ -228,9 +228,6 @@ class _ProjectChecklistExecutionWidgetState
         }
 
         int defectCount = group.defectCount;
-        double defectRate = totalItems > 0
-            ? (defectCount / totalItems) * 100
-            : 0;
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -247,11 +244,11 @@ class _ProjectChecklistExecutionWidgetState
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Group defect stats badge
+                // Group defect count badge (cumulative)
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
+                    horizontal: 12,
+                    vertical: 6,
                   ),
                   decoration: BoxDecoration(
                     color: defectCount > 0
@@ -264,31 +261,15 @@ class _ProjectChecklistExecutionWidgetState
                           : Colors.grey.shade400,
                     ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Defects: $defectCount',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: defectCount > 0
-                              ? Colors.red.shade900
-                              : Colors.grey.shade700,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '(${defectRate.toStringAsFixed(1)}%)',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: defectCount > 0
-                              ? Colors.red.shade800
-                              : Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    'Defects: $defectCount',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: defectCount > 0
+                          ? Colors.red.shade900
+                          : Colors.grey.shade700,
+                    ),
                   ),
                 ),
               ],

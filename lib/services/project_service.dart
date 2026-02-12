@@ -47,6 +47,15 @@ class ProjectService {
       creatorId = createdBy.toString();
     }
 
+    // Handle assignedEmployees if present (from optimized endpoint)
+    List<String>? assignedEmployees;
+    if (j.containsKey('assignedEmployees') && j['assignedEmployees'] is List) {
+      assignedEmployees = (j['assignedEmployees'] as List)
+          .map((e) => e.toString())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+
     return Project(
       id: id,
       projectNo: projectNo,
@@ -57,7 +66,7 @@ class ProjectService {
       priority: priority,
       status: status,
       executor: creatorName ?? creatorId, // Use creator name or ID
-      assignedEmployees: null, // Fetched separately via ProjectMembership
+      assignedEmployees: assignedEmployees, // From backend or null
     );
   }
 
@@ -86,6 +95,14 @@ class ProjectService {
 
   Future<List<Project>> getAll() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/projects');
+    final json = await http.getJson(uri);
+    final data = (json['data'] as List).cast<dynamic>();
+    return data.map((e) => _fromApi(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Get projects for a specific user (optimized - includes memberships)
+  Future<List<Project>> getForUser(String userId) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/projects/user/$userId');
     final json = await http.getJson(uri);
     final data = (json['data'] as List).cast<dynamic>();
     return data.map((e) => _fromApi(e as Map<String, dynamic>)).toList();

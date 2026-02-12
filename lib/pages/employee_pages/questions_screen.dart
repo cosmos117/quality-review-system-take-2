@@ -63,6 +63,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   Map<String, int> _defectsByChecklist = {};
   Map<String, int> _checkpointsByChecklist =
       {}; // Track checkpoints per checklist
+  // Track cumulative defect count per phase (from backend)
+  final Map<int, int> _cumulativeDefectCount = {};
   final Map<String, String?> _selectedDefectCategory = {};
   final Map<String, String?> _selectedDefectSeverity = {};
   Map<String, Map<String, dynamic>> _defectCategories = {};
@@ -347,6 +349,16 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         final groups = projectChecklistData['groups'] as List<dynamic>? ?? [];
         if (groups.isNotEmpty) {
           loadedChecklist = Question.fromProjectChecklistGroups(groups);
+
+          // Calculate total cumulative defect count from all groups for this phase
+          int totalDefects = 0;
+          for (final group in groups) {
+            if (group is Map<String, dynamic>) {
+              final defectCount = group['defectCount'] as int? ?? 0;
+              totalDefects += defectCount;
+            }
+          }
+          _cumulativeDefectCount[phase] = totalDefects;
 
           // Extract defect category and severity from questions
           for (final group in groups) {
@@ -1370,7 +1382,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                                 ),
                                 const SizedBox(width: 12),
                                 const Text(
-                                  'Defect Rate',
+                                  'Defect Count',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 14,
@@ -1380,38 +1392,29 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                                 const SizedBox(width: 12),
                                 Builder(
                                   builder: (context) {
-                                    // Calculate total defects and checkpoints
-                                    int totalDefects = 0;
-                                    int totalCheckpoints = 0;
-                                    _defectsByChecklist.values.forEach(
-                                      (count) => totalDefects += count,
-                                    );
-                                    _checkpointsByChecklist.values.forEach(
-                                      (count) => totalCheckpoints += count,
-                                    );
-                                    final percentage = totalCheckpoints > 0
-                                        ? (totalDefects /
-                                              totalCheckpoints *
-                                              100)
-                                        : 0.0;
+                                    // Get cumulative defect count from backend for current phase
+                                    final totalDefects =
+                                        _cumulativeDefectCount[_selectedPhase] ??
+                                        0;
 
                                     return Container(
                                       padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
+                                        horizontal: 16,
+                                        vertical: 8,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: Colors.red,
+                                        color: totalDefects > 0
+                                            ? Colors.red
+                                            : Colors.grey.shade600,
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Text(
-                                        '${percentage.toStringAsFixed(2)}%\n($totalDefects/$totalCheckpoints)',
+                                        '$totalDefects',
                                         textAlign: TextAlign.center,
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          fontSize: 13,
+                                          fontSize: 16,
                                           color: Colors.white,
-                                          height: 1.2,
                                         ),
                                       ),
                                     );

@@ -806,9 +806,6 @@ class _DefectChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final percentage = checkpointCount > 0
-        ? ((defectCount / checkpointCount) * 100).toStringAsFixed(1)
-        : '0.0';
     final has = defectCount > 0;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -816,27 +813,13 @@ class _DefectChip extends StatelessWidget {
         color: has ? Colors.redAccent : Colors.grey.shade400,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Defects: $defectCount',
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '($percentage%)',
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: Colors.white,
-            ),
-          ),
-        ],
+      child: Text(
+        'Defects: $defectCount',
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
       ),
     );
   }

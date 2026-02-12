@@ -2,12 +2,15 @@ import 'package:get/get.dart';
 import '../models/project.dart';
 import '../services/approval_service.dart';
 import '../services/stage_service.dart';
+import '../services/project_membership_service.dart';
 import 'auth_controller.dart';
 
 /// Controller to track notification states for projects
 class NotificationController extends GetxController {
   ApprovalService get _approvalService => Get.find<ApprovalService>();
   StageService get _stageService => Get.find<StageService>();
+  ProjectMembershipService get _membershipService =>
+      Get.find<ProjectMembershipService>();
 
   // Map of projectId to notification info
   final _projectNotifications = <String, ProjectNotification>{}.obs;
@@ -33,17 +36,33 @@ class NotificationController extends GetxController {
     try {
       final authCtrl = Get.find<AuthController>();
       final userId = authCtrl.currentUser.value?.id;
-      final userName = authCtrl.currentUser.value?.name;
 
       if (userId == null) return;
 
-      final executors = project.assignedEmployees ?? [];
-      // Executor: user in assignedEmployees list (who fills checklists)
-      final isExecutor = _listMatchesUser(executors, userId, userName);
-      // Reviewer: user is competenceManager or executor (who approves/reverts)
-      final isReviewer =
-          _matchesUser(project.competenceManager, userId, userName) ||
-          _matchesUser(project.executor, userId, userName);
+      // Fetch project memberships to determine user's role
+      List<dynamic> memberships = [];
+      String? userRole;
+
+      try {
+        memberships = await _membershipService.getProjectMembers(project.id);
+
+        // Find the current user's role
+        for (final membership in memberships) {
+          if (membership.userId == userId) {
+            userRole = membership.roleName?.toLowerCase();
+            break;
+          }
+        }
+      } catch (e) {
+        print('Could not fetch memberships for ${project.id}: $e');
+        // Fallback to old logic if membership service fails
+        return;
+      }
+
+      // Determine if user is executor or reviewer based on role
+      final isExecutor = userRole == 'executor';
+      final isReviewer = userRole == 'reviewer';
+      final isTeamLeader = userRole == 'teamleader';
 
       bool hasPendingAction = false;
       String? actionType;
@@ -69,8 +88,11 @@ class NotificationController extends GetxController {
                 approval?['approvalStatus'],
           );
 
-          // Executor needs to act if reverted (ONLY for executors, not reviewers)
-          if (isExecutor && !isReviewer && _isRevertedStatus(status)) {
+          // Executor needs to act if reverted (ONLY for executors, not reviewers/teamleaders)
+          if (isExecutor &&
+              !isReviewer &&
+              !isTeamLeader &&
+              _isRevertedStatus(status)) {
             hasPendingAction = true;
             actionType = 'revert';
             phaseNumber = phase;
@@ -78,8 +100,11 @@ class NotificationController extends GetxController {
             break;
           }
 
-          // Reviewer needs to act if submitted by executor
-          if (isReviewer && !isExecutor && _isPendingReviewStatus(status)) {
+          // Reviewer needs to act if submitted by executor (ONLY for reviewers, not executors/teamleaders)
+          if (isReviewer &&
+              !isExecutor &&
+              !isTeamLeader &&
+              _isPendingReviewStatus(status)) {
             hasPendingAction = true;
             actionType = 'pending_review';
             phaseNumber = phase;

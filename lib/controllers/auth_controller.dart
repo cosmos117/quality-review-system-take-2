@@ -67,12 +67,11 @@ class AuthController extends GetxController {
     try {
       if (Get.isRegistered<ProjectsController>()) {
         final projectsCtrl = Get.find<ProjectsController>();
-        await projectsCtrl.refreshProjects();
-
-        // Additional delay to ensure hydration completes
-        // Removed delay for faster navigation
-
         final userId = currentUser.value!.id;
+
+        // Use optimized endpoint - no hydration needed
+        await projectsCtrl.loadUserProjects(userId);
+
         final myProjects = projectsCtrl.byAssigneeId(userId);
 
         print(
