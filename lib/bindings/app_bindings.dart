@@ -3,6 +3,7 @@ import '../controllers/projects_controller.dart';
 import '../controllers/team_controller.dart';
 import '../controllers/admin_dashboard_ui_controller.dart';
 import '../controllers/template_management_controller.dart';
+import '../controllers/notification_controller.dart';
 import '../services/http_client.dart';
 import '../services/project_service.dart';
 import '../services/user_service.dart';
@@ -106,6 +107,10 @@ class AppBindings extends Bindings {
     );
     Get.lazyPut<TemplateManagementController>(
       () => TemplateManagementController(),
+      fenix: true,
+    );
+    Get.lazyPut<NotificationController>(
+      () => NotificationController(),
       fenix: true,
     );
   }

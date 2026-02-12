@@ -19,7 +19,6 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
   String _searchQuery = '';
   String _sortKey = 'started';
   bool _ascending = false; // default: newest first
-  int? _hoverIndex;
   final Set<String> _selectedStatuses = {}; // Start with no filters selected
 
   @override
@@ -339,104 +338,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                       itemCount: projects.length,
                       itemBuilder: (context, index) {
                         final proj = projects[index];
-                        final executor =
-                            (proj.status == 'In Progress' ||
-                                proj.status == 'Completed')
-                            ? ((proj.executor?.trim().isNotEmpty ?? false)
-                                  ? proj.executor!.trim()
-                                  : '--')
-                            : '--';
-                        final hovered = _hoverIndex == index;
-                        return MouseRegion(
-                          onEnter: (_) => setState(() => _hoverIndex = index),
-                          onExit: (_) => setState(() => _hoverIndex = null),
-                          child: GestureDetector(
-                            onTap: () => Get.to(
-                              () => EmployeeProjectDetailPage(
-                                project: proj,
-                                description: proj.description,
-                              ),
-                            ),
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 6),
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 10,
-                                horizontal: 16,
-                              ),
-                              decoration: BoxDecoration(
-                                color: hovered
-                                    ? const Color(0xFFF7F9FC)
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: hovered
-                                      ? Colors.blue.shade200
-                                      : Colors.black12,
-                                ),
-                                boxShadow: hovered
-                                    ? const [
-                                        BoxShadow(
-                                          color: Colors.black12,
-                                          blurRadius: 6,
-                                          offset: Offset(0, 2),
-                                        ),
-                                      ]
-                                    : null,
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    flex: 2,
-                                    child: Text(
-                                      (proj.projectNo?.trim().isNotEmpty ??
-                                              false)
-                                          ? proj.projectNo!.trim()
-                                          : '--',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  Expanded(
-                                    flex: 3,
-                                    child: Text(
-                                      proj.title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  Expanded(
-                                    flex: 2,
-                                    child: Text(
-                                      '${proj.started.year}-${proj.started.month.toString().padLeft(2, '0')}-${proj.started.day.toString().padLeft(2, '0')}',
-                                    ),
-                                  ),
-                                  Expanded(
-                                    flex: 2,
-                                    child: Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: _priorityChip(proj.priority),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    flex: 2,
-                                    child: Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text((proj.status).toString()),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    flex: 2,
-                                    child: Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(executor),
-                                    ),
-                                  ),
-                                  // Edit/Delete removed from dashboard; now only in details page.
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
+                        return _EmployeeProjectCard(project: proj);
                       },
                     ),
                   ],
@@ -450,6 +352,128 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
   }
 
   // Description now lives on Project model; no temp store needed.
+}
+
+class _EmployeeProjectCard extends StatefulWidget {
+  final Project project;
+
+  const _EmployeeProjectCard({required this.project});
+
+  @override
+  State<_EmployeeProjectCard> createState() => _EmployeeProjectCardState();
+}
+
+class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
+  bool _isHovered = false;
+
+  Widget _priorityChip(String p) {
+    Color bg = const Color(0xFFEFF3F7);
+    if (p == 'High') bg = const Color(0xFFFBEFEF);
+    if (p == 'Low') bg = const Color(0xFFF5F7FA);
+    return Chip(
+      label: Text(p, style: const TextStyle(fontSize: 12)),
+      backgroundColor: bg,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final executor =
+        (widget.project.status == 'In Progress' ||
+            widget.project.status == 'Completed')
+        ? ((widget.project.executor?.trim().isNotEmpty ?? false)
+              ? widget.project.executor!.trim()
+              : '--')
+        : '--';
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: () => Get.to(
+          () => EmployeeProjectDetailPage(
+            project: widget.project,
+            description: widget.project.description,
+          ),
+        ),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+          decoration: BoxDecoration(
+            color: _isHovered ? const Color(0xFFF7F9FC) : Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: _isHovered ? Colors.blue.shade300 : Colors.grey.shade300,
+              width: _isHovered ? 1.5 : 1,
+            ),
+            boxShadow: _isHovered
+                ? [
+                    BoxShadow(
+                      color: Colors.blue.shade100.withOpacity(0.5),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          transform: _isHovered
+              ? (Matrix4.identity()..translate(0.0, -2.0))
+              : Matrix4.identity(),
+          child: Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: Text(
+                  (widget.project.projectNo?.trim().isNotEmpty ?? false)
+                      ? widget.project.projectNo!.trim()
+                      : '--',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  widget.project.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  '${widget.project.started.year}-${widget.project.started.month.toString().padLeft(2, '0')}-${widget.project.started.day.toString().padLeft(2, '0')}',
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: _priorityChip(widget.project.priority),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text((widget.project.status).toString()),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(executor),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class ProjectFormData {
