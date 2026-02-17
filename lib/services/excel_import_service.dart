@@ -24,6 +24,7 @@ class ExcelImportService {
     'Actual Delivery Date',
     'Planned Efforts',
     'Actual Efforts',
+    'Is Review Applicable',
   ];
 
   List<Project> parse(Uint8List bytes) {
@@ -79,6 +80,16 @@ class ExcelImportService {
       return (s == null || s.isEmpty) ? null : s;
     }
 
+    // Helper to parse "Is Review Applicable" column
+    String? parseReviewApplicable(dynamic v) {
+      if (v == null) return null;
+      final s = v.toString().trim().toLowerCase();
+      if (s.isEmpty) return null;
+      if (s == 'yes' || s == 'y') return 'yes';
+      if (s == 'no' || s == 'n') return 'no';
+      return null; // Default to null if not recognized
+    }
+
     final projects = <Project>[];
     for (int r = 1; r < rows.length; r++) {
       final row = rows[r];
@@ -109,6 +120,9 @@ class ExcelImportService {
         actualDeliveryDate: date(cell(row, 'Actual Delivery Date')),
         plannedEfforts: num(cell(row, 'Planned Efforts')),
         actualEfforts: num(cell(row, 'Actual Efforts')),
+        isReviewApplicable: parseReviewApplicable(
+          cell(row, 'Is Review Applicable'),
+        ),
       );
       projects.add(p);
     }

@@ -203,7 +203,7 @@ class ExcelExportService {
       'Is Review Applicable',
       project.isReviewApplicable == null
           ? ''
-          : (project.isReviewApplicable == true ? 'Yes' : 'No'),
+          : (project.isReviewApplicable == 'yes' ? 'Yes' : 'No'),
     );
 
     // Set column widths for better readability

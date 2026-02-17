@@ -83,6 +83,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   List<Map<String, dynamic>> _iterationsWithRates = [];
   Map<String, dynamic>? _currentIterationStats;
   int? _selectedIterationNumber;
+  List<DropdownMenuItem<int>> _cachedDropdownItems = [];
 
   // Persisted reviewer submission summary per phase
   final Map<int, Map<String, dynamic>> _reviewerSubmissionSummaries = {};
@@ -777,19 +778,36 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       setState(() {
         // Parse iterations data
         final iterations = iterationData['iterations'] as List<dynamic>? ?? [];
-        _iterationsWithRates = iterations.map((iter) {
-          return {
-            'iterationNumber': iter['iterationNumber'] ?? 0,
+
+        debugPrint(
+          'Raw iterations from backend: ${iterations.map((i) => i['iterationNumber']).toList()}',
+        );
+
+        // Deduplicate iterations by iteration number
+        final Map<int, Map<String, dynamic>> uniqueIterations = {};
+        for (final iter in iterations) {
+          final iterNum = iter['iterationNumber'] ?? 0;
+          uniqueIterations[iterNum] = {
+            'iterationNumber': iterNum,
             'defectRate': (iter['defectRate'] ?? 0.0).toDouble(),
             'totalDefects': iter['totalDefects'] ?? 0,
             'totalQuestions': iter['totalQuestions'] ?? 0,
             'revertedAt': iter['revertedAt'],
             'revertNotes': iter['revertNotes'],
           };
-        }).toList();
+        }
+        _iterationsWithRates = uniqueIterations.values.toList()
+          ..sort(
+            (a, b) => (b['iterationNumber'] as int).compareTo(
+              a['iterationNumber'] as int,
+            ),
+          );
 
         // Parse current iteration data
         final current = iterationData['current'] as Map<String, dynamic>?;
+        debugPrint(
+          'Current iteration from backend: ${current?['iterationNumber']}',
+        );
         if (current != null) {
           _currentIterationStats = {
             'iterationNumber': current['iterationNumber'] ?? 1,
@@ -809,10 +827,59 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           _selectedIterationNumber =
               _currentIterationStats!['iterationNumber'] as int;
         }
+
+        // Rebuild dropdown items
+        _rebuildDropdownItems();
       });
     } catch (e) {
       debugPrint('Error loading defect rates: $e');
       // Silently fail - don't disrupt the UI
+    }
+  }
+
+  // Build dropdown items for iteration selector with proper deduplication
+  void _rebuildDropdownItems() {
+    // Collect all unique iteration numbers and their labels
+    final Map<int, String> iterationMap = {};
+
+    // Add current iteration first if it exists
+    if (_currentIterationStats != null) {
+      final currentNum = _currentIterationStats!['iterationNumber'] as int;
+      iterationMap[currentNum] = 'Current ($currentNum)';
+    }
+
+    // Add previous iterations (will not override if already exists)
+    for (final iter in _iterationsWithRates) {
+      final iterNum = iter['iterationNumber'] as int;
+      if (!iterationMap.containsKey(iterNum)) {
+        iterationMap[iterNum] = 'Iteration $iterNum';
+      }
+    }
+
+    // Build dropdown items from the map (guaranteed unique by Map keys)
+    _cachedDropdownItems = iterationMap.entries.map((entry) {
+      return DropdownMenuItem<int>(
+        value: entry.key,
+        child: Text(entry.value, style: const TextStyle(fontSize: 13)),
+      );
+    }).toList();
+
+    // Debug logging
+    debugPrint(
+      'Rebuilt dropdown items values: ${_cachedDropdownItems.map((i) => i.value).toList()}',
+    );
+
+    // Validate _selectedIterationNumber is in the items
+    if (_selectedIterationNumber != null && _cachedDropdownItems.isNotEmpty) {
+      final hasSelectedValue = _cachedDropdownItems.any(
+        (item) => item.value == _selectedIterationNumber,
+      );
+      if (!hasSelectedValue) {
+        debugPrint(
+          'WARNING: Selected value $_selectedIterationNumber not in dropdown items!',
+        );
+        _selectedIterationNumber = _cachedDropdownItems.first.value;
+      }
     }
   }
 
@@ -1528,40 +1595,28 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                                     ),
                                   ),
                                   child: DropdownButton<int>(
-                                    value: _selectedIterationNumber,
+                                    value: _cachedDropdownItems.isEmpty
+                                        ? null
+                                        : _selectedIterationNumber,
                                     underline: const SizedBox(),
                                     isDense: true,
-                                    items: [
-                                      // Current iteration
-                                      if (_currentIterationStats != null)
-                                        DropdownMenuItem<int>(
-                                          value:
-                                              _currentIterationStats!['iterationNumber']
-                                                  as int,
-                                          child: Text(
-                                            'Current (${_currentIterationStats!['iterationNumber']})',
-                                            style: const TextStyle(
-                                              fontSize: 13,
+                                    items: _cachedDropdownItems.isNotEmpty
+                                        ? _cachedDropdownItems
+                                        : [
+                                            const DropdownMenuItem<int>(
+                                              value: null,
+                                              child: Text(
+                                                'No iterations',
+                                                style: TextStyle(fontSize: 13),
+                                              ),
                                             ),
-                                          ),
-                                        ),
-                                      // Previous iterations
-                                      ..._iterationsWithRates.map((iter) {
-                                        return DropdownMenuItem<int>(
-                                          value: iter['iterationNumber'] as int,
-                                          child: Text(
-                                            'Iteration ${iter['iterationNumber']}',
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        );
-                                      }),
-                                    ],
+                                          ],
                                     onChanged: (value) {
-                                      setState(() {
-                                        _selectedIterationNumber = value;
-                                      });
+                                      if (value != null) {
+                                        setState(() {
+                                          _selectedIterationNumber = value;
+                                        });
+                                      }
                                     },
                                   ),
                                 ),

@@ -10,8 +10,8 @@ class Project {
   String status; // Pending, In Progress, Completed, Not Started
   String? executor;
   List<String>? assignedEmployees;
-  bool?
-  isReviewApplicable; // Toggle: null = not set, true = Yes (normal workflow), false = No (mark as Completed)
+  String?
+  isReviewApplicable; // Toggle: null = not set, "yes" = Yes (normal workflow), "no" = No (mark as Completed)
 
   // New attributes from Excel import
   String? groupOrCostCentre;
@@ -68,7 +68,7 @@ class Project {
     String? status,
     String? executor,
     List<String>? assignedEmployees,
-    bool? isReviewApplicable,
+    String? isReviewApplicable,
     String? groupOrCostCentre,
     String? actionRequired,
     String? sponsor,

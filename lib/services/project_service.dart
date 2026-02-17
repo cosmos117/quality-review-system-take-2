@@ -57,9 +57,15 @@ class ProjectService {
     }
 
     // Handle isReviewApplicable field
-    bool? isReviewApplicable;
+    String? isReviewApplicable;
     if (j.containsKey('isReviewApplicable')) {
-      isReviewApplicable = j['isReviewApplicable'] as bool?;
+      final value = j['isReviewApplicable'];
+      if (value is String) {
+        isReviewApplicable = value;
+      } else if (value is bool) {
+        // Handle legacy boolean values
+        isReviewApplicable = value ? 'yes' : 'no';
+      }
     }
 
     return Project(

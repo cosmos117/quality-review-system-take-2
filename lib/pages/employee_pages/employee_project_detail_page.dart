@@ -239,7 +239,7 @@ class _EmployeeProjectDetailsPageState
                           ),
                     const SizedBox(height: 24),
                     if (details.project.status == 'Not Started' &&
-                        details.project.isReviewApplicable == true)
+                        details.project.isReviewApplicable == 'yes')
                       _RoleAssignmentSections(
                         teamCtrl: _teamCtrl,
                         details: details,
@@ -248,7 +248,7 @@ class _EmployeeProjectDetailsPageState
                         onAssignmentsChanged: _loadAssignments,
                       ),
                     if (details.project.status == 'Completed' ||
-                        details.project.isReviewApplicable == false ||
+                        details.project.isReviewApplicable == 'no' ||
                         (details.project.status == 'Not Started' &&
                             details.project.isReviewApplicable == null))
                       Card(
@@ -264,7 +264,7 @@ class _EmployeeProjectDetailsPageState
                                   details.project.isReviewApplicable == null
                                       ? 'Please select "Yes" or "No" for "Is Review Applicable" above to proceed.'
                                       : details.project.isReviewApplicable ==
-                                            true
+                                            'yes'
                                       ? 'Team member assignment is not available for completed projects.'
                                       : details.project.status == 'Not Started'
                                       ? 'Review is marked as not applicable. Change to "Yes" to enable team member assignment.'
@@ -321,7 +321,7 @@ class _EmployeeProjectDetailsPageState
                       if (details.project.status == 'Not Started') ...[
                         ElevatedButton(
                           onPressed: () =>
-                              _handleReviewApplicableToggle(details, true),
+                              _handleReviewApplicableToggle(details, 'yes'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
                             padding: const EdgeInsets.symmetric(
@@ -338,7 +338,7 @@ class _EmployeeProjectDetailsPageState
                         const SizedBox(width: 8),
                         ElevatedButton(
                           onPressed: () =>
-                              _handleReviewApplicableToggle(details, false),
+                              _handleReviewApplicableToggle(details, 'no'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             padding: const EdgeInsets.symmetric(
@@ -362,11 +362,11 @@ class _EmployeeProjectDetailsPageState
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: details.project.isReviewApplicable == true
+                      color: details.project.isReviewApplicable == 'yes'
                           ? Colors.green.withOpacity(0.1)
                           : Colors.red.withOpacity(0.1),
                       border: Border.all(
-                        color: details.project.isReviewApplicable == true
+                        color: details.project.isReviewApplicable == 'yes'
                             ? Colors.green
                             : Colors.red,
                         width: 2,
@@ -374,9 +374,11 @@ class _EmployeeProjectDetailsPageState
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      details.project.isReviewApplicable == true ? 'Yes' : 'No',
+                      details.project.isReviewApplicable == 'yes'
+                          ? 'Yes'
+                          : 'No',
                       style: TextStyle(
-                        color: details.project.isReviewApplicable == true
+                        color: details.project.isReviewApplicable == 'yes'
                             ? Colors.green[800]
                             : Colors.red[800],
                         fontWeight: FontWeight.bold,
@@ -394,13 +396,13 @@ class _EmployeeProjectDetailsPageState
 
   Future<void> _handleReviewApplicableToggle(
     ProjectDetailsController details,
-    bool value,
+    String value,
   ) async {
     try {
       final projectService = Get.find<ProjectService>();
 
       // If toggling to No, set status to Completed
-      final newStatus = value ? details.project.status : 'Completed';
+      final newStatus = value == 'yes' ? details.project.status : 'Completed';
 
       final updatedProject = details.project.copyWith(
         isReviewApplicable: value,
@@ -415,7 +417,7 @@ class _EmployeeProjectDetailsPageState
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              value
+              value == 'yes'
                   ? 'Review marked as applicable'
                   : 'Review marked as not applicable - Project status changed to Completed',
             ),

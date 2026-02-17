@@ -8,6 +8,8 @@ class ProjectQuestion {
   final String text;
   final String? executorAnswer; // "Yes", "No", "NA", or null
   final String? executorRemark;
+  final String?
+  reviewerAnswer; // "Yes", "No", or null - the actual reviewer answer
   final String? reviewerStatus; // "Approved", "Rejected", or null
   final String? reviewerRemark;
 
@@ -16,6 +18,7 @@ class ProjectQuestion {
     required this.text,
     this.executorAnswer,
     this.executorRemark,
+    this.reviewerAnswer,
     this.reviewerStatus,
     this.reviewerRemark,
   });
@@ -27,6 +30,7 @@ class ProjectQuestion {
       text: json['text'] as String? ?? '',
       executorAnswer: json['executorAnswer'] as String?,
       executorRemark: json['executorRemark'] as String?,
+      reviewerAnswer: json['reviewerAnswer'] as String?,
       reviewerStatus: json['reviewerStatus'] as String?,
       reviewerRemark: json['reviewerRemark'] as String?,
     );
@@ -38,6 +42,7 @@ class ProjectQuestion {
     'text': text,
     'executorAnswer': executorAnswer,
     'executorRemark': executorRemark,
+    'reviewerAnswer': reviewerAnswer,
     'reviewerStatus': reviewerStatus,
     'reviewerRemark': reviewerRemark,
   };
@@ -48,6 +53,7 @@ class ProjectQuestion {
     String? text,
     String? executorAnswer,
     String? executorRemark,
+    String? reviewerAnswer,
     String? reviewerStatus,
     String? reviewerRemark,
   }) {
@@ -56,6 +62,7 @@ class ProjectQuestion {
       text: text ?? this.text,
       executorAnswer: executorAnswer ?? this.executorAnswer,
       executorRemark: executorRemark ?? this.executorRemark,
+      reviewerAnswer: reviewerAnswer ?? this.reviewerAnswer,
       reviewerStatus: reviewerStatus ?? this.reviewerStatus,
       reviewerRemark: reviewerRemark ?? this.reviewerRemark,
     );

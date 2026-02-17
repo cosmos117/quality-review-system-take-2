@@ -221,13 +221,76 @@ class _ProjectChecklistExecutionWidgetState
         final group = _checklist!.groups[index];
         final isExpanded = _expandedGroups.contains(group.id);
 
-        // Use defectCount from backend
-        int totalItems = group.questions.length;
-        for (final section in group.sections) {
-          totalItems += section.questions.length;
+        // FRESH CALCULATION: Count only current mismatches for THIS GROUP ONLY
+        int currentGroupDefects = 0;
+
+        // Count mismatches in direct questions
+        for (final question in group.questions) {
+          final hasExecutorAnswer =
+              question.executorAnswer != null &&
+              question.executorAnswer!.isNotEmpty;
+          final hasReviewerAnswer =
+              question.reviewerAnswer != null &&
+              question.reviewerAnswer!.isNotEmpty;
+
+          if (hasExecutorAnswer && hasReviewerAnswer) {
+            // Normalize answers for comparison (trim whitespace, case-insensitive)
+            final executorNormalized = question.executorAnswer!
+                .trim()
+                .toLowerCase();
+            final reviewerNormalized = question.reviewerAnswer!
+                .trim()
+                .toLowerCase();
+
+            debugPrint(
+              '${group.groupName} - Direct Q: "${question.text}" - Executor: "${question.executorAnswer}" (normalized: "$executorNormalized"), Reviewer: "${question.reviewerAnswer}" (normalized: "$reviewerNormalized")',
+            );
+
+            if (executorNormalized != reviewerNormalized) {
+              currentGroupDefects++;
+              debugPrint('  -> DEFECT COUNTED (mismatch)');
+            } else {
+              debugPrint('  -> Match - no defect');
+            }
+          }
         }
 
-        int defectCount = group.defectCount;
+        // Count mismatches in section questions
+        for (final section in group.sections) {
+          for (final question in section.questions) {
+            final hasExecutorAnswer =
+                question.executorAnswer != null &&
+                question.executorAnswer!.isNotEmpty;
+            final hasReviewerAnswer =
+                question.reviewerAnswer != null &&
+                question.reviewerAnswer!.isNotEmpty;
+
+            if (hasExecutorAnswer && hasReviewerAnswer) {
+              // Normalize answers for comparison (trim whitespace, case-insensitive)
+              final executorNormalized = question.executorAnswer!
+                  .trim()
+                  .toLowerCase();
+              final reviewerNormalized = question.reviewerAnswer!
+                  .trim()
+                  .toLowerCase();
+
+              debugPrint(
+                '${group.groupName} - Section Q (${section.sectionName}): "${question.text}" - Executor: "${question.executorAnswer}" (normalized: "$executorNormalized"), Reviewer: "${question.reviewerAnswer}" (normalized: "$reviewerNormalized")',
+              );
+
+              if (executorNormalized != reviewerNormalized) {
+                currentGroupDefects++;
+                debugPrint('  -> DEFECT COUNTED (mismatch)');
+              } else {
+                debugPrint('  -> Match - no defect');
+              }
+            }
+          }
+        }
+
+        debugPrint(
+          '>>> GROUP: ${group.groupName} - TOTAL DEFECTS: $currentGroupDefects <<<',
+        );
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -244,29 +307,29 @@ class _ProjectChecklistExecutionWidgetState
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Group defect count badge (cumulative)
+                // Group defect count badge (current mismatches ONLY for this group)
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: defectCount > 0
+                    color: currentGroupDefects > 0
                         ? Colors.red.shade100
                         : Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: defectCount > 0
+                      color: currentGroupDefects > 0
                           ? Colors.red.shade400
                           : Colors.grey.shade400,
                     ),
                   ),
                   child: Text(
-                    'Defects: $defectCount',
+                    'Defects: $currentGroupDefects',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: defectCount > 0
+                      color: currentGroupDefects > 0
                           ? Colors.red.shade900
                           : Colors.grey.shade700,
                     ),
@@ -729,12 +792,36 @@ class _SectionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Calculate defect metrics for section
+    // Calculate FRESH defect count: only count current answer mismatches
     int totalItems = section.questions.length;
-    int defectCount = section.questions
-        .where((q) => q.reviewerStatus == 'Rejected')
-        .length;
-    double defectRate = totalItems > 0 ? (defectCount / totalItems) * 100 : 0;
+    int currentSectionDefects = 0;
+
+    for (final question in section.questions) {
+      final hasExecutorAnswer =
+          question.executorAnswer != null &&
+          question.executorAnswer!.isNotEmpty;
+      final hasReviewerAnswer =
+          question.reviewerAnswer != null &&
+          question.reviewerAnswer!.isNotEmpty;
+
+      if (hasExecutorAnswer && hasReviewerAnswer) {
+        // Normalize answers for comparison (trim whitespace, case-insensitive)
+        final executorNormalized = question.executorAnswer!
+            .trim()
+            .toLowerCase();
+        final reviewerNormalized = question.reviewerAnswer!
+            .trim()
+            .toLowerCase();
+
+        if (executorNormalized != reviewerNormalized) {
+          currentSectionDefects++;
+        }
+      }
+    }
+
+    double defectRate = totalItems > 0
+        ? (currentSectionDefects / totalItems) * 100
+        : 0;
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -767,29 +854,29 @@ class _SectionTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Section defect stats
+                // Section defect stats (current mismatches only)
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: defectCount > 0
+                    color: currentSectionDefects > 0
                         ? Colors.orange.shade100
                         : Colors.green.shade100,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: defectCount > 0
+                      color: currentSectionDefects > 0
                           ? Colors.orange.shade300
                           : Colors.green.shade300,
                     ),
                   ),
                   child: Text(
-                    '${defectRate.toStringAsFixed(1)}% (${defectCount}/${totalItems})',
+                    '${defectRate.toStringAsFixed(1)}% (${currentSectionDefects}/${totalItems})',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: defectCount > 0
+                      color: currentSectionDefects > 0
                           ? Colors.orange.shade800
                           : Colors.green.shade800,
                     ),
