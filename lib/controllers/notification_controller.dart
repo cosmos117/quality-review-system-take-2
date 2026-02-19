@@ -183,26 +183,6 @@ class NotificationController extends GetxController {
         (status.contains('submitted') && status.contains('review'));
   }
 
-  bool _listMatchesUser(List<String> list, String? userId, String? userName) {
-    for (final value in list) {
-      if (_matchesUser(value, userId, userName)) return true;
-    }
-    return false;
-  }
-
-  bool _matchesUser(String? candidate, String? userId, String? userName) {
-    if (candidate == null) return false;
-    final normalized = candidate.trim().toLowerCase();
-    if (normalized.isEmpty) return false;
-    if (userId != null && normalized == userId.trim().toLowerCase()) {
-      return true;
-    }
-    if (userName != null && normalized == userName.trim().toLowerCase()) {
-      return true;
-    }
-    return false;
-  }
-
   String _getStageName(List<Map<String, dynamic>> stages, int phaseNumber) {
     if (stages.isEmpty) return 'Phase $phaseNumber';
 

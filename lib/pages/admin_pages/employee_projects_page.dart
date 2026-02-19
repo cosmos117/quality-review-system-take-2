@@ -4,7 +4,6 @@ import '../../controllers/projects_controller.dart';
 import '../../models/team_member.dart';
 import '../../models/project.dart';
 import '../../services/project_membership_service.dart';
-import '../../models/project_membership.dart';
 
 class EmployeeProjectsPage extends StatefulWidget {
   final TeamMember member;

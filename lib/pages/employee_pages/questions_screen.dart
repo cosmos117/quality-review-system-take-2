@@ -656,7 +656,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
             answer = reviewerSheet[key];
           }
 
-          if (answer != null && answer is Map<String, dynamic>) {
+          if (answer != null) {
             final categoryId = (answer['categoryId'] ?? '').toString();
             final severity = (answer['severity'] ?? '').toString();
 
@@ -1168,28 +1168,20 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                widget.projectTitle,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+        title: Text(
+          widget.projectTitle,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+          overflow: TextOverflow.ellipsis,
         ),
         backgroundColor: Colors.blue,
         actions: [
           // TeamLeader can only view - no approve/revert buttons needed anymore
           // Reviewer submission now auto-approves the phase
 
-          // Spacer to create gap before right-aligned items
-          const Spacer(),
           // Phase selector on the right
           DropdownButtonHideUnderline(
             child: DropdownButton<int>(
@@ -2026,229 +2018,5 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     final u = userName.trim().toLowerCase();
     if (u.contains('teamleader')) return true;
     return widget.leaders.map((e) => e.trim().toLowerCase()).contains(u);
-  }
-
-  // Show defect summary dialog when reviewer submits checklist
-  Future<Map<String, dynamic>?> _showReviewerSubmissionDialog(
-    BuildContext context,
-  ) async {
-    final remarkCtrl = TextEditingController();
-    String? selectedCategory;
-    String? selectedCategoryName; // Store the category name too
-    String? selectedSeverity;
-    final categories = _getAvailableCategories();
-    List<Map<String, dynamic>> suggestedCategories = [];
-    bool isLoadingSuggestions = false;
-    Timer? debounceTimer;
-
-    return showDialog<Map<String, dynamic>>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          // Auto-suggest on remark change
-          void onRemarkChanged(String text) {
-            debounceTimer?.cancel();
-            if (text.trim().length < 3) {
-              setDialogState(() {
-                suggestedCategories = [];
-                isLoadingSuggestions = false;
-              });
-              return;
-            }
-            setDialogState(() => isLoadingSuggestions = true);
-            debounceTimer = Timer(const Duration(milliseconds: 500), () async {
-              try {
-                final matched = categories
-                    .where((cat) {
-                      final name = (cat['name'] ?? '').toString().toLowerCase();
-                      final keywords =
-                          (cat['keywords'] as List<dynamic>?)
-                              ?.map((k) => k.toString().toLowerCase())
-                              .toList() ??
-                          [];
-                      final searchText = text.toLowerCase();
-                      return name.contains(searchText) ||
-                          keywords.any((k) => k.contains(searchText));
-                    })
-                    .take(5)
-                    .toList();
-                setDialogState(() {
-                  suggestedCategories = matched;
-                  isLoadingSuggestions = false;
-                });
-              } catch (e) {
-                setDialogState(() => isLoadingSuggestions = false);
-              }
-            });
-          }
-
-          return AlertDialog(
-            title: const Text('Reviewer Checklist Submission Summary'),
-            content: SingleChildScrollView(
-              child: SizedBox(
-                width: 450,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      controller: remarkCtrl,
-                      onChanged: onRemarkChanged,
-                      decoration: const InputDecoration(
-                        labelText: 'Remark (type to auto-suggest category)',
-                        hintText: 'Enter defect remarks',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 3,
-                    ),
-                    if (isLoadingSuggestions)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 8.0),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Fetching suggestions...',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                    if (suggestedCategories.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Suggested Categories:',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: suggestedCategories.map((cat) {
-                                final id = (cat['_id'] ?? '').toString();
-                                final name = (cat['name'] ?? '').toString();
-                                final isSelected = selectedCategory == id;
-                                return FilterChip(
-                                  label: Text(name),
-                                  selected: isSelected,
-                                  onSelected: (_) {
-                                    setDialogState(() {
-                                      selectedCategory = id;
-                                      selectedCategoryName = name;
-                                    });
-                                  },
-                                  backgroundColor: Colors.blue.shade50,
-                                  selectedColor: Colors.blue.shade200,
-                                );
-                              }).toList(),
-                            ),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Assigned Defect Category',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: selectedCategory,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        hintText: 'Select category',
-                      ),
-                      items: [
-                        const DropdownMenuItem(
-                          value: null,
-                          child: Text('None'),
-                        ),
-                        ...categories.map((cat) {
-                          final id = (cat['_id'] ?? '').toString();
-                          final name = (cat['name'] ?? 'Unknown').toString();
-                          return DropdownMenuItem(value: id, child: Text(name));
-                        }),
-                      ],
-                      onChanged: (val) {
-                        setDialogState(() {
-                          selectedCategory = val;
-                          // Find and store the category name
-                          if (val != null) {
-                            final cat = categories.firstWhere(
-                              (c) => (c['_id'] ?? '').toString() == val,
-                              orElse: () => {},
-                            );
-                            selectedCategoryName = (cat['name'] ?? '')
-                                .toString();
-                          } else {
-                            selectedCategoryName = null;
-                          }
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Severity',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: selectedSeverity,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        hintText: 'Select severity',
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: null, child: Text('None')),
-                        DropdownMenuItem(
-                          value: 'Critical',
-                          child: Text('Critical'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'Non-Critical',
-                          child: Text('Non-Critical'),
-                        ),
-                      ],
-                      onChanged: (val) =>
-                          setDialogState(() => selectedSeverity = val),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(null),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(ctx).pop({
-                    'remark': remarkCtrl.text.trim(),
-                    'category': selectedCategory,
-                    'categoryName': selectedCategoryName, // Save the name too
-                    'severity': selectedSeverity,
-                    'timestamp': DateTime.now().toIso8601String(),
-                  });
-                },
-                child: const Text('Submit'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
   }
 }
