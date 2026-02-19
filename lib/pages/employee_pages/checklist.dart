@@ -83,7 +83,7 @@ class Question {
 
       final groupId = (group['_id'] ?? '').toString();
       final groupName = (group['groupName'] ?? '').toString();
-      final defectCount = (group['defectCount'] ?? 0) as int;
+      final defectCount = (group['currentDefects'] ?? 0) as int;
       final subQuestions = <Map<String, String>>[];
 
       // Add direct questions in group
@@ -1089,19 +1089,22 @@ class ApprovalBanner extends StatelessWidget {
     }
 
     final cmp = match ? 'Answers match' : 'Answers differ';
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.info_outline, size: 18),
-          const SizedBox(width: 8),
-          Expanded(child: Text('$text • $cmp')),
-        ],
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.info_outline, size: 18),
+            const SizedBox(width: 8),
+            Text('$text • $cmp'),
+          ],
+        ),
       ),
     );
   }

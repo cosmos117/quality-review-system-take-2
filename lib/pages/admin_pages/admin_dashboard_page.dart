@@ -162,18 +162,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       );
     }
 
-    // ...
-
-    Widget priorityChip(String p) {
-      Color bg = const Color(0xFFEFF3F7);
-      if (p == 'High') bg = const Color(0xFFFBEFEF);
-      if (p == 'Low') bg = const Color(0xFFF5F7FA);
-      return Chip(
-        label: Text(p, style: const TextStyle(fontSize: 12)),
-        backgroundColor: bg,
-      );
-    }
-
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: SingleChildScrollView(
