@@ -19,14 +19,13 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
   String _sortKey = 'started';
-  bool _ascending = false; // default: newest first
-  final Set<String> _selectedStatuses = {}; // Start with no filters selected
+  bool _ascending = false;
+  final Set<String> _selectedStatuses = {};
 
   @override
   void initState() {
     super.initState();
     _ctrl = Get.find<ProjectsController>();
-    // Projects are automatically loaded via real-time stream in ProjectsController
   }
 
   @override
