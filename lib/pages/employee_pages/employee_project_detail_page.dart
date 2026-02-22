@@ -401,46 +401,39 @@ class _EmployeeProjectDetailsPageState
             details.project.reviewApplicableRemark!.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(left: 120, top: 8),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.05),
-                border: Border.all(color: Colors.red.withOpacity(0.3)),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.note_alt_outlined, size: 16, color: Colors.red[700]),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Remark:',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                            color: Colors.red[700],
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          details.project.reviewApplicableRemark!,
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                      ],
+            child: IntrinsicWidth(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 600),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade400),
+                  borderRadius: BorderRadius.circular(6),
+                  color: Colors.grey.shade50,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Remark: ',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
                     ),
-                  ),
-                ],
+                    Flexible(
+                      child: Text(
+                        details.project.reviewApplicableRemark!,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
       ],
     );
-  }
-                
   }
 
   Future<void> _handleReviewApplicableToggle(
