@@ -94,38 +94,68 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
   }
 
   Widget _buildFilterChip(String status) {
-    final isSelected = _selectedStatuses.contains(status);
-    return FilterChip(
-      label: Text(status),
-      selected: isSelected,
-      onSelected: (selected) {
-        setState(() {
-          if (selected) {
-            _selectedStatuses.add(status);
-          } else {
-            _selectedStatuses.remove(status);
-          }
-        });
+    return Builder(
+      builder: (context) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        double responsiveFontSize(double baseFontSize) =>
+            screenWidth * (baseFontSize / 1920) + 8;
+        double responsivePadding(double basePadding) =>
+            screenWidth * (basePadding / 1920);
+
+        final isSelected = _selectedStatuses.contains(status);
+        return FilterChip(
+          label: Text(
+            status,
+            style: TextStyle(fontSize: responsiveFontSize(5)),
+          ),
+          selected: isSelected,
+          onSelected: (selected) {
+            setState(() {
+              if (selected) {
+                _selectedStatuses.add(status);
+              } else {
+                _selectedStatuses.remove(status);
+              }
+            });
+          },
+          selectedColor: Colors.blue[100],
+          checkmarkColor: Colors.blue[800],
+          backgroundColor: Colors.grey[200],
+          labelStyle: TextStyle(
+            color: isSelected ? Colors.blue[900] : Colors.black87,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            fontSize: responsiveFontSize(5),
+          ),
+          padding: EdgeInsets.symmetric(
+            horizontal: responsivePadding(8),
+            vertical: responsivePadding(4),
+          ),
+        );
       },
-      selectedColor: Colors.blue[100],
-      checkmarkColor: Colors.blue[800],
-      backgroundColor: Colors.grey[200],
-      labelStyle: TextStyle(
-        color: isSelected ? Colors.blue[900] : Colors.black87,
-        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-        fontSize: 13,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    // Get screen dimensions for responsive sizing
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    // Responsive sizing helpers
+    double responsiveWidth(double baseWidth) =>
+        screenWidth * (baseWidth / 1920);
+    double responsiveHeight(double baseHeight) =>
+        screenHeight * (baseHeight / 1080);
+    double responsiveFontSize(double baseFontSize) =>
+        screenWidth * (baseFontSize / 1920) + 8;
+    double responsivePadding(double basePadding) =>
+        screenWidth * (basePadding / 1920);
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: EdgeInsets.all(responsivePadding(24.0)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -134,59 +164,63 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                 children: [
                   Text(
                     'Welcome Back!',
-                    style: Theme.of(context).textTheme.headlineMedium,
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontSize: responsiveFontSize(16),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: responsivePadding(16)),
               // Project Statistics
               const ProjectStatisticsCard(),
-              const SizedBox(height: 16),
+              SizedBox(height: responsivePadding(16)),
               // Search bar
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: const [
+                  borderRadius: BorderRadius.circular(responsivePadding(8)),
+                  boxShadow: [
                     BoxShadow(
                       color: Colors.black12,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
+                      blurRadius: responsivePadding(4),
+                      offset: Offset(0, responsivePadding(2)),
                     ),
                   ],
                 ),
                 child: TextField(
                   controller: _searchCtrl,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText:
                         'Search by title, status, priority, created by...',
-                    prefixIcon: Icon(Icons.search),
+                    hintStyle: TextStyle(fontSize: responsiveFontSize(6)),
+                    prefixIcon: Icon(Icons.search, size: responsiveFontSize(9)),
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 14,
+                      horizontal: responsivePadding(12),
+                      vertical: responsivePadding(14),
                     ),
                   ),
+                  style: TextStyle(fontSize: responsiveFontSize(6)),
                   onChanged: (v) => setState(() => _searchQuery = v),
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: responsivePadding(16)),
               // Status filter chips and Export button
               Row(
                 children: [
-                  const Text(
+                  Text(
                     'Filter by Status:',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: responsiveFontSize(6),
                       fontWeight: FontWeight.w600,
                       color: Colors.black87,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: responsivePadding(12)),
                   _buildFilterChip('Not Started'),
-                  const SizedBox(width: 8),
+                  SizedBox(width: responsivePadding(8)),
                   _buildFilterChip('In Progress'),
-                  const SizedBox(width: 8),
+                  SizedBox(width: responsivePadding(8)),
                   _buildFilterChip('Completed'),
                   const Spacer(),
                   // Export Master Excel Button
@@ -199,9 +233,9 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                               await exportCtrl.exportMasterExcel();
                             },
                       icon: exportCtrl.isExporting.value
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
+                          ? SizedBox(
+                              width: responsiveFontSize(8),
+                              height: responsiveFontSize(8),
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 valueColor: AlwaysStoppedAnimation<Color>(
@@ -209,22 +243,23 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                                 ),
                               ),
                             )
-                          : const Icon(Icons.download),
+                          : Icon(Icons.download, size: responsiveFontSize(8)),
                       label: Text(
                         exportCtrl.isExporting.value
                             ? 'Exporting...'
                             : 'Export Master Excel',
+                        style: TextStyle(fontSize: responsiveFontSize(6)),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green[600],
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: responsivePadding(16),
+                          vertical: responsivePadding(12),
                         ),
                       ),
                     );
                   }),
-                  const SizedBox(width: 8),
+                  SizedBox(width: responsivePadding(8)),
                   if (_selectedStatuses.isNotEmpty)
                     TextButton.icon(
                       onPressed: () {
@@ -232,15 +267,18 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                           _selectedStatuses.clear();
                         });
                       },
-                      icon: const Icon(Icons.clear, size: 16),
-                      label: const Text('Clear Filters'),
+                      icon: Icon(Icons.clear, size: responsiveFontSize(7)),
+                      label: Text(
+                        'Clear Filters',
+                        style: TextStyle(fontSize: responsiveFontSize(6)),
+                      ),
                       style: TextButton.styleFrom(
                         foregroundColor: Colors.blue[700],
                       ),
                     ),
                 ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: responsivePadding(16)),
               // Tabular layout using ListView + Rows
               Obx(() {
                 final allProjects = _visibleProjects;
@@ -274,13 +312,14 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                       startIndex,
                       endIndex,
                       totalPages,
+                      context,
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: responsivePadding(12)),
                     // Single horizontal scrollbar wrapping the entire table
                     Scrollbar(
                       controller: _horizontalScrollController,
                       thumbVisibility: true,
-                      thickness: 10.0,
+                      thickness: responsivePadding(10.0),
                       child: SingleChildScrollView(
                         controller: _horizontalScrollController,
                         scrollDirection: Axis.horizontal,
@@ -288,128 +327,134 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                           children: [
                             // Header row
                             Container(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 12,
-                                horizontal: 16,
+                              padding: EdgeInsets.symmetric(
+                                vertical: responsivePadding(12),
+                                horizontal: responsivePadding(16),
                               ),
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: BorderRadius.circular(6),
-                                boxShadow: const [
+                                borderRadius: BorderRadius.circular(
+                                  responsivePadding(6),
+                                ),
+                                boxShadow: [
                                   BoxShadow(
                                     color: Colors.black12,
-                                    blurRadius: 4,
-                                    offset: Offset(0, 2),
+                                    blurRadius: responsivePadding(4),
+                                    offset: Offset(0, responsivePadding(2)),
                                   ),
                                 ],
                               ),
                               child: Row(
                                 children: [
                                   SizedBox(
-                                    width: 150,
-                                    child: const Text(
+                                    width: responsiveWidth(150),
+                                    child: Text(
                                       'Project No.',
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
                                         color: Colors.blueGrey,
-                                        fontSize: 13,
+                                        fontSize: responsiveFontSize(5),
                                       ),
                                     ),
                                   ),
                                   SizedBox(
-                                    width: 250,
-                                    child: const Text(
+                                    width: responsiveWidth(250),
+                                    child: Text(
                                       'Project Title',
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
                                         color: Colors.blueGrey,
-                                        fontSize: 13,
+                                        fontSize: responsiveFontSize(5),
                                       ),
                                     ),
                                   ),
                                   SizedBox(
-                                    width: 150,
-                                    child: const Text(
+                                    width: responsiveWidth(150),
+                                    child: Text(
                                       'Team Leader',
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
                                         color: Colors.blueGrey,
-                                        fontSize: 13,
+                                        fontSize: responsiveFontSize(5),
                                       ),
                                     ),
                                   ),
                                   SizedBox(
-                                    width: 180,
-                                    child: const Text(
+                                    width: responsiveWidth(180),
+                                    child: Text(
                                       'Executors',
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
                                         color: Colors.blueGrey,
-                                        fontSize: 13,
+                                        fontSize: responsiveFontSize(5),
                                       ),
                                     ),
                                   ),
                                   SizedBox(
-                                    width: 180,
-                                    child: const Text(
+                                    width: responsiveWidth(180),
+                                    child: Text(
                                       'Reviewers',
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
                                         color: Colors.blueGrey,
-                                        fontSize: 13,
+                                        fontSize: responsiveFontSize(5),
                                       ),
                                     ),
                                   ),
                                   SizedBox(
-                                    width: 120,
+                                    width: responsiveWidth(120),
                                     child: _HeaderCell(
                                       label: 'Defect Rate',
                                       active: _sortKey == 'defectRate',
                                       ascending: _ascending,
                                       onTap: () => _toggleSort('defectRate'),
+                                      fontSize: responsiveFontSize(5),
                                     ),
                                   ),
                                   SizedBox(
-                                    width: 120,
+                                    width: responsiveWidth(120),
                                     child: _HeaderCell(
                                       label: 'Started',
                                       active: _sortKey == 'started',
                                       ascending: _ascending,
                                       onTap: () => _toggleSort('started'),
+                                      fontSize: responsiveFontSize(5),
                                     ),
                                   ),
                                   SizedBox(
-                                    width: 120,
+                                    width: responsiveWidth(120),
                                     child: _HeaderCell(
                                       label: 'Priority',
                                       active: _sortKey == 'priority',
                                       ascending: _ascending,
                                       onTap: () => _toggleSort('priority'),
+                                      fontSize: responsiveFontSize(5),
                                     ),
                                   ),
                                   SizedBox(
-                                    width: 120,
+                                    width: responsiveWidth(120),
                                     child: _HeaderCell(
                                       label: 'Status',
                                       active: _sortKey == 'status',
                                       ascending: _ascending,
                                       onTap: () => _toggleSort('status'),
+                                      fontSize: responsiveFontSize(5),
                                     ),
                                   ),
                                   SizedBox(
-                                    width: 150,
-                                    child: const Text(
+                                    width: responsiveWidth(150),
+                                    child: Text(
                                       'Created By',
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
                                         color: Colors.blueGrey,
-                                        fontSize: 13,
+                                        fontSize: responsiveFontSize(5),
                                       ),
                                     ),
                                   ),
@@ -417,11 +462,14 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            SizedBox(height: responsivePadding(8)),
                             // Project rows without individual scrollbars
                             ...projects
                                 .map(
-                                  (proj) => _EmployeeProjectCard(project: proj),
+                                  (proj) => _EmployeeProjectCard(
+                                    project: proj,
+                                    context: context,
+                                  ),
                                 )
                                 .toList(),
                           ],
@@ -445,17 +493,27 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
     int start,
     int end,
     int totalPages,
+    BuildContext context,
   ) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    double responsiveFontSize(double baseFontSize) =>
+        screenWidth * (baseFontSize / 1920) + 8;
+    double responsivePadding(double basePadding) =>
+        screenWidth * (basePadding / 1920);
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.start,
       children: [
         Text(
           total > 0 ? '${start + 1}-$end of $total' : '0 of 0',
-          style: const TextStyle(fontSize: 13, color: Colors.black87),
+          style: TextStyle(
+            fontSize: responsiveFontSize(5),
+            color: Colors.black87,
+          ),
         ),
-        const SizedBox(width: 16),
+        SizedBox(width: responsivePadding(16)),
         IconButton(
-          icon: const Icon(Icons.chevron_left, size: 20),
+          icon: Icon(Icons.chevron_left, size: responsiveFontSize(9)),
           onPressed: _currentPage > 1
               ? () {
                   setState(() {
@@ -467,9 +525,9 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: responsivePadding(8)),
         IconButton(
-          icon: const Icon(Icons.chevron_right, size: 20),
+          icon: Icon(Icons.chevron_right, size: responsiveFontSize(9)),
           onPressed: _currentPage < totalPages
               ? () {
                   setState(() {
@@ -488,8 +546,9 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
 
 class _EmployeeProjectCard extends StatefulWidget {
   final Project project;
+  final BuildContext context;
 
-  const _EmployeeProjectCard({required this.project});
+  const _EmployeeProjectCard({required this.project, required this.context});
 
   @override
   State<_EmployeeProjectCard> createState() => _EmployeeProjectCardState();
@@ -540,17 +599,29 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
   }
 
   Widget _priorityChip(String p) {
+    final screenWidth = MediaQuery.of(widget.context).size.width;
+    double responsiveFontSize(double baseFontSize) =>
+        screenWidth * (baseFontSize / 1920) + 8;
+
     Color bg = const Color(0xFFEFF3F7);
     if (p == 'High') bg = const Color(0xFFFBEFEF);
     if (p == 'Low') bg = const Color(0xFFF5F7FA);
     return Chip(
-      label: Text(p, style: const TextStyle(fontSize: 12)),
+      label: Text(p, style: TextStyle(fontSize: responsiveFontSize(4))),
       backgroundColor: bg,
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(widget.context).size.width;
+    double responsiveWidth(double baseWidth) =>
+        screenWidth * (baseWidth / 1920);
+    double responsiveFontSize(double baseFontSize) =>
+        screenWidth * (baseFontSize / 1920) + 8;
+    double responsivePadding(double basePadding) =>
+        screenWidth * (basePadding / 1920);
+
     final executor =
         (widget.project.status == 'In Progress' ||
             widget.project.status == 'Completed')
@@ -572,11 +643,14 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           curve: Curves.easeOut,
-          margin: const EdgeInsets.only(bottom: 6),
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+          margin: EdgeInsets.only(bottom: responsivePadding(6)),
+          padding: EdgeInsets.symmetric(
+            vertical: responsivePadding(10),
+            horizontal: responsivePadding(16),
+          ),
           decoration: BoxDecoration(
             color: _isHovered ? const Color(0xFFF7F9FC) : Colors.white,
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(responsivePadding(6)),
             border: Border.all(
               color: _isHovered ? Colors.blue.shade300 : Colors.grey.shade300,
               width: _isHovered ? 1.5 : 1,
@@ -585,8 +659,8 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
                 ? [
                     BoxShadow(
                       color: Colors.blue.shade100.withOpacity(0.5),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+                      blurRadius: responsivePadding(8),
+                      offset: Offset(0, responsivePadding(2)),
                     ),
                   ]
                 : null,
@@ -597,25 +671,27 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
           child: Row(
             children: [
               SizedBox(
-                width: 150,
+                width: responsiveWidth(150),
                 child: Text(
                   (widget.project.projectNo?.trim().isNotEmpty ?? false)
                       ? widget.project.projectNo!.trim()
                       : '--',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: responsiveFontSize(5)),
                 ),
               ),
               SizedBox(
-                width: 250,
+                width: responsiveWidth(250),
                 child: Text(
                   widget.project.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: responsiveFontSize(5)),
                 ),
               ),
               SizedBox(
-                width: 150,
+                width: responsiveWidth(150),
                 child: Text(
                   _loadingMembers
                       ? 'Loading...'
@@ -624,11 +700,11 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
                       : _teamLeaders.join(', '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13),
+                  style: TextStyle(fontSize: responsiveFontSize(5)),
                 ),
               ),
               SizedBox(
-                width: 180,
+                width: responsiveWidth(180),
                 child: Text(
                   _loadingMembers
                       ? 'Loading...'
@@ -637,11 +713,11 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
                       : _executors.join(', '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13),
+                  style: TextStyle(fontSize: responsiveFontSize(5)),
                 ),
               ),
               SizedBox(
-                width: 180,
+                width: responsiveWidth(180),
                 child: Text(
                   _loadingMembers
                       ? 'Loading...'
@@ -650,11 +726,11 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
                       : _reviewers.join(', '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13),
+                  style: TextStyle(fontSize: responsiveFontSize(5)),
                 ),
               ),
               SizedBox(
-                width: 120,
+                width: responsiveWidth(120),
                 child: Text(
                   widget.project.overallDefectRate != null
                       ? '${widget.project.overallDefectRate!.toStringAsFixed(1)}%'
@@ -662,7 +738,7 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: responsiveFontSize(5),
                     color: (widget.project.overallDefectRate ?? 0) > 10
                         ? Colors.red
                         : Colors.black87,
@@ -673,30 +749,37 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
                 ),
               ),
               SizedBox(
-                width: 120,
+                width: responsiveWidth(120),
                 child: Text(
                   '${widget.project.started.year}-${widget.project.started.month.toString().padLeft(2, '0')}-${widget.project.started.day.toString().padLeft(2, '0')}',
+                  style: TextStyle(fontSize: responsiveFontSize(5)),
                 ),
               ),
               SizedBox(
-                width: 120,
+                width: responsiveWidth(120),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: _priorityChip(widget.project.priority),
                 ),
               ),
               SizedBox(
-                width: 120,
+                width: responsiveWidth(120),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Text((widget.project.status).toString()),
+                  child: Text(
+                    (widget.project.status).toString(),
+                    style: TextStyle(fontSize: responsiveFontSize(5)),
+                  ),
                 ),
               ),
               SizedBox(
-                width: 150,
+                width: responsiveWidth(150),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Text(executor),
+                  child: Text(
+                    executor,
+                    style: TextStyle(fontSize: responsiveFontSize(5)),
+                  ),
                 ),
               ),
             ],
@@ -969,11 +1052,14 @@ class _HeaderCell extends StatelessWidget {
   final bool active;
   final bool ascending;
   final VoidCallback onTap;
+  final double fontSize;
+
   const _HeaderCell({
     required this.label,
     required this.active,
     required this.ascending,
     required this.onTap,
+    required this.fontSize,
   });
 
   @override
@@ -995,12 +1081,12 @@ class _HeaderCell extends StatelessWidget {
             style: TextStyle(
               fontWeight: FontWeight.w600,
               color: color,
-              fontSize: 13,
+              fontSize: fontSize,
             ),
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(width: 4),
-          Icon(icon, size: 16, color: color),
+          Icon(icon, size: fontSize + 3, color: color),
         ],
       ),
     );
