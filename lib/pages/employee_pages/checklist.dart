@@ -11,12 +11,10 @@ import 'checklist_controller.dart';
 import '../../services/phase_checklist_service.dart';
 import '../../services/iteration_service.dart';
 
-// import '../../config/api_config.dart';
-// Simple backend base URL for uploads; adjust if needed
-const String _backendBaseUrl = String.fromEnvironment(
-  'API_BASE_URL',
-  defaultValue: 'http://localhost:8000',
-);
+import '../../config/api_config.dart';
+
+// Backend base URL for uploads; uses ApiConfig as single source of truth
+String get _imageBaseUrl => ApiConfig.baseUrl;
 
 enum UploadStatus { pending, uploading, success, failed }
 
@@ -1554,7 +1552,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
             final req = await http.MultipartRequest(
               'POST',
               Uri.parse(
-                '$_backendBaseUrl/api/v1/images/${widget.checkpointId ?? widget.subQuestion}?role=${widget.role}',
+                '$_imageBaseUrl/images/${widget.checkpointId ?? widget.subQuestion}?role=${widget.role}',
               ),
             );
             req.files.add(
@@ -1571,7 +1569,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
             }
           } catch (_) {}
         }
-        setState(() => _images = uploaded);
+        setState(() => _images = [..._images, ...uploaded]);
         await _updateAnswer();
       }
     } catch (e) {
@@ -2028,7 +2026,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                                   fit: BoxFit.cover,
                                 )
                               : Image.network(
-                                  '$_backendBaseUrl/api/v1/images/file/$fileId',
+                                  '$_imageBaseUrl/images/file/$fileId',
                                   width: 100,
                                   height: 100,
                                   fit: BoxFit.cover,
@@ -2125,7 +2123,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                                   if (confirmed == true) {
                                     await http.delete(
                                       Uri.parse(
-                                        '$_backendBaseUrl/api/v1/images/file/$fileId',
+                                        '$_imageBaseUrl/images/file/$fileId',
                                       ),
                                     );
                                     // Remove from local list only after deletion confirmed
@@ -2201,8 +2199,50 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
           image = Image.memory(bytes, fit: BoxFit.contain);
         } else if (fileId != null && fileId.isNotEmpty) {
           image = Image.network(
-            '$_backendBaseUrl/api/v1/images/file/$fileId',
+            '$_imageBaseUrl/images/file/$fileId',
             fit: BoxFit.contain,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Center(
+                child: CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded /
+                            loadingProgress.expectedTotalBytes!
+                      : null,
+                  color: Colors.white,
+                ),
+              );
+            },
+            errorBuilder: (_, error, ___) {
+              if (kDebugMode) {
+                print('❌ Image viewer failed to load $fileId: $error');
+              }
+              return Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.broken_image,
+                      color: Colors.white54,
+                      size: 64,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Failed to load image',
+                      style: TextStyle(color: Colors.white70, fontSize: 16),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'File: ${name ?? fileId}',
+                      style: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           );
         } else {
           image = const SizedBox.shrink();
