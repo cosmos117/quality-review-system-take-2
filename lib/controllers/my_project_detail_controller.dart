@@ -37,7 +37,11 @@ class MyProjectDetailController extends GetxController {
           project.value.id,
         );
         teamLeaders.value = memberships
-            .where((m) => (m.roleName?.toLowerCase() ?? '') == 'teamleader')
+            .where(
+              (m) =>
+                  (m.roleName?.toLowerCase() ?? '').replaceAll(' ', '') ==
+                  'teamleader',
+            )
             .toList();
         executors.value = memberships
             .where((m) => (m.roleName?.toLowerCase() ?? '') == 'executor')

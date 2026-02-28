@@ -180,7 +180,9 @@ class ExcelExportService {
 
     final projectLeader = memberships
         .firstWhereOrNull(
-          (m) => (m.roleName?.toLowerCase() ?? '') == 'teamleader',
+          (m) =>
+              (m.roleName?.toLowerCase() ?? '').replaceAll(' ', '') ==
+              'teamleader',
         )
         ?.userName;
 

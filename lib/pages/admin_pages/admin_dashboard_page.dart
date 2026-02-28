@@ -534,7 +534,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                               child: Row(
                                 children: [
                                   SizedBox(
-                                    width: responsiveWidth(150),
+                                    width: responsiveWidth(200),
                                     child: Text(
                                       'Project No.',
                                       overflow: TextOverflow.ellipsis,
@@ -546,7 +546,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                     ),
                                   ),
                                   SizedBox(
-                                    width: responsiveWidth(250),
+                                    width: responsiveWidth(300),
                                     child: Text(
                                       'Project Title',
                                       overflow: TextOverflow.ellipsis,
@@ -969,7 +969,6 @@ class _AdminProjectCard extends StatefulWidget {
 }
 
 class _AdminProjectCardState extends State<_AdminProjectCard> {
-  bool _isHovered = false;
   bool _loadingMembers = false;
   List<String> _teamLeaders = [];
   List<String> _executors = [];
@@ -991,7 +990,13 @@ class _AdminProjectCardState extends State<_AdminProjectCard> {
         if (mounted) {
           setState(() {
             _teamLeaders = memberships
-                .where((m) => (m.roleName?.toLowerCase() ?? '') == 'teamleader')
+                .where((m) {
+                  final role = (m.roleName?.toLowerCase() ?? '').replaceAll(
+                    ' ',
+                    '',
+                  );
+                  return role == 'teamleader';
+                })
                 .map((m) => m.userName ?? 'Unknown')
                 .toList();
             _executors = memberships
@@ -1036,150 +1041,131 @@ class _AdminProjectCardState extends State<_AdminProjectCard> {
     double responsivePadding(double basePadding) =>
         screenWidth * (basePadding / 1920);
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: () => Get.to(
-          () => AdminProjectDetailsPage(
-            project: widget.project,
-            descriptionOverride: widget.project.description,
-          ),
+    return InkWell(
+      onTap: () => Get.to(
+        () => AdminProjectDetailsPage(
+          project: widget.project,
+          descriptionOverride: widget.project.description,
         ),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          margin: EdgeInsets.only(bottom: responsivePadding(6)),
-          padding: EdgeInsets.symmetric(
-            vertical: responsivePadding(10),
-            horizontal: responsivePadding(16),
-          ),
-          decoration: BoxDecoration(
-            color: _isHovered ? const Color(0xFFF7F9FC) : Colors.white,
-            borderRadius: BorderRadius.circular(responsivePadding(6)),
-            border: Border.all(
-              color: _isHovered ? Colors.blue.shade300 : Colors.grey.shade300,
-              width: _isHovered ? 1.5 : 1,
+      ),
+      hoverColor: const Color(0xFFF7F9FC),
+      borderRadius: BorderRadius.circular(responsivePadding(6)),
+      child: Container(
+        margin: EdgeInsets.only(bottom: responsivePadding(6)),
+        padding: EdgeInsets.symmetric(
+          vertical: responsivePadding(10),
+          horizontal: responsivePadding(16),
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(responsivePadding(6)),
+          border: Border.all(color: Colors.grey.shade300, width: 1),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: responsiveWidth(200),
+              child: Text(
+                (widget.project.projectNo?.trim().isNotEmpty ?? false)
+                    ? widget.project.projectNo!.trim()
+                    : '--',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: responsiveFontSize(5)),
+              ),
             ),
-            boxShadow: _isHovered
-                ? [
-                    BoxShadow(
-                      color: Colors.blue.shade100.withOpacity(0.5),
-                      blurRadius: responsivePadding(8),
-                      offset: Offset(0, responsivePadding(2)),
-                    ),
-                  ]
-                : null,
-          ),
-          transform: _isHovered
-              ? (Matrix4.identity()..translate(0.0, -2.0))
-              : Matrix4.identity(),
-          child: Row(
-            children: [
-              SizedBox(
-                width: responsiveWidth(150),
+            SizedBox(
+              width: responsiveWidth(300),
+              child: Text(
+                widget.project.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: responsiveFontSize(5)),
+              ),
+            ),
+            SizedBox(
+              width: responsiveWidth(150),
+              child: Text(
+                _loadingMembers
+                    ? 'Loading...'
+                    : _teamLeaders.isEmpty
+                    ? '--'
+                    : _teamLeaders.join(', '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: responsiveFontSize(5)),
+              ),
+            ),
+            SizedBox(
+              width: responsiveWidth(180),
+              child: Text(
+                _loadingMembers
+                    ? 'Loading...'
+                    : _executors.isEmpty
+                    ? '--'
+                    : _executors.join(', '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: responsiveFontSize(5)),
+              ),
+            ),
+            SizedBox(
+              width: responsiveWidth(180),
+              child: Text(
+                _loadingMembers
+                    ? 'Loading...'
+                    : _reviewers.isEmpty
+                    ? '--'
+                    : _reviewers.join(', '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: responsiveFontSize(5)),
+              ),
+            ),
+            SizedBox(
+              width: responsiveWidth(120),
+              child: Text(
+                widget.project.overallDefectRate != null
+                    ? '${widget.project.overallDefectRate!.toStringAsFixed(1)}%'
+                    : '--',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: responsiveFontSize(5),
+                  color: widget.project.overallDefectRate != null
+                      ? Colors.red
+                      : Colors.black87,
+                  fontWeight: widget.project.overallDefectRate != null
+                      ? FontWeight.w600
+                      : FontWeight.normal,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: responsiveWidth(120),
+              child: Text(
+                '${widget.project.started.year}-${widget.project.started.month.toString().padLeft(2, '0')}-${widget.project.started.day.toString().padLeft(2, '0')}',
+                style: TextStyle(fontSize: responsiveFontSize(5)),
+              ),
+            ),
+            SizedBox(
+              width: responsiveWidth(120),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: priorityChip(widget.project.priority, widget.context),
+              ),
+            ),
+            SizedBox(
+              width: responsiveWidth(120),
+              child: Align(
+                alignment: Alignment.centerLeft,
                 child: Text(
-                  (widget.project.projectNo?.trim().isNotEmpty ?? false)
-                      ? widget.project.projectNo!.trim()
-                      : '--',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  (widget.project.status).toString(),
                   style: TextStyle(fontSize: responsiveFontSize(5)),
                 ),
               ),
-              SizedBox(
-                width: responsiveWidth(250),
-                child: Text(
-                  widget.project.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: responsiveFontSize(5)),
-                ),
-              ),
-              SizedBox(
-                width: responsiveWidth(150),
-                child: Text(
-                  _loadingMembers
-                      ? 'Loading...'
-                      : _teamLeaders.isEmpty
-                      ? '--'
-                      : _teamLeaders.join(', '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: responsiveFontSize(5)),
-                ),
-              ),
-              SizedBox(
-                width: responsiveWidth(180),
-                child: Text(
-                  _loadingMembers
-                      ? 'Loading...'
-                      : _executors.isEmpty
-                      ? '--'
-                      : _executors.join(', '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: responsiveFontSize(5)),
-                ),
-              ),
-              SizedBox(
-                width: responsiveWidth(180),
-                child: Text(
-                  _loadingMembers
-                      ? 'Loading...'
-                      : _reviewers.isEmpty
-                      ? '--'
-                      : _reviewers.join(', '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: responsiveFontSize(5)),
-                ),
-              ),
-              SizedBox(
-                width: responsiveWidth(120),
-                child: Text(
-                  widget.project.overallDefectRate != null
-                      ? '${widget.project.overallDefectRate!.toStringAsFixed(1)}%'
-                      : '--',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: responsiveFontSize(5),
-                    color: (widget.project.overallDefectRate ?? 0) > 10
-                        ? Colors.red
-                        : Colors.black87,
-                    fontWeight: (widget.project.overallDefectRate ?? 0) > 10
-                        ? FontWeight.w600
-                        : FontWeight.normal,
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: responsiveWidth(120),
-                child: Text(
-                  '${widget.project.started.year}-${widget.project.started.month.toString().padLeft(2, '0')}-${widget.project.started.day.toString().padLeft(2, '0')}',
-                  style: TextStyle(fontSize: responsiveFontSize(5)),
-                ),
-              ),
-              SizedBox(
-                width: responsiveWidth(120),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: priorityChip(widget.project.priority, widget.context),
-                ),
-              ),
-              SizedBox(
-                width: responsiveWidth(120),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    (widget.project.status).toString(),
-                    style: TextStyle(fontSize: responsiveFontSize(5)),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

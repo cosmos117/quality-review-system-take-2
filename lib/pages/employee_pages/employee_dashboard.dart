@@ -6,6 +6,7 @@ import '../../controllers/projects_controller.dart';
 import '../../controllers/team_controller.dart';
 import '../../controllers/export_controller.dart';
 import '../../components/project_statistics_card.dart';
+import '../../components/employee_performance_card.dart';
 import '../../services/project_membership_service.dart';
 
 class EmployeeDashboard extends StatefulWidget {
@@ -171,37 +172,82 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                 ],
               ),
               SizedBox(height: responsivePadding(16)),
-              // Project Statistics
-              const ProjectStatisticsCard(),
-              SizedBox(height: responsivePadding(16)),
-              // Search bar
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(responsivePadding(8)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: responsivePadding(4),
-                      offset: Offset(0, responsivePadding(2)),
-                    ),
-                  ],
-                ),
-                child: TextField(
-                  controller: _searchCtrl,
-                  decoration: InputDecoration(
-                    hintText:
-                        'Search by title, status, priority, created by...',
-                    hintStyle: TextStyle(fontSize: responsiveFontSize(6)),
-                    prefixIcon: Icon(Icons.search, size: responsiveFontSize(9)),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: responsivePadding(12),
-                      vertical: responsivePadding(14),
+              // Project Statistics and Performance in same row
+              Row(
+                children: [
+                  Expanded(flex: 3, child: const ProjectStatisticsCard()),
+                  SizedBox(width: responsivePadding(16)),
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 4,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Performance as',
+                            style: TextStyle(
+                              fontSize: responsiveFontSize(6),
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          SizedBox(height: responsivePadding(12)),
+                          const EmployeePerformanceCard(),
+                        ],
+                      ),
                     ),
                   ),
-                  style: TextStyle(fontSize: responsiveFontSize(6)),
-                  onChanged: (v) => setState(() => _searchQuery = v),
+                ],
+              ),
+              SizedBox(height: responsivePadding(16)),
+              // Search bar
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: responsiveWidth(1400)),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(responsivePadding(8)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: responsivePadding(4),
+                        offset: Offset(0, responsivePadding(2)),
+                      ),
+                    ],
+                  ),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    textAlignVertical: TextAlignVertical.center,
+                    decoration: InputDecoration(
+                      hintText:
+                          'Search by title, status, priority, created by...',
+                      hintStyle: TextStyle(fontSize: responsiveFontSize(6)),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        size: responsiveFontSize(9),
+                      ),
+                      isDense: true,
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: responsivePadding(12),
+                        vertical: responsivePadding(14),
+                      ),
+                    ),
+                    style: TextStyle(fontSize: responsiveFontSize(6)),
+                    onChanged: (v) => setState(() => _searchQuery = v),
+                  ),
                 ),
               ),
               SizedBox(height: responsivePadding(16)),
@@ -347,7 +393,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                               child: Row(
                                 children: [
                                   SizedBox(
-                                    width: responsiveWidth(150),
+                                    width: responsiveWidth(200),
                                     child: Text(
                                       'Project No.',
                                       overflow: TextOverflow.ellipsis,
@@ -359,7 +405,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                                     ),
                                   ),
                                   SizedBox(
-                                    width: responsiveWidth(250),
+                                    width: responsiveWidth(300),
                                     child: Text(
                                       'Project Title',
                                       overflow: TextOverflow.ellipsis,
@@ -444,18 +490,6 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                                       ascending: _ascending,
                                       onTap: () => _toggleSort('status'),
                                       fontSize: responsiveFontSize(5),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(150),
-                                    child: Text(
-                                      'Created By',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.blueGrey,
-                                        fontSize: responsiveFontSize(5),
-                                      ),
                                     ),
                                   ),
                                   // Actions column removed (moved to details page)
@@ -555,7 +589,6 @@ class _EmployeeProjectCard extends StatefulWidget {
 }
 
 class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
-  bool _isHovered = false;
   bool _loadingMembers = false;
   List<String> _teamLeaders = [];
   List<String> _executors = [];
@@ -577,7 +610,11 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
         if (mounted) {
           setState(() {
             _teamLeaders = memberships
-                .where((m) => (m.roleName?.toLowerCase() ?? '') == 'teamleader')
+                .where(
+                  (m) =>
+                      (m.roleName?.toLowerCase() ?? '').replaceAll(' ', '') ==
+                      'teamleader',
+                )
                 .map((m) => m.userName ?? 'Unknown')
                 .toList();
             _executors = memberships
@@ -630,160 +667,131 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
               : '--')
         : '--';
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: () => Get.to(
-          () => EmployeeProjectDetailPage(
-            project: widget.project,
-            description: widget.project.description,
-          ),
+    return InkWell(
+      onTap: () => Get.to(
+        () => EmployeeProjectDetailPage(
+          project: widget.project,
+          description: widget.project.description,
         ),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          margin: EdgeInsets.only(bottom: responsivePadding(6)),
-          padding: EdgeInsets.symmetric(
-            vertical: responsivePadding(10),
-            horizontal: responsivePadding(16),
-          ),
-          decoration: BoxDecoration(
-            color: _isHovered ? const Color(0xFFF7F9FC) : Colors.white,
-            borderRadius: BorderRadius.circular(responsivePadding(6)),
-            border: Border.all(
-              color: _isHovered ? Colors.blue.shade300 : Colors.grey.shade300,
-              width: _isHovered ? 1.5 : 1,
+      ),
+      hoverColor: const Color(0xFFF7F9FC),
+      borderRadius: BorderRadius.circular(responsivePadding(6)),
+      child: Container(
+        margin: EdgeInsets.only(bottom: responsivePadding(6)),
+        padding: EdgeInsets.symmetric(
+          vertical: responsivePadding(10),
+          horizontal: responsivePadding(16),
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(responsivePadding(6)),
+          border: Border.all(color: Colors.grey.shade300, width: 1),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: responsiveWidth(200),
+              child: Text(
+                (widget.project.projectNo?.trim().isNotEmpty ?? false)
+                    ? widget.project.projectNo!.trim()
+                    : '--',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: responsiveFontSize(5)),
+              ),
             ),
-            boxShadow: _isHovered
-                ? [
-                    BoxShadow(
-                      color: Colors.blue.shade100.withOpacity(0.5),
-                      blurRadius: responsivePadding(8),
-                      offset: Offset(0, responsivePadding(2)),
-                    ),
-                  ]
-                : null,
-          ),
-          transform: _isHovered
-              ? (Matrix4.identity()..translate(0.0, -2.0))
-              : Matrix4.identity(),
-          child: Row(
-            children: [
-              SizedBox(
-                width: responsiveWidth(150),
+            SizedBox(
+              width: responsiveWidth(300),
+              child: Text(
+                widget.project.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: responsiveFontSize(5)),
+              ),
+            ),
+            SizedBox(
+              width: responsiveWidth(150),
+              child: Text(
+                _loadingMembers
+                    ? 'Loading...'
+                    : _teamLeaders.isEmpty
+                    ? '--'
+                    : _teamLeaders.join(', '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: responsiveFontSize(5)),
+              ),
+            ),
+            SizedBox(
+              width: responsiveWidth(180),
+              child: Text(
+                _loadingMembers
+                    ? 'Loading...'
+                    : _executors.isEmpty
+                    ? '--'
+                    : _executors.join(', '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: responsiveFontSize(5)),
+              ),
+            ),
+            SizedBox(
+              width: responsiveWidth(180),
+              child: Text(
+                _loadingMembers
+                    ? 'Loading...'
+                    : _reviewers.isEmpty
+                    ? '--'
+                    : _reviewers.join(', '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: responsiveFontSize(5)),
+              ),
+            ),
+            SizedBox(
+              width: responsiveWidth(120),
+              child: Text(
+                widget.project.overallDefectRate != null
+                    ? '${widget.project.overallDefectRate!.toStringAsFixed(1)}%'
+                    : '--',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: responsiveFontSize(5),
+                  color: widget.project.overallDefectRate != null
+                      ? Colors.red
+                      : Colors.black87,
+                  fontWeight: widget.project.overallDefectRate != null
+                      ? FontWeight.w600
+                      : FontWeight.normal,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: responsiveWidth(120),
+              child: Text(
+                '${widget.project.started.year}-${widget.project.started.month.toString().padLeft(2, '0')}-${widget.project.started.day.toString().padLeft(2, '0')}',
+                style: TextStyle(fontSize: responsiveFontSize(5)),
+              ),
+            ),
+            SizedBox(
+              width: responsiveWidth(120),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _priorityChip(widget.project.priority),
+              ),
+            ),
+            SizedBox(
+              width: responsiveWidth(120),
+              child: Align(
+                alignment: Alignment.centerLeft,
                 child: Text(
-                  (widget.project.projectNo?.trim().isNotEmpty ?? false)
-                      ? widget.project.projectNo!.trim()
-                      : '--',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  (widget.project.status).toString(),
                   style: TextStyle(fontSize: responsiveFontSize(5)),
                 ),
               ),
-              SizedBox(
-                width: responsiveWidth(250),
-                child: Text(
-                  widget.project.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: responsiveFontSize(5)),
-                ),
-              ),
-              SizedBox(
-                width: responsiveWidth(150),
-                child: Text(
-                  _loadingMembers
-                      ? 'Loading...'
-                      : _teamLeaders.isEmpty
-                      ? '--'
-                      : _teamLeaders.join(', '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: responsiveFontSize(5)),
-                ),
-              ),
-              SizedBox(
-                width: responsiveWidth(180),
-                child: Text(
-                  _loadingMembers
-                      ? 'Loading...'
-                      : _executors.isEmpty
-                      ? '--'
-                      : _executors.join(', '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: responsiveFontSize(5)),
-                ),
-              ),
-              SizedBox(
-                width: responsiveWidth(180),
-                child: Text(
-                  _loadingMembers
-                      ? 'Loading...'
-                      : _reviewers.isEmpty
-                      ? '--'
-                      : _reviewers.join(', '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: responsiveFontSize(5)),
-                ),
-              ),
-              SizedBox(
-                width: responsiveWidth(120),
-                child: Text(
-                  widget.project.overallDefectRate != null
-                      ? '${widget.project.overallDefectRate!.toStringAsFixed(1)}%'
-                      : '--',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: responsiveFontSize(5),
-                    color: (widget.project.overallDefectRate ?? 0) > 10
-                        ? Colors.red
-                        : Colors.black87,
-                    fontWeight: (widget.project.overallDefectRate ?? 0) > 10
-                        ? FontWeight.w600
-                        : FontWeight.normal,
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: responsiveWidth(120),
-                child: Text(
-                  '${widget.project.started.year}-${widget.project.started.month.toString().padLeft(2, '0')}-${widget.project.started.day.toString().padLeft(2, '0')}',
-                  style: TextStyle(fontSize: responsiveFontSize(5)),
-                ),
-              ),
-              SizedBox(
-                width: responsiveWidth(120),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: _priorityChip(widget.project.priority),
-                ),
-              ),
-              SizedBox(
-                width: responsiveWidth(120),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    (widget.project.status).toString(),
-                    style: TextStyle(fontSize: responsiveFontSize(5)),
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: responsiveWidth(150),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    executor,
-                    style: TextStyle(fontSize: responsiveFontSize(5)),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -60,9 +60,10 @@ class NotificationController extends GetxController {
       }
 
       // Determine if user is executor or reviewer based on role
-      final isExecutor = userRole == 'executor';
-      final isReviewer = userRole == 'reviewer';
-      final isTeamLeader = userRole == 'teamleader';
+      final normalizedRole = userRole.replaceAll(' ', '');
+      final isExecutor = normalizedRole == 'executor';
+      final isReviewer = normalizedRole == 'reviewer';
+      final isTeamLeader = normalizedRole == 'teamleader';
 
       bool hasPendingAction = false;
       String? actionType;

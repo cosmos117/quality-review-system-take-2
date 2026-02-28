@@ -86,6 +86,8 @@ class ProjectsController extends GetxController {
       description: (p.description?.trim().isNotEmpty ?? false)
           ? p.description!.trim()
           : null,
+      // Preserve userRole to prevent flickering during updates
+      userRole: p.userRole,
     );
   }
 
@@ -398,9 +400,14 @@ class ProjectsController extends GetxController {
       return;
     }
     final membershipService = Get.find<ProjectMembershipService>();
+
+    // Get current user ID for setting userRole
+    final authCtrl = Get.find<AuthController>();
+    final currentUserId = authCtrl.currentUser.value?.id;
+
     // ignore: avoid_print
     print(
-      '[ProjectsController] _hydrateAssignments: Starting for ${projects.length} projects',
+      '[ProjectsController] _hydrateAssignments: Starting for ${projects.length} projects (currentUserId=$currentUserId)',
     );
 
     // Process all projects in parallel for faster hydration
@@ -415,19 +422,34 @@ class ProjectsController extends GetxController {
               .where((id) => id.trim().isNotEmpty)
               .toList();
 
+          // Find current user's role in this project
+          String? userRole;
+          if (currentUserId != null && currentUserId.isNotEmpty) {
+            final userMembership = memberships.firstWhere(
+              (m) => m.userId == currentUserId,
+              orElse: () => memberships.first,
+            );
+            if (userMembership.userId == currentUserId) {
+              userRole = userMembership.roleName;
+            }
+          }
+
           // ignore: avoid_print
           print(
-            '[ProjectsController] Project "${project.title}" (${project.id}): Found ${memberships.length} memberships → userIds=$ids',
+            '[ProjectsController] Project "${project.title}" (${project.id}): Found ${memberships.length} memberships → userIds=$ids, userRole=$userRole',
           );
 
           final idx = projects.indexWhere((p) => p.id == project.id);
           if (idx != -1) {
             projects[idx] = _normalize(
-              projects[idx].copyWith(assignedEmployees: ids),
+              projects[idx].copyWith(
+                assignedEmployees: ids,
+                userRole: userRole,
+              ),
             );
             // ignore: avoid_print
             print(
-              '[ProjectsController] ✓ Updated project "${project.title}" assignedEmployees=$ids',
+              '[ProjectsController] ✓ Updated project "${project.title}" assignedEmployees=$ids, userRole=$userRole',
             );
           }
         } catch (e) {
