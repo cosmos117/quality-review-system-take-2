@@ -60,7 +60,7 @@ class NotificationController extends GetxController {
       }
 
       // Determine if user is executor or reviewer based on role
-      final normalizedRole = userRole.replaceAll(' ', '');
+      final normalizedRole = userRole?.replaceAll(' ', '') ?? '';
       final isExecutor = normalizedRole == 'executor';
       final isReviewer = normalizedRole == 'reviewer';
       final isTeamLeader = normalizedRole == 'teamleader';

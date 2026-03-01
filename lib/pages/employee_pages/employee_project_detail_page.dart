@@ -44,8 +44,15 @@ class _EmployeeProjectDetailsPageState
       permanent: false,
     );
     _detailsCtrl.seed(widget.project);
-    _fetchLatestProjectData();
-    _loadAssignments();
+    _initializeData();
+  }
+
+  Future<void> _initializeData() async {
+    await _fetchLatestProjectData();
+    await _loadAssignments();
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _fetchLatestProjectData() async {
@@ -55,10 +62,6 @@ class _EmployeeProjectDetailsPageState
       _detailsCtrl.seed(latestProject);
     } catch (e) {
       debugPrint('Failed to fetch latest project: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
     }
   }
 
@@ -104,6 +107,7 @@ class _EmployeeProjectDetailsPageState
           _teamLeaders = leaders;
           _executors = execs;
           _reviewers = reviewers;
+          _loadingAssignments = false;
         });
       }
       // Refresh projects controller to update dashboard immediately
@@ -116,10 +120,9 @@ class _EmployeeProjectDetailsPageState
           _teamLeaders = [];
           _executors = [];
           _reviewers = [];
+          _loadingAssignments = false;
         });
       }
-    } finally {
-      if (mounted) setState(() => _loadingAssignments = false);
     }
   }
 
@@ -841,6 +844,8 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
       if (widget.onAssignmentsChanged != null) {
         await widget.onAssignmentsChanged!();
       }
+      // Refresh dashboard membership cache immediately
+      await widget.projectsCtrl.refreshProjectMemberships(widget.projectId);
     } catch (e) {
       if (mounted) {
         Get.snackbar(

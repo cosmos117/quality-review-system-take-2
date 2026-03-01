@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../../models/project.dart';
@@ -136,6 +137,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
     final projCtrl = Get.find<ProjectsController>();
     final ui = Get.find<AdminDashboardUIController>();
+    // Ensure the polling stream is active (may have been stopped by employee view)
+    projCtrl.ensureRealtimeSync();
     _ensureSeed(projCtrl);
 
     final teamCtrl = Get.isRegistered<TeamController>()
@@ -505,7 +508,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                     // Single horizontal scrollbar wrapping the entire table
                     Scrollbar(
                       controller: _horizontalScrollController,
-                      thumbVisibility: true,
+                      thumbVisibility: false,
                       thickness: responsivePadding(10.0),
                       child: SingleChildScrollView(
                         controller: _horizontalScrollController,
@@ -643,8 +646,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                             ...projects
                                 .map(
                                   (proj) => _AdminProjectCard(
+                                    key: ValueKey(proj.id),
                                     project: proj,
-                                    context: context,
+                                    parentContext: context,
                                   ),
                                 )
                                 .toList(),
@@ -683,7 +687,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         Text(
           total > 0 ? '${start + 1}-$end of $total' : '0 of 0',
           style: TextStyle(
-            fontSize: responsiveFontSize(5),
+            fontSize: responsiveFontSize(8),
             color: Colors.black87,
           ),
         ),
@@ -803,6 +807,9 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                   TextFormField(
                     initialValue: data.projectNo,
                     decoration: const InputDecoration(labelText: 'Project No.'),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
+                    ],
                     onSaved: (v) => data.projectNo = v?.trim(),
                   ),
                   // Internal Order No.
@@ -958,64 +965,15 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
   }
 }
 
-class _AdminProjectCard extends StatefulWidget {
+class _AdminProjectCard extends StatelessWidget {
   final Project project;
-  final BuildContext context;
+  final BuildContext parentContext;
 
-  const _AdminProjectCard({required this.project, required this.context});
-
-  @override
-  State<_AdminProjectCard> createState() => _AdminProjectCardState();
-}
-
-class _AdminProjectCardState extends State<_AdminProjectCard> {
-  bool _loadingMembers = false;
-  List<String> _teamLeaders = [];
-  List<String> _executors = [];
-  List<String> _reviewers = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadTeamMembers();
-  }
-
-  Future<void> _loadTeamMembers() async {
-    if (!mounted) return;
-    setState(() => _loadingMembers = true);
-    try {
-      if (Get.isRegistered<ProjectMembershipService>()) {
-        final svc = Get.find<ProjectMembershipService>();
-        final memberships = await svc.getProjectMembers(widget.project.id);
-        if (mounted) {
-          setState(() {
-            _teamLeaders = memberships
-                .where((m) {
-                  final role = (m.roleName?.toLowerCase() ?? '').replaceAll(
-                    ' ',
-                    '',
-                  );
-                  return role == 'teamleader';
-                })
-                .map((m) => m.userName ?? 'Unknown')
-                .toList();
-            _executors = memberships
-                .where((m) => (m.roleName?.toLowerCase() ?? '') == 'executor')
-                .map((m) => m.userName ?? 'Unknown')
-                .toList();
-            _reviewers = memberships
-                .where((m) => (m.roleName?.toLowerCase() ?? '') == 'reviewer')
-                .map((m) => m.userName ?? 'Unknown')
-                .toList();
-          });
-        }
-      }
-    } catch (e) {
-      // Silently fail - just show no members
-    } finally {
-      if (mounted) setState(() => _loadingMembers = false);
-    }
-  }
+  const _AdminProjectCard({
+    required Key key,
+    required this.project,
+    required this.parentContext,
+  }) : super(key: key);
 
   Widget priorityChip(String p, BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -1033,7 +991,7 @@ class _AdminProjectCardState extends State<_AdminProjectCard> {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(widget.context).size.width;
+    final screenWidth = MediaQuery.of(parentContext).size.width;
     double responsiveWidth(double baseWidth) =>
         screenWidth * (baseWidth / 1920);
     double responsiveFontSize(double baseFontSize) =>
@@ -1041,11 +999,13 @@ class _AdminProjectCardState extends State<_AdminProjectCard> {
     double responsivePadding(double basePadding) =>
         screenWidth * (basePadding / 1920);
 
+    final projCtrl = Get.find<ProjectsController>();
+
     return InkWell(
       onTap: () => Get.to(
         () => AdminProjectDetailsPage(
-          project: widget.project,
-          descriptionOverride: widget.project.description,
+          project: project,
+          descriptionOverride: project.description,
         ),
       ),
       hoverColor: const Color(0xFFF7F9FC),
@@ -1061,112 +1021,107 @@ class _AdminProjectCardState extends State<_AdminProjectCard> {
           borderRadius: BorderRadius.circular(responsivePadding(6)),
           border: Border.all(color: Colors.grey.shade300, width: 1),
         ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: responsiveWidth(200),
-              child: Text(
-                (widget.project.projectNo?.trim().isNotEmpty ?? false)
-                    ? widget.project.projectNo!.trim()
-                    : '--',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: responsiveFontSize(5)),
-              ),
-            ),
-            SizedBox(
-              width: responsiveWidth(300),
-              child: Text(
-                widget.project.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: responsiveFontSize(5)),
-              ),
-            ),
-            SizedBox(
-              width: responsiveWidth(150),
-              child: Text(
-                _loadingMembers
-                    ? 'Loading...'
-                    : _teamLeaders.isEmpty
-                    ? '--'
-                    : _teamLeaders.join(', '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: responsiveFontSize(5)),
-              ),
-            ),
-            SizedBox(
-              width: responsiveWidth(180),
-              child: Text(
-                _loadingMembers
-                    ? 'Loading...'
-                    : _executors.isEmpty
-                    ? '--'
-                    : _executors.join(', '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: responsiveFontSize(5)),
-              ),
-            ),
-            SizedBox(
-              width: responsiveWidth(180),
-              child: Text(
-                _loadingMembers
-                    ? 'Loading...'
-                    : _reviewers.isEmpty
-                    ? '--'
-                    : _reviewers.join(', '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: responsiveFontSize(5)),
-              ),
-            ),
-            SizedBox(
-              width: responsiveWidth(120),
-              child: Text(
-                widget.project.overallDefectRate != null
-                    ? '${widget.project.overallDefectRate!.toStringAsFixed(1)}%'
-                    : '--',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: responsiveFontSize(5),
-                  color: widget.project.overallDefectRate != null
-                      ? Colors.red
-                      : Colors.black87,
-                  fontWeight: widget.project.overallDefectRate != null
-                      ? FontWeight.w600
-                      : FontWeight.normal,
-                ),
-              ),
-            ),
-            SizedBox(
-              width: responsiveWidth(120),
-              child: Text(
-                '${widget.project.started.year}-${widget.project.started.month.toString().padLeft(2, '0')}-${widget.project.started.day.toString().padLeft(2, '0')}',
-                style: TextStyle(fontSize: responsiveFontSize(5)),
-              ),
-            ),
-            SizedBox(
-              width: responsiveWidth(120),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: priorityChip(widget.project.priority, widget.context),
-              ),
-            ),
-            SizedBox(
-              width: responsiveWidth(120),
-              child: Align(
-                alignment: Alignment.centerLeft,
+        child: Obx(() {
+          final cache = projCtrl.membershipCache[project.id];
+          final teamLeaders = cache?.teamLeaders ?? [];
+          final executors = cache?.executors ?? [];
+          final reviewers = cache?.reviewers ?? [];
+
+          return Row(
+            children: [
+              SizedBox(
+                width: responsiveWidth(200),
                 child: Text(
-                  (widget.project.status).toString(),
+                  (project.projectNo?.trim().isNotEmpty ?? false)
+                      ? project.projectNo!.trim()
+                      : '--',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: responsiveFontSize(5)),
                 ),
               ),
-            ),
-          ],
-        ),
+              SizedBox(
+                width: responsiveWidth(300),
+                child: Text(
+                  project.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: responsiveFontSize(5)),
+                ),
+              ),
+              SizedBox(
+                width: responsiveWidth(150),
+                child: Text(
+                  teamLeaders.isEmpty ? '--' : teamLeaders.join(', '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: responsiveFontSize(5)),
+                ),
+              ),
+              SizedBox(
+                width: responsiveWidth(180),
+                child: Text(
+                  executors.isEmpty ? '--' : executors.join(', '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: responsiveFontSize(5)),
+                ),
+              ),
+              SizedBox(
+                width: responsiveWidth(180),
+                child: Text(
+                  reviewers.isEmpty ? '--' : reviewers.join(', '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: responsiveFontSize(5)),
+                ),
+              ),
+              SizedBox(
+                width: responsiveWidth(120),
+                child: Text(
+                  project.overallDefectRate != null
+                      ? '${project.overallDefectRate!.toStringAsFixed(1)}%'
+                      : '--',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: responsiveFontSize(5),
+                    color: project.overallDefectRate != null
+                        ? Colors.red
+                        : Colors.black87,
+                    fontWeight: project.overallDefectRate != null
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: responsiveWidth(120),
+                child: Text(
+                  '${project.started.year}-${project.started.month.toString().padLeft(2, '0')}-${project.started.day.toString().padLeft(2, '0')}',
+                  style: TextStyle(fontSize: responsiveFontSize(5)),
+                ),
+              ),
+              SizedBox(
+                width: responsiveWidth(120),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: priorityChip(project.priority, parentContext),
+                ),
+              ),
+              SizedBox(
+                width: responsiveWidth(120),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    (project.status).toString(),
+                    style: TextStyle(fontSize: responsiveFontSize(5)),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }),
       ),
     );
   }

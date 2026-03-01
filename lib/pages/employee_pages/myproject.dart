@@ -24,6 +24,7 @@ class _MyprojectState extends State<Myproject> {
   bool _isInitialLoad = true;
   final Set<String> _selectedStatuses = {};
   Timer? _notificationTimer;
+  bool _loadingInProgress = false;
 
   @override
   void initState() {
@@ -33,7 +34,8 @@ class _MyprojectState extends State<Myproject> {
   }
 
   Future<void> _loadProjects({bool forceRefresh = false}) async {
-    if (!mounted) return;
+    if (!mounted || _loadingInProgress) return;
+    _loadingInProgress = true;
 
     try {
       final ctrl = Get.find<ProjectsController>();
@@ -52,9 +54,6 @@ class _MyprojectState extends State<Myproject> {
 
       // Use optimized user-specific endpoint (includes memberships, no hydration needed)
       if (_isInitialLoad || forceRefresh) {
-        print(
-          '[MyProjects] Loading projects for user $userId using optimized endpoint',
-        );
         await ctrl.loadUserProjects(userId);
       }
 
@@ -63,27 +62,15 @@ class _MyprojectState extends State<Myproject> {
       // Filter projects for this user
       final myProjects = ctrl.byAssigneeId(userId);
 
-      // Update notifications for all projects
-      final notifCtrl = Get.find<NotificationController>();
-      await notifCtrl.updateMultipleProjects(myProjects);
-
-      // Debug logging
-      print('[MyProjects] Loaded projects for user $userId:');
-      print('[MyProjects] Total projects found: ${myProjects.length}');
-      for (final p in myProjects) {
-        print(
-          '[MyProjects]   - ${p.title} (assignedEmployees: ${p.assignedEmployees})',
-        );
-      }
-
       if (mounted) {
         setState(() {
           _cachedProjects = myProjects;
           _isInitialLoad = false;
         });
-
-        print('[MyProjects] Cached ${_cachedProjects.length} projects');
       }
+
+      // Update notifications in the background (don't block UI)
+      _updateNotificationsInBackground(myProjects);
     } catch (e) {
       print('[MyProjects] Error loading projects: $e');
       if (mounted) {
@@ -92,7 +79,6 @@ class _MyprojectState extends State<Myproject> {
           _isInitialLoad = false;
         });
 
-        // Show error snackbar
         Get.snackbar(
           'Error',
           'Failed to load projects: $e',
@@ -105,7 +91,20 @@ class _MyprojectState extends State<Myproject> {
           ),
         );
       }
+    } finally {
+      _loadingInProgress = false;
     }
+  }
+
+  void _updateNotificationsInBackground(List<Project> projects) {
+    // Fire-and-forget: update notifications without blocking the UI
+    Future.microtask(() async {
+      try {
+        final notifCtrl = Get.find<NotificationController>();
+        await notifCtrl.updateMultipleProjects(projects);
+        if (mounted) setState(() {}); // Refresh UI to show notification badges
+      } catch (_) {}
+    });
   }
 
   @override
@@ -444,6 +443,18 @@ class _MyprojectState extends State<Myproject> {
                                               showIcon: false,
                                             ),
                                           ),
+                                          Expanded(
+                                            flex: 2,
+                                            child: const Text(
+                                              'Working As',
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.blueGrey,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -613,6 +624,40 @@ class _MyProjectCardState extends State<_MyProjectCard> {
                         ),
                       ),
                     ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child:
+                        widget.project.userRole != null &&
+                            widget.project.userRole!.trim().isNotEmpty
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE3F2FD),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              widget.project.userRole!.trim(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF135BEC),
+                                fontSize: 11,
+                              ),
+                            ),
+                          )
+                        : const Text(
+                            '--',
+                            style: TextStyle(
+                              color: Colors.black54,
+                              fontSize: 11,
+                            ),
+                          ),
                   ),
                 ],
               ),

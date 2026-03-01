@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:quality_review/components/admin_dialog.dart';
 import 'package:quality_review/controllers/project_details_controller.dart';
@@ -44,8 +45,15 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
       permanent: false,
     );
     _detailsCtrl.seed(widget.project);
-    _fetchLatestProjectData();
-    _loadAssignments();
+    _initializeData();
+  }
+
+  Future<void> _initializeData() async {
+    await _fetchLatestProjectData();
+    await _loadAssignments();
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _fetchLatestProjectData() async {
@@ -56,10 +64,6 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
     } catch (e) {
       // If fetch fails, continue with the passed project data
       debugPrint('Failed to fetch latest project: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
     }
   }
 
@@ -113,6 +117,7 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
           _teamLeaders = leaders;
           _executors = execs;
           _reviewers = reviewers;
+          _loadingAssignments = false;
         });
 
         debugPrint(
@@ -129,10 +134,9 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
           _teamLeaders = [];
           _executors = [];
           _reviewers = [];
+          _loadingAssignments = false;
         });
       }
-    } finally {
-      if (mounted) setState(() => _loadingAssignments = false);
     }
   }
 
@@ -367,6 +371,9 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
             TextFormField(
               initialValue: projectNo,
               decoration: const InputDecoration(labelText: 'Project No.'),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
+              ],
               onSaved: (v) => projectNo = v?.trim(),
             ),
             const SizedBox(height: 12),
@@ -1140,6 +1147,8 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
       if (widget.onAssignmentsChanged != null) {
         await widget.onAssignmentsChanged!();
       }
+      // Refresh dashboard membership cache immediately
+      await widget.projectsCtrl.refreshProjectMemberships(widget.projectId);
     } catch (e) {
       if (mounted) {
         Get.snackbar(

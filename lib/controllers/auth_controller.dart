@@ -69,13 +69,13 @@ class AuthController extends GetxController {
         final projectsCtrl = Get.find<ProjectsController>();
         final userId = currentUser.value!.id;
 
-        // Use optimized endpoint - no hydration needed
-        await projectsCtrl.loadUserProjects(userId);
+        // Load ALL projects so employee dashboard shows all projects
+        await projectsCtrl.refreshProjects();
 
         final myProjects = projectsCtrl.byAssigneeId(userId);
 
         print(
-          '[AuthController] Preloaded ${myProjects.length} projects for employee $userId',
+          '[AuthController] Preloaded all projects; ${myProjects.length} assigned to employee $userId',
         );
       }
     } catch (e) {

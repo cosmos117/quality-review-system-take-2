@@ -364,7 +364,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                     // Single horizontal scrollbar wrapping the entire table
                     Scrollbar(
                       controller: _horizontalScrollController,
-                      thumbVisibility: true,
+                      thumbVisibility: false,
                       thickness: responsivePadding(10.0),
                       child: SingleChildScrollView(
                         controller: _horizontalScrollController,
@@ -501,6 +501,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                             ...projects
                                 .map(
                                   (proj) => _EmployeeProjectCard(
+                                    key: ValueKey(proj.id),
                                     project: proj,
                                     context: context,
                                   ),
@@ -541,7 +542,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
         Text(
           total > 0 ? '${start + 1}-$end of $total' : '0 of 0',
           style: TextStyle(
-            fontSize: responsiveFontSize(5),
+            fontSize: responsiveFontSize(8),
             color: Colors.black87,
           ),
         ),
@@ -578,65 +579,18 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
   }
 }
 
-class _EmployeeProjectCard extends StatefulWidget {
+class _EmployeeProjectCard extends StatelessWidget {
   final Project project;
   final BuildContext context;
 
-  const _EmployeeProjectCard({required this.project, required this.context});
-
-  @override
-  State<_EmployeeProjectCard> createState() => _EmployeeProjectCardState();
-}
-
-class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
-  bool _loadingMembers = false;
-  List<String> _teamLeaders = [];
-  List<String> _executors = [];
-  List<String> _reviewers = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadTeamMembers();
-  }
-
-  Future<void> _loadTeamMembers() async {
-    if (!mounted) return;
-    setState(() => _loadingMembers = true);
-    try {
-      if (Get.isRegistered<ProjectMembershipService>()) {
-        final svc = Get.find<ProjectMembershipService>();
-        final memberships = await svc.getProjectMembers(widget.project.id);
-        if (mounted) {
-          setState(() {
-            _teamLeaders = memberships
-                .where(
-                  (m) =>
-                      (m.roleName?.toLowerCase() ?? '').replaceAll(' ', '') ==
-                      'teamleader',
-                )
-                .map((m) => m.userName ?? 'Unknown')
-                .toList();
-            _executors = memberships
-                .where((m) => (m.roleName?.toLowerCase() ?? '') == 'executor')
-                .map((m) => m.userName ?? 'Unknown')
-                .toList();
-            _reviewers = memberships
-                .where((m) => (m.roleName?.toLowerCase() ?? '') == 'reviewer')
-                .map((m) => m.userName ?? 'Unknown')
-                .toList();
-          });
-        }
-      }
-    } catch (e) {
-      // Silently fail - just show no members
-    } finally {
-      if (mounted) setState(() => _loadingMembers = false);
-    }
-  }
+  const _EmployeeProjectCard({
+    required Key key,
+    required this.project,
+    required this.context,
+  }) : super(key: key);
 
   Widget _priorityChip(String p) {
-    final screenWidth = MediaQuery.of(widget.context).size.width;
+    final screenWidth = MediaQuery.of(context).size.width;
     double responsiveFontSize(double baseFontSize) =>
         screenWidth * (baseFontSize / 1920) + 8;
 
@@ -650,8 +604,8 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(widget.context).size.width;
+  Widget build(BuildContext buildContext) {
+    final screenWidth = MediaQuery.of(context).size.width;
     double responsiveWidth(double baseWidth) =>
         screenWidth * (baseWidth / 1920);
     double responsiveFontSize(double baseFontSize) =>
@@ -659,19 +613,20 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
     double responsivePadding(double basePadding) =>
         screenWidth * (basePadding / 1920);
 
+    final projCtrl = Get.find<ProjectsController>();
+
     final executor =
-        (widget.project.status == 'In Progress' ||
-            widget.project.status == 'Completed')
-        ? ((widget.project.executor?.trim().isNotEmpty ?? false)
-              ? widget.project.executor!.trim()
+        (project.status == 'In Progress' || project.status == 'Completed')
+        ? ((project.executor?.trim().isNotEmpty ?? false)
+              ? project.executor!.trim()
               : '--')
         : '--';
 
     return InkWell(
       onTap: () => Get.to(
         () => EmployeeProjectDetailPage(
-          project: widget.project,
-          description: widget.project.description,
+          project: project,
+          description: project.description,
         ),
       ),
       hoverColor: const Color(0xFFF7F9FC),
@@ -687,112 +642,107 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
           borderRadius: BorderRadius.circular(responsivePadding(6)),
           border: Border.all(color: Colors.grey.shade300, width: 1),
         ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: responsiveWidth(200),
-              child: Text(
-                (widget.project.projectNo?.trim().isNotEmpty ?? false)
-                    ? widget.project.projectNo!.trim()
-                    : '--',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: responsiveFontSize(5)),
-              ),
-            ),
-            SizedBox(
-              width: responsiveWidth(300),
-              child: Text(
-                widget.project.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: responsiveFontSize(5)),
-              ),
-            ),
-            SizedBox(
-              width: responsiveWidth(150),
-              child: Text(
-                _loadingMembers
-                    ? 'Loading...'
-                    : _teamLeaders.isEmpty
-                    ? '--'
-                    : _teamLeaders.join(', '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: responsiveFontSize(5)),
-              ),
-            ),
-            SizedBox(
-              width: responsiveWidth(180),
-              child: Text(
-                _loadingMembers
-                    ? 'Loading...'
-                    : _executors.isEmpty
-                    ? '--'
-                    : _executors.join(', '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: responsiveFontSize(5)),
-              ),
-            ),
-            SizedBox(
-              width: responsiveWidth(180),
-              child: Text(
-                _loadingMembers
-                    ? 'Loading...'
-                    : _reviewers.isEmpty
-                    ? '--'
-                    : _reviewers.join(', '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: responsiveFontSize(5)),
-              ),
-            ),
-            SizedBox(
-              width: responsiveWidth(120),
-              child: Text(
-                widget.project.overallDefectRate != null
-                    ? '${widget.project.overallDefectRate!.toStringAsFixed(1)}%'
-                    : '--',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: responsiveFontSize(5),
-                  color: widget.project.overallDefectRate != null
-                      ? Colors.red
-                      : Colors.black87,
-                  fontWeight: widget.project.overallDefectRate != null
-                      ? FontWeight.w600
-                      : FontWeight.normal,
-                ),
-              ),
-            ),
-            SizedBox(
-              width: responsiveWidth(120),
-              child: Text(
-                '${widget.project.started.year}-${widget.project.started.month.toString().padLeft(2, '0')}-${widget.project.started.day.toString().padLeft(2, '0')}',
-                style: TextStyle(fontSize: responsiveFontSize(5)),
-              ),
-            ),
-            SizedBox(
-              width: responsiveWidth(120),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: _priorityChip(widget.project.priority),
-              ),
-            ),
-            SizedBox(
-              width: responsiveWidth(120),
-              child: Align(
-                alignment: Alignment.centerLeft,
+        child: Obx(() {
+          final cache = projCtrl.membershipCache[project.id];
+          final teamLeaders = cache?.teamLeaders ?? [];
+          final executors = cache?.executors ?? [];
+          final reviewers = cache?.reviewers ?? [];
+
+          return Row(
+            children: [
+              SizedBox(
+                width: responsiveWidth(200),
                 child: Text(
-                  (widget.project.status).toString(),
+                  (project.projectNo?.trim().isNotEmpty ?? false)
+                      ? project.projectNo!.trim()
+                      : '--',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: responsiveFontSize(5)),
                 ),
               ),
-            ),
-          ],
-        ),
+              SizedBox(
+                width: responsiveWidth(300),
+                child: Text(
+                  project.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: responsiveFontSize(5)),
+                ),
+              ),
+              SizedBox(
+                width: responsiveWidth(150),
+                child: Text(
+                  teamLeaders.isEmpty ? '--' : teamLeaders.join(', '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: responsiveFontSize(5)),
+                ),
+              ),
+              SizedBox(
+                width: responsiveWidth(180),
+                child: Text(
+                  executors.isEmpty ? '--' : executors.join(', '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: responsiveFontSize(5)),
+                ),
+              ),
+              SizedBox(
+                width: responsiveWidth(180),
+                child: Text(
+                  reviewers.isEmpty ? '--' : reviewers.join(', '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: responsiveFontSize(5)),
+                ),
+              ),
+              SizedBox(
+                width: responsiveWidth(120),
+                child: Text(
+                  project.overallDefectRate != null
+                      ? '${project.overallDefectRate!.toStringAsFixed(1)}%'
+                      : '--',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: responsiveFontSize(5),
+                    color: project.overallDefectRate != null
+                        ? Colors.red
+                        : Colors.black87,
+                    fontWeight: project.overallDefectRate != null
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: responsiveWidth(120),
+                child: Text(
+                  '${project.started.year}-${project.started.month.toString().padLeft(2, '0')}-${project.started.day.toString().padLeft(2, '0')}',
+                  style: TextStyle(fontSize: responsiveFontSize(5)),
+                ),
+              ),
+              SizedBox(
+                width: responsiveWidth(120),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: _priorityChip(project.priority),
+                ),
+              ),
+              SizedBox(
+                width: responsiveWidth(120),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    (project.status).toString(),
+                    style: TextStyle(fontSize: responsiveFontSize(5)),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }),
       ),
     );
   }

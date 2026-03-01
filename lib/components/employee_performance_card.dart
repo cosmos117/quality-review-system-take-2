@@ -107,13 +107,13 @@ class _EmployeePerformanceCardState extends State<EmployeePerformanceCard> {
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
         _buildPerformanceItem(
-          label: 'Executors',
+          label: 'Executor',
           value: _executorAvg,
           color: Colors.purple,
         ),
         _buildDivider(),
         _buildPerformanceItem(
-          label: 'Team Leaders',
+          label: 'Team Leader',
           value: _leaderAvg,
           color: Colors.indigo,
         ),

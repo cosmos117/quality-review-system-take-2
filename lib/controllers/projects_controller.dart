@@ -8,14 +8,35 @@ import '../services/role_service.dart';
 import '../services/user_service.dart';
 import 'auth_controller.dart';
 
+/// Holds cached membership names per project for reactive dashboard display.
+class ProjectMembershipCache {
+  final List<String> teamLeaders;
+  final List<String> executors;
+  final List<String> reviewers;
+  const ProjectMembershipCache({
+    this.teamLeaders = const [],
+    this.executors = const [],
+    this.reviewers = const [],
+  });
+}
+
 class ProjectsController extends GetxController {
   final RxList<Project> projects = <Project>[].obs;
   final RxBool isLoading = false.obs;
   final RxString errorMessage = ''.obs;
 
+  /// Reactive cache: projectId → membership names (team leaders, executors, reviewers).
+  /// Dashboard cards observe this so they update instantly when memberships change.
+  final membershipCache = <String, ProjectMembershipCache>{}.obs;
+
   List<Project> get all => projects;
   late final ProjectService _service;
   StreamSubscription? _projectsSubscription;
+  bool _hydratingInProgress = false;
+
+  /// True when in user-specific mode (employee side); the global polling
+  /// stream is paused to prevent it from overwriting user-filtered data.
+  bool _userMode = false;
 
   @override
   void onInit() {
@@ -25,13 +46,17 @@ class ProjectsController extends GetxController {
   }
 
   void _startRealtimeSync() {
+    _projectsSubscription?.cancel();
+    _userMode = false;
     isLoading.value = true;
     _projectsSubscription = _service.getProjectsStream().listen(
       (projectsList) async {
+        // Skip if we switched to user-specific mode while waiting
+        if (_userMode) return;
         projects.assignAll(projectsList.map(_normalize));
         // Hydrate assignments for each project
         await _hydrateAssignments();
-        isLoading.value = false;
+        if (!_userMode) isLoading.value = false;
         errorMessage.value = '';
       },
       onError: (e) {
@@ -39,6 +64,19 @@ class ProjectsController extends GetxController {
         isLoading.value = false;
       },
     );
+  }
+
+  /// Restart the global polling stream (call from admin pages if needed).
+  void ensureRealtimeSync() {
+    if (!_userMode) return; // already running
+    _startRealtimeSync();
+  }
+
+  /// Stop the global polling stream (used when switching to employee view).
+  void stopRealtimeSync() {
+    _projectsSubscription?.cancel();
+    _projectsSubscription = null;
+    _userMode = true;
   }
 
   @override
@@ -198,9 +236,13 @@ class ProjectsController extends GetxController {
     }
   }
 
-  /// Load projects for a specific user (optimized - no hydration needed)
+  /// Load projects for a specific user (optimized - no hydration needed).
+  /// Cancels the global polling stream to prevent it from overwriting
+  /// user-specific data with ALL projects + expensive hydration.
   Future<void> loadUserProjects(String userId) async {
     try {
+      // Stop the global polling stream – employees don't need all-project sync
+      stopRealtimeSync();
       isLoading.value = true;
       errorMessage.value = '';
       final projectsList = await _service.getForUser(userId);
@@ -392,6 +434,17 @@ class ProjectsController extends GetxController {
   }
 
   Future<void> _hydrateAssignments() async {
+    // Prevent concurrent hydration runs (expensive N API calls)
+    if (_hydratingInProgress) return;
+    _hydratingInProgress = true;
+    try {
+      await _doHydrateAssignments();
+    } finally {
+      _hydratingInProgress = false;
+    }
+  }
+
+  Future<void> _doHydrateAssignments() async {
     if (!Get.isRegistered<ProjectMembershipService>()) {
       // ignore: avoid_print
       print(
@@ -452,6 +505,28 @@ class ProjectsController extends GetxController {
               '[ProjectsController] ✓ Updated project "${project.title}" assignedEmployees=$ids, userRole=$userRole',
             );
           }
+
+          // Populate membership cache for dashboard
+          membershipCache[project.id] = ProjectMembershipCache(
+            teamLeaders: memberships
+                .where((m) {
+                  final role = (m.roleName?.toLowerCase() ?? '').replaceAll(
+                    ' ',
+                    '',
+                  );
+                  return role == 'teamleader';
+                })
+                .map((m) => m.userName ?? 'Unknown')
+                .toList(),
+            executors: memberships
+                .where((m) => (m.roleName?.toLowerCase() ?? '') == 'executor')
+                .map((m) => m.userName ?? 'Unknown')
+                .toList(),
+            reviewers: memberships
+                .where((m) => (m.roleName?.toLowerCase() ?? '') == 'reviewer')
+                .map((m) => m.userName ?? 'Unknown')
+                .toList(),
+          );
         } catch (e) {
           // ignore: avoid_print
           print(
@@ -463,5 +538,60 @@ class ProjectsController extends GetxController {
 
     // ignore: avoid_print
     print('[ProjectsController] _hydrateAssignments: Complete');
+  }
+
+  /// Refresh membership cache for a single project. Call this after saving
+  /// role assignments so the dashboard updates immediately.
+  Future<void> refreshProjectMemberships(String projectId) async {
+    if (!Get.isRegistered<ProjectMembershipService>()) return;
+    try {
+      final svc = Get.find<ProjectMembershipService>();
+      final memberships = await svc.getProjectMembers(projectId);
+
+      final newCache = ProjectMembershipCache(
+        teamLeaders: memberships
+            .where((m) {
+              final role = (m.roleName?.toLowerCase() ?? '').replaceAll(
+                ' ',
+                '',
+              );
+              return role == 'teamleader';
+            })
+            .map((m) => m.userName ?? 'Unknown')
+            .toList(),
+        executors: memberships
+            .where((m) => (m.roleName?.toLowerCase() ?? '') == 'executor')
+            .map((m) => m.userName ?? 'Unknown')
+            .toList(),
+        reviewers: memberships
+            .where((m) => (m.roleName?.toLowerCase() ?? '') == 'reviewer')
+            .map((m) => m.userName ?? 'Unknown')
+            .toList(),
+      );
+
+      // Update cache: create new map to ensure observable notification
+      final newMap = {...membershipCache};
+      newMap[projectId] = newCache;
+      membershipCache.assignAll(newMap);
+
+      // Also update the project in the list with new assignedEmployees
+      final idx = projects.indexWhere((p) => p.id == projectId);
+      if (idx != -1) {
+        final memberIds = memberships
+            .map((m) => m.userId)
+            .where((id) => id.trim().isNotEmpty)
+            .toList();
+        final updated = projects[idx].copyWith(assignedEmployees: memberIds);
+        projects[idx] = _normalize(updated);
+      }
+
+      print(
+        '[ProjectsController] ✓ Refreshed memberships for project=$projectId',
+      );
+    } catch (e) {
+      print(
+        '[ProjectsController] refreshProjectMemberships($projectId) failed: $e',
+      );
+    }
   }
 }
