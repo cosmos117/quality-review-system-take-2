@@ -482,7 +482,7 @@ class _LeaderPerformanceState extends State<LeaderPerformance> {
                                   child: Row(
                                     children: [
                                       Expanded(
-                                        flex: 2,
+                                        flex: 3,
                                         child: const Text(
                                           'Project No.',
                                           overflow: TextOverflow.ellipsis,
@@ -494,7 +494,7 @@ class _LeaderPerformanceState extends State<LeaderPerformance> {
                                         ),
                                       ),
                                       Expanded(
-                                        flex: 3,
+                                        flex: 4,
                                         child: const Text(
                                           'Project Title',
                                           overflow: TextOverflow.ellipsis,
@@ -599,8 +599,6 @@ class _ProjectCard extends StatefulWidget {
 }
 
 class _ProjectCardState extends State<_ProjectCard> {
-  bool _isHovered = false;
-
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'not started':
@@ -629,8 +627,6 @@ class _ProjectCardState extends State<_ProjectCard> {
 
   Color _getDefectRateColor(double? defectRate) {
     if (defectRate == null) return Colors.grey.shade700;
-    if (defectRate <= 5.0) return Colors.green.shade700;
-    if (defectRate <= 20.0) return Colors.orange.shade800;
     return Colors.red.shade700;
   }
 
@@ -639,93 +635,83 @@ class _ProjectCardState extends State<_ProjectCard> {
     final project = widget.project;
     final defectRateColor = _getDefectRateColor(project.overallDefectRate);
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: InkWell(
-        onTap: () {
-          Get.to(() => MyProjectDetailPage(project: project));
-        },
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: _isHovered
-                ? _getHoverColor(project.status)
-                : _getStatusColor(project.status),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: _isHovered ? Colors.blue[300]! : Colors.transparent,
-              width: 1.5,
+    return InkWell(
+      onTap: () {
+        Get.to(() => MyProjectDetailPage(project: project));
+      },
+      hoverColor: _getHoverColor(project.status),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: _getStatusColor(project.status),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.transparent, width: 1),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Text(
+                project.projectNo ?? 'N/A',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13),
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: Text(
-                  project.projectNo ?? 'N/A',
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13),
+            Expanded(
+              flex: 4,
+              child: Text(
+                project.title,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              Expanded(
-                flex: 3,
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                '${project.started.year}-${project.started.month.toString().padLeft(2, '0')}-${project.started.day.toString().padLeft(2, '0')}',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                project.status,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: defectRateColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: defectRateColor.withOpacity(0.4),
+                    width: 1,
+                  ),
+                ),
                 child: Text(
-                  project.title,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                  project.overallDefectRate != null
+                      ? '${project.overallDefectRate!.toStringAsFixed(2)}%'
+                      : 'N/A',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: defectRateColor,
                   ),
                 ),
               ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  '${project.started.year}-${project.started.month.toString().padLeft(2, '0')}-${project.started.day.toString().padLeft(2, '0')}',
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  project.status,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: defectRateColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: defectRateColor.withOpacity(0.4),
-                      width: 1,
-                    ),
-                  ),
-                  child: Text(
-                    project.overallDefectRate != null
-                        ? '${project.overallDefectRate!.toStringAsFixed(2)}%'
-                        : 'N/A',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: defectRateColor,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

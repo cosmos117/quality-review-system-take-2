@@ -427,9 +427,7 @@ class _ProjectCard extends StatelessWidget {
 
   Color _getDefectRateColor(double? rate) {
     if (rate == null) return Colors.grey.shade700;
-    if (rate <= 5.0) return Colors.green.shade700;
-    if (rate <= 20.0) return Colors.orange.shade700;
-    return Colors.red.shade800;
+    return Colors.red.shade700;
   }
 
   @override

@@ -192,7 +192,7 @@ class _AssignedEmployeesSection extends GetView<MyProjectDetailController> {
         children: [
           Expanded(
             child: _RoleCard(
-              title: 'TeamLeader',
+              title: 'Team Leader',
               members: leaders,
               color: Colors.blue,
             ),

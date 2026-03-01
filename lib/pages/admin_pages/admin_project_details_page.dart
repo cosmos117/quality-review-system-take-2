@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:quality_review/components/admin_dialog.dart';
 import 'package:quality_review/controllers/project_details_controller.dart';
@@ -44,8 +45,15 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
       permanent: false,
     );
     _detailsCtrl.seed(widget.project);
-    _fetchLatestProjectData();
-    _loadAssignments();
+    _initializeData();
+  }
+
+  Future<void> _initializeData() async {
+    await _fetchLatestProjectData();
+    await _loadAssignments();
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _fetchLatestProjectData() async {
@@ -56,10 +64,6 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
     } catch (e) {
       // If fetch fails, continue with the passed project data
       debugPrint('Failed to fetch latest project: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
     }
   }
 
@@ -93,9 +97,10 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
         );
       }
 
-      final leaders = memberships
-          .where((m) => (m.roleName?.toLowerCase() ?? '') == 'teamleader')
-          .toList();
+      final leaders = memberships.where((m) {
+        final role = (m.roleName?.toLowerCase() ?? '').replaceAll(' ', '');
+        return role == 'teamleader';
+      }).toList();
       final execs = memberships
           .where((m) => (m.roleName?.toLowerCase() ?? '') == 'executor')
           .toList();
@@ -112,12 +117,15 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
           _teamLeaders = leaders;
           _executors = execs;
           _reviewers = reviewers;
+          _loadingAssignments = false;
         });
 
         debugPrint(
           '[AdminProjectDetail] State updated - displaying ${_teamLeaders.length + _executors.length + _reviewers.length} total members',
         );
       }
+      // Refresh projects controller to update dashboard immediately
+      await _projectsCtrl.refreshProjects();
     } catch (e, stackTrace) {
       debugPrint('[AdminProjectDetail] loadAssignments error: $e');
       debugPrint('[AdminProjectDetail] Stack trace: $stackTrace');
@@ -126,10 +134,9 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
           _teamLeaders = [];
           _executors = [];
           _reviewers = [];
+          _loadingAssignments = false;
         });
       }
-    } finally {
-      if (mounted) setState(() => _loadingAssignments = false);
     }
   }
 
@@ -364,6 +371,9 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
             TextFormField(
               initialValue: projectNo,
               decoration: const InputDecoration(labelText: 'Project No.'),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
+              ],
               onSaved: (v) => projectNo = v?.trim(),
             ),
             const SizedBox(height: 12),
@@ -822,7 +832,7 @@ class _AssignedTeamGrid extends StatelessWidget {
       children: [
         Expanded(
           child: _RoleCard(
-            title: 'TeamLeader',
+            title: 'Team Leader',
             color: Colors.blue,
             members: leaders,
           ),
@@ -1137,6 +1147,8 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
       if (widget.onAssignmentsChanged != null) {
         await widget.onAssignmentsChanged!();
       }
+      // Refresh dashboard membership cache immediately
+      await widget.projectsCtrl.refreshProjectMemberships(widget.projectId);
     } catch (e) {
       if (mounted) {
         Get.snackbar(
@@ -1243,7 +1255,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _section(
-            title: 'Assign TeamLeader',
+            title: 'Assign Team Leader',
             ctrl: _searchLeader,
             selected: d.teamLeaderIds,
             toggle: d.toggleTeamLeader,
@@ -1252,7 +1264,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
           ),
           const _DashedDivider(),
           _section(
-            title: 'Assign Executor(s)',
+            title: 'Assign Executors',
             ctrl: _searchExecutor,
             selected: d.executorIds,
             toggle: d.toggleExecutor,
@@ -1260,7 +1272,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
           ),
           const _DashedDivider(),
           _section(
-            title: 'Assign Reviewer(s)',
+            title: 'Assign Reviewers',
             ctrl: _searchReviewer,
             selected: d.reviewerIds,
             toggle: d.toggleReviewer,
@@ -1279,7 +1291,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
           children: [
             Expanded(
               child: _section(
-                title: 'Assign TeamLeader',
+                title: 'Assign Team Leader',
                 ctrl: _searchLeader,
                 selected: d.teamLeaderIds,
                 toggle: d.toggleTeamLeader,
@@ -1290,7 +1302,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
             const _VerticalDashedDivider(),
             Expanded(
               child: _section(
-                title: 'Assign Executor(s)',
+                title: 'Assign Executors',
                 ctrl: _searchExecutor,
                 selected: d.executorIds,
                 toggle: d.toggleExecutor,
@@ -1300,7 +1312,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
             const _VerticalDashedDivider(),
             Expanded(
               child: _section(
-                title: 'Assign Reviewer(s)',
+                title: 'Assign Reviewers',
                 ctrl: _searchReviewer,
                 selected: d.reviewerIds,
                 toggle: d.toggleReviewer,

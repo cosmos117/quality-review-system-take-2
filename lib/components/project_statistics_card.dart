@@ -23,7 +23,6 @@ class ProjectStatisticsCard extends StatelessWidget {
           .length;
 
       return Container(
-        constraints: const BoxConstraints(maxWidth: 600),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
           color: Colors.white,

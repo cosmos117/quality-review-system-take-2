@@ -6,6 +6,7 @@ import '../../controllers/projects_controller.dart';
 import '../../controllers/team_controller.dart';
 import '../../controllers/export_controller.dart';
 import '../../components/project_statistics_card.dart';
+import '../../components/employee_performance_card.dart';
 import '../../services/project_membership_service.dart';
 
 class EmployeeDashboard extends StatefulWidget {
@@ -171,37 +172,82 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                 ],
               ),
               SizedBox(height: responsivePadding(16)),
-              // Project Statistics
-              const ProjectStatisticsCard(),
-              SizedBox(height: responsivePadding(16)),
-              // Search bar
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(responsivePadding(8)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: responsivePadding(4),
-                      offset: Offset(0, responsivePadding(2)),
-                    ),
-                  ],
-                ),
-                child: TextField(
-                  controller: _searchCtrl,
-                  decoration: InputDecoration(
-                    hintText:
-                        'Search by title, status, priority, created by...',
-                    hintStyle: TextStyle(fontSize: responsiveFontSize(6)),
-                    prefixIcon: Icon(Icons.search, size: responsiveFontSize(9)),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: responsivePadding(12),
-                      vertical: responsivePadding(14),
+              // Project Statistics and Performance in same row
+              Row(
+                children: [
+                  Expanded(flex: 3, child: const ProjectStatisticsCard()),
+                  SizedBox(width: responsivePadding(16)),
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 4,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Performance as',
+                            style: TextStyle(
+                              fontSize: responsiveFontSize(6),
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          SizedBox(height: responsivePadding(12)),
+                          const EmployeePerformanceCard(),
+                        ],
+                      ),
                     ),
                   ),
-                  style: TextStyle(fontSize: responsiveFontSize(6)),
-                  onChanged: (v) => setState(() => _searchQuery = v),
+                ],
+              ),
+              SizedBox(height: responsivePadding(16)),
+              // Search bar
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: responsiveWidth(1400)),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(responsivePadding(8)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: responsivePadding(4),
+                        offset: Offset(0, responsivePadding(2)),
+                      ),
+                    ],
+                  ),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    textAlignVertical: TextAlignVertical.center,
+                    decoration: InputDecoration(
+                      hintText:
+                          'Search by title, status, priority, created by...',
+                      hintStyle: TextStyle(fontSize: responsiveFontSize(6)),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        size: responsiveFontSize(9),
+                      ),
+                      isDense: true,
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: responsivePadding(12),
+                        vertical: responsivePadding(14),
+                      ),
+                    ),
+                    style: TextStyle(fontSize: responsiveFontSize(6)),
+                    onChanged: (v) => setState(() => _searchQuery = v),
+                  ),
                 ),
               ),
               SizedBox(height: responsivePadding(16)),
@@ -318,7 +364,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                     // Single horizontal scrollbar wrapping the entire table
                     Scrollbar(
                       controller: _horizontalScrollController,
-                      thumbVisibility: true,
+                      thumbVisibility: false,
                       thickness: responsivePadding(10.0),
                       child: SingleChildScrollView(
                         controller: _horizontalScrollController,
@@ -347,7 +393,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                               child: Row(
                                 children: [
                                   SizedBox(
-                                    width: responsiveWidth(150),
+                                    width: responsiveWidth(200),
                                     child: Text(
                                       'Project No.',
                                       overflow: TextOverflow.ellipsis,
@@ -359,7 +405,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                                     ),
                                   ),
                                   SizedBox(
-                                    width: responsiveWidth(250),
+                                    width: responsiveWidth(300),
                                     child: Text(
                                       'Project Title',
                                       overflow: TextOverflow.ellipsis,
@@ -446,18 +492,6 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                                       fontSize: responsiveFontSize(5),
                                     ),
                                   ),
-                                  SizedBox(
-                                    width: responsiveWidth(150),
-                                    child: Text(
-                                      'Created By',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.blueGrey,
-                                        fontSize: responsiveFontSize(5),
-                                      ),
-                                    ),
-                                  ),
                                   // Actions column removed (moved to details page)
                                 ],
                               ),
@@ -467,6 +501,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                             ...projects
                                 .map(
                                   (proj) => _EmployeeProjectCard(
+                                    key: ValueKey(proj.id),
                                     project: proj,
                                     context: context,
                                   ),
@@ -507,7 +542,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
         Text(
           total > 0 ? '${start + 1}-$end of $total' : '0 of 0',
           style: TextStyle(
-            fontSize: responsiveFontSize(5),
+            fontSize: responsiveFontSize(8),
             color: Colors.black87,
           ),
         ),
@@ -544,62 +579,18 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
   }
 }
 
-class _EmployeeProjectCard extends StatefulWidget {
+class _EmployeeProjectCard extends StatelessWidget {
   final Project project;
   final BuildContext context;
 
-  const _EmployeeProjectCard({required this.project, required this.context});
-
-  @override
-  State<_EmployeeProjectCard> createState() => _EmployeeProjectCardState();
-}
-
-class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
-  bool _isHovered = false;
-  bool _loadingMembers = false;
-  List<String> _teamLeaders = [];
-  List<String> _executors = [];
-  List<String> _reviewers = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadTeamMembers();
-  }
-
-  Future<void> _loadTeamMembers() async {
-    if (!mounted) return;
-    setState(() => _loadingMembers = true);
-    try {
-      if (Get.isRegistered<ProjectMembershipService>()) {
-        final svc = Get.find<ProjectMembershipService>();
-        final memberships = await svc.getProjectMembers(widget.project.id);
-        if (mounted) {
-          setState(() {
-            _teamLeaders = memberships
-                .where((m) => (m.roleName?.toLowerCase() ?? '') == 'teamleader')
-                .map((m) => m.userName ?? 'Unknown')
-                .toList();
-            _executors = memberships
-                .where((m) => (m.roleName?.toLowerCase() ?? '') == 'executor')
-                .map((m) => m.userName ?? 'Unknown')
-                .toList();
-            _reviewers = memberships
-                .where((m) => (m.roleName?.toLowerCase() ?? '') == 'reviewer')
-                .map((m) => m.userName ?? 'Unknown')
-                .toList();
-          });
-        }
-      }
-    } catch (e) {
-      // Silently fail - just show no members
-    } finally {
-      if (mounted) setState(() => _loadingMembers = false);
-    }
-  }
+  const _EmployeeProjectCard({
+    required Key key,
+    required this.project,
+    required this.context,
+  }) : super(key: key);
 
   Widget _priorityChip(String p) {
-    final screenWidth = MediaQuery.of(widget.context).size.width;
+    final screenWidth = MediaQuery.of(context).size.width;
     double responsiveFontSize(double baseFontSize) =>
         screenWidth * (baseFontSize / 1920) + 8;
 
@@ -613,8 +604,8 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(widget.context).size.width;
+  Widget build(BuildContext buildContext) {
+    final screenWidth = MediaQuery.of(context).size.width;
     double responsiveWidth(double baseWidth) =>
         screenWidth * (baseWidth / 1920);
     double responsiveFontSize(double baseFontSize) =>
@@ -622,59 +613,48 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
     double responsivePadding(double basePadding) =>
         screenWidth * (basePadding / 1920);
 
+    final projCtrl = Get.find<ProjectsController>();
+
     final executor =
-        (widget.project.status == 'In Progress' ||
-            widget.project.status == 'Completed')
-        ? ((widget.project.executor?.trim().isNotEmpty ?? false)
-              ? widget.project.executor!.trim()
+        (project.status == 'In Progress' || project.status == 'Completed')
+        ? ((project.executor?.trim().isNotEmpty ?? false)
+              ? project.executor!.trim()
               : '--')
         : '--';
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: () => Get.to(
-          () => EmployeeProjectDetailPage(
-            project: widget.project,
-            description: widget.project.description,
-          ),
+    return InkWell(
+      onTap: () => Get.to(
+        () => EmployeeProjectDetailPage(
+          project: project,
+          description: project.description,
         ),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          margin: EdgeInsets.only(bottom: responsivePadding(6)),
-          padding: EdgeInsets.symmetric(
-            vertical: responsivePadding(10),
-            horizontal: responsivePadding(16),
-          ),
-          decoration: BoxDecoration(
-            color: _isHovered ? const Color(0xFFF7F9FC) : Colors.white,
-            borderRadius: BorderRadius.circular(responsivePadding(6)),
-            border: Border.all(
-              color: _isHovered ? Colors.blue.shade300 : Colors.grey.shade300,
-              width: _isHovered ? 1.5 : 1,
-            ),
-            boxShadow: _isHovered
-                ? [
-                    BoxShadow(
-                      color: Colors.blue.shade100.withOpacity(0.5),
-                      blurRadius: responsivePadding(8),
-                      offset: Offset(0, responsivePadding(2)),
-                    ),
-                  ]
-                : null,
-          ),
-          transform: _isHovered
-              ? (Matrix4.identity()..translate(0.0, -2.0))
-              : Matrix4.identity(),
-          child: Row(
+      ),
+      hoverColor: const Color(0xFFF7F9FC),
+      borderRadius: BorderRadius.circular(responsivePadding(6)),
+      child: Container(
+        margin: EdgeInsets.only(bottom: responsivePadding(6)),
+        padding: EdgeInsets.symmetric(
+          vertical: responsivePadding(10),
+          horizontal: responsivePadding(16),
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(responsivePadding(6)),
+          border: Border.all(color: Colors.grey.shade300, width: 1),
+        ),
+        child: Obx(() {
+          final cache = projCtrl.membershipCache[project.id];
+          final teamLeaders = cache?.teamLeaders ?? [];
+          final executors = cache?.executors ?? [];
+          final reviewers = cache?.reviewers ?? [];
+
+          return Row(
             children: [
               SizedBox(
-                width: responsiveWidth(150),
+                width: responsiveWidth(200),
                 child: Text(
-                  (widget.project.projectNo?.trim().isNotEmpty ?? false)
-                      ? widget.project.projectNo!.trim()
+                  (project.projectNo?.trim().isNotEmpty ?? false)
+                      ? project.projectNo!.trim()
                       : '--',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -682,9 +662,9 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
                 ),
               ),
               SizedBox(
-                width: responsiveWidth(250),
+                width: responsiveWidth(300),
                 child: Text(
-                  widget.project.title,
+                  project.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: responsiveFontSize(5)),
@@ -693,11 +673,7 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
               SizedBox(
                 width: responsiveWidth(150),
                 child: Text(
-                  _loadingMembers
-                      ? 'Loading...'
-                      : _teamLeaders.isEmpty
-                      ? '--'
-                      : _teamLeaders.join(', '),
+                  teamLeaders.isEmpty ? '--' : teamLeaders.join(', '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: responsiveFontSize(5)),
@@ -706,11 +682,7 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
               SizedBox(
                 width: responsiveWidth(180),
                 child: Text(
-                  _loadingMembers
-                      ? 'Loading...'
-                      : _executors.isEmpty
-                      ? '--'
-                      : _executors.join(', '),
+                  executors.isEmpty ? '--' : executors.join(', '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: responsiveFontSize(5)),
@@ -719,11 +691,7 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
               SizedBox(
                 width: responsiveWidth(180),
                 child: Text(
-                  _loadingMembers
-                      ? 'Loading...'
-                      : _reviewers.isEmpty
-                      ? '--'
-                      : _reviewers.join(', '),
+                  reviewers.isEmpty ? '--' : reviewers.join(', '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: responsiveFontSize(5)),
@@ -732,17 +700,17 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
               SizedBox(
                 width: responsiveWidth(120),
                 child: Text(
-                  widget.project.overallDefectRate != null
-                      ? '${widget.project.overallDefectRate!.toStringAsFixed(1)}%'
+                  project.overallDefectRate != null
+                      ? '${project.overallDefectRate!.toStringAsFixed(1)}%'
                       : '--',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: responsiveFontSize(5),
-                    color: (widget.project.overallDefectRate ?? 0) > 10
+                    color: project.overallDefectRate != null
                         ? Colors.red
                         : Colors.black87,
-                    fontWeight: (widget.project.overallDefectRate ?? 0) > 10
+                    fontWeight: project.overallDefectRate != null
                         ? FontWeight.w600
                         : FontWeight.normal,
                   ),
@@ -751,7 +719,7 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
               SizedBox(
                 width: responsiveWidth(120),
                 child: Text(
-                  '${widget.project.started.year}-${widget.project.started.month.toString().padLeft(2, '0')}-${widget.project.started.day.toString().padLeft(2, '0')}',
+                  '${project.started.year}-${project.started.month.toString().padLeft(2, '0')}-${project.started.day.toString().padLeft(2, '0')}',
                   style: TextStyle(fontSize: responsiveFontSize(5)),
                 ),
               ),
@@ -759,7 +727,7 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
                 width: responsiveWidth(120),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: _priorityChip(widget.project.priority),
+                  child: _priorityChip(project.priority),
                 ),
               ),
               SizedBox(
@@ -767,24 +735,14 @@ class _EmployeeProjectCardState extends State<_EmployeeProjectCard> {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    (widget.project.status).toString(),
-                    style: TextStyle(fontSize: responsiveFontSize(5)),
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: responsiveWidth(150),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    executor,
+                    (project.status).toString(),
                     style: TextStyle(fontSize: responsiveFontSize(5)),
                   ),
                 ),
               ),
             ],
-          ),
-        ),
+          );
+        }),
       ),
     );
   }

@@ -83,7 +83,11 @@ class ProjectDetailsController extends GetxController {
     reviewerIds.clear();
     for (final m in memberships) {
       try {
-        final roleName = (m.roleName ?? '').toString().trim().toLowerCase();
+        final roleName = (m.roleName ?? '')
+            .toString()
+            .trim()
+            .toLowerCase()
+            .replaceAll(' ', '');
         final userId = (m.userId).toString();
         if (userId.isEmpty) continue;
         if (roleName == 'teamleader') {
