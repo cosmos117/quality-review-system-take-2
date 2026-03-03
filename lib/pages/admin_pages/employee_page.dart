@@ -41,7 +41,7 @@ class EmployeePage extends StatelessWidget {
     final formKey = GlobalKey<FormState>();
     String name = '';
     String email = '';
-    String role = 'User';
+    String role = 'Employee';
     String password = '';
     bool obscure = true;
     await showAdminDialog(
@@ -89,7 +89,7 @@ class EmployeePage extends StatelessWidget {
               initialValue: role,
               items: const [
                 'Admin',
-                'User',
+                'Employee',
               ].map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
               onChanged: (v) => role = v ?? role,
               decoration: const InputDecoration(labelText: 'Role *'),
@@ -188,7 +188,7 @@ class EmployeePage extends StatelessWidget {
     final formKey = GlobalKey<FormState>();
     String name = m.name;
     String email = m.email;
-    String role = (m.role == 'Admin') ? 'Admin' : 'User';
+    String role = (m.role == 'Admin') ? 'Admin' : 'Employee';
     String password = m.password ?? '';
     bool obscure = true;
     await showAdminDialog(
@@ -240,7 +240,7 @@ class EmployeePage extends StatelessWidget {
               initialValue: role,
               items: const [
                 'Admin',
-                'User',
+                'Employee',
               ].map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
               onChanged: (v) => role = v ?? role,
               decoration: const InputDecoration(labelText: 'Role *'),
@@ -704,11 +704,11 @@ class EmployeePage extends StatelessWidget {
                                 title: const Text('Admin'),
                               ),
                               CheckboxListTile(
-                                value: ctrl.selectedRoles.contains('User'),
+                                value: ctrl.selectedRoles.contains('Employee'),
                                 onChanged: (v) => v == true
-                                    ? ctrl.selectedRoles.add('User')
-                                    : ctrl.selectedRoles.remove('User'),
-                                title: const Text('User'),
+                                    ? ctrl.selectedRoles.add('Employee')
+                                    : ctrl.selectedRoles.remove('Employee'),
+                                title: const Text('Employee'),
                               ),
                             ],
                           ),

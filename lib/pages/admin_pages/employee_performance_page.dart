@@ -27,10 +27,22 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
     setState(() => _isLoading = true);
     try {
       final projectsCtrl = Get.find<ProjectsController>();
+      final teamCtrl = Get.find<TeamController>();
+
+      // Ensure members are loaded
+      if (teamCtrl.members.isEmpty) {
+        await teamCtrl.refreshMembers();
+      }
+
+      // Load all projects
       await projectsCtrl.refreshProjects();
 
+      print(
+        '[EmployeePerformance] Projects loaded: ${projectsCtrl.projects.length}',
+      );
+      print('[EmployeePerformance] Team members: ${teamCtrl.members.length}');
+
       // Calculate and store employee stats
-      final teamCtrl = Get.find<TeamController>();
       final stats = <String, Map<String, int>>{};
 
       for (final employee in teamCtrl.members) {
@@ -47,6 +59,12 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
           'completed': completed,
           'inProgress': inProgress,
         };
+
+        if (allProjects.isNotEmpty) {
+          print(
+            '[EmployeePerformance] ${employee.name}: ${allProjects.length} projects',
+          );
+        }
       }
 
       if (mounted) {
@@ -60,6 +78,14 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
       );
     } catch (e) {
       print('[EmployeePerformance] Error loading projects: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading employee data: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -130,7 +156,7 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
                                     columns: const [
                                       DataColumn(
                                         label: Text(
-                                          'User',
+                                          'Employee',
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             fontSize: 15,
