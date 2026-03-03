@@ -32,17 +32,32 @@ class _EmployeeProjectsPageState extends State<EmployeeProjectsPage> {
 
     try {
       final projectsCtrl = Get.find<ProjectsController>();
+      final membershipService = Get.find<ProjectMembershipService>();
 
-      // Refresh projects to ensure we have latest data with assigned employees
+      // Refresh projects to ensure we have latest data
       await projectsCtrl.refreshProjects();
-
-      // Small delay to ensure hydration completes (race condition fix)
-      // Removed delay for faster loading
 
       if (!mounted) return;
 
-      // Use the controller's byAssigneeId method for more reliable filtering
-      final allProjects = projectsCtrl.byAssigneeId(widget.member.id);
+      // Get all projects for this employee through their memberships
+      final userProjectsData = await membershipService.getUserProjects(
+        widget.member.id,
+      );
+
+      // Extract project IDs from membership data
+      // Each element is a ProjectMembership with a populated project_id field
+      final employeeProjectIds = <String>{};
+      for (final membership in userProjectsData) {
+        final projectId = membership['project_id'];
+        if (projectId is Map && projectId['_id'] != null) {
+          employeeProjectIds.add(projectId['_id'].toString());
+        }
+      }
+
+      // Get the actual project objects from the projects controller
+      final allProjects = projectsCtrl.projects
+          .where((p) => employeeProjectIds.contains(p.id))
+          .toList();
 
       // Debug logging
       print(
@@ -52,16 +67,13 @@ class _EmployeeProjectsPageState extends State<EmployeeProjectsPage> {
         '[EmployeeProjectsPage] Total projects found: ${allProjects.length}',
       );
       for (final p in allProjects) {
-        print(
-          '[EmployeeProjectsPage]   - ${p.title} (assignedEmployees: ${p.assignedEmployees})',
-        );
+        print('[EmployeeProjectsPage]   - ${p.title} (id: ${p.id})');
       }
 
       // Separate into current and completed
       bool isCompleted(Project p) => p.status.toLowerCase() == 'completed';
 
       // Fetch roles for each project
-      final membershipService = Get.find<ProjectMembershipService>();
       final rolesMap = <String, List<String>>{};
 
       for (final project in allProjects) {

@@ -636,7 +636,7 @@ class _MyProjectCardState extends State<_MyProjectCard> {
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE3F2FD),
+                              color: const Color(0xFF1976D2),
                               borderRadius: BorderRadius.circular(16),
                             ),
                             child: Text(
@@ -646,7 +646,7 @@ class _MyProjectCardState extends State<_MyProjectCard> {
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 fontWeight: FontWeight.w500,
-                                color: Color(0xFF135BEC),
+                                color: Colors.white,
                                 fontSize: 11,
                               ),
                             ),

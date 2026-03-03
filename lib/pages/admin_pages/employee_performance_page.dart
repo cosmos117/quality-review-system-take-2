@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../../controllers/team_controller.dart';
 import '../../controllers/projects_controller.dart';
 import '../../models/team_member.dart';
+import '../../services/project_membership_service.dart';
 import 'employee_performance_detail_page.dart';
 
 class EmployeePerformancePage extends StatefulWidget {
@@ -28,6 +29,7 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
     try {
       final projectsCtrl = Get.find<ProjectsController>();
       final teamCtrl = Get.find<TeamController>();
+      final membershipService = Get.find<ProjectMembershipService>();
 
       // Ensure members are loaded
       if (teamCtrl.members.isEmpty) {
@@ -42,28 +44,55 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
       );
       print('[EmployeePerformance] Team members: ${teamCtrl.members.length}');
 
-      // Calculate and store employee stats
+      // Calculate and store employee stats using project memberships
       final stats = <String, Map<String, int>>{};
 
       for (final employee in teamCtrl.members) {
-        final allProjects = projectsCtrl.byAssigneeId(employee.id);
-        final completed = allProjects
-            .where((p) => p.status.toLowerCase() == 'completed')
-            .length;
-        final inProgress = allProjects
-            .where((p) => p.status.toLowerCase() == 'in progress')
-            .length;
-
-        stats[employee.id] = {
-          'total': allProjects.length,
-          'completed': completed,
-          'inProgress': inProgress,
-        };
-
-        if (allProjects.isNotEmpty) {
-          print(
-            '[EmployeePerformance] ${employee.name}: ${allProjects.length} projects',
+        try {
+          // Get all projects for this employee through their memberships
+          final userProjectsData = await membershipService.getUserProjects(
+            employee.id,
           );
+
+          // Extract project IDs from membership data
+          // Each element is a ProjectMembership with a populated project_id field
+          final employeeProjectIds = <String>{};
+          for (final membership in userProjectsData) {
+            final projectId = membership['project_id'];
+            if (projectId is Map && projectId['_id'] != null) {
+              employeeProjectIds.add(projectId['_id'].toString());
+            }
+          }
+
+          // Get the actual project objects from the projects controller
+          final allProjects = projectsCtrl.projects
+              .where((p) => employeeProjectIds.contains(p.id))
+              .toList();
+
+          final completed = allProjects
+              .where((p) => p.status.toLowerCase() == 'completed')
+              .length;
+          final inProgress = allProjects
+              .where((p) => p.status.toLowerCase() == 'in progress')
+              .length;
+
+          stats[employee.id] = {
+            'total': allProjects.length,
+            'completed': completed,
+            'inProgress': inProgress,
+          };
+
+          if (allProjects.isNotEmpty) {
+            print(
+              '[EmployeePerformance] ${employee.name}: ${allProjects.length} projects (completed: $completed, in progress: $inProgress)',
+            );
+          }
+        } catch (employeeError) {
+          print(
+            '[EmployeePerformance] Error loading projects for ${employee.name}: $employeeError',
+          );
+          // Set empty stats for this employee
+          stats[employee.id] = {'total': 0, 'completed': 0, 'inProgress': 0};
         }
       }
 
