@@ -22,6 +22,7 @@ class ProjectMembershipCache {
 
 class ProjectsController extends GetxController {
   final RxList<Project> projects = <Project>[].obs;
+  final RxList<Project> userProjects = <Project>[].obs;
   final RxBool isLoading = false.obs;
   final RxString errorMessage = ''.obs;
 
@@ -34,8 +35,8 @@ class ProjectsController extends GetxController {
   StreamSubscription? _projectsSubscription;
   bool _hydratingInProgress = false;
 
-  /// True when in user-specific mode (employee side); the global polling
-  /// stream is paused to prevent it from overwriting user-filtered data.
+  /// True when in user-specific mode (employee side); kept for backward compatibility
+  /// but no longer used since we load user-specific projects into a separate list.
   bool _userMode = false;
 
   @override
@@ -237,16 +238,14 @@ class ProjectsController extends GetxController {
   }
 
   /// Load projects for a specific user (optimized - no hydration needed).
-  /// Cancels the global polling stream to prevent it from overwriting
-  /// user-specific data with ALL projects + expensive hydration.
+  /// Stores user-specific projects in a separate list without modifying the global projects list.
+  /// The global polling stream continues to run so the Dashboard always shows all projects.
   Future<void> loadUserProjects(String userId) async {
     try {
-      // Stop the global polling stream – employees don't need all-project sync
-      stopRealtimeSync();
       isLoading.value = true;
       errorMessage.value = '';
       final projectsList = await _service.getForUser(userId);
-      projects.assignAll(projectsList.map(_normalize));
+      userProjects.assignAll(projectsList.map(_normalize));
       isLoading.value = false;
       // No hydration needed - data already included from backend
     } catch (e) {

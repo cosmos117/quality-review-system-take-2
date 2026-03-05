@@ -142,11 +142,16 @@ class _PhaseOverviewWidgetState extends State<PhaseOverviewWidget> {
           if (_isProjectCompleted)
             Padding(
               padding: EdgeInsets.only(bottom: widget.compact ? 8.0 : 12.0),
-              child: Card(
-                color: Colors.blue.shade50,
-                child: Padding(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   padding: EdgeInsets.all(widget.compact ? 8.0 : 12.0),
                   child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         Icons.check_circle,
@@ -154,14 +159,12 @@ class _PhaseOverviewWidgetState extends State<PhaseOverviewWidget> {
                         size: widget.compact ? 20 : 24,
                       ),
                       const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          '🎉 Project Completed! All phases have been reviewed and approved.',
-                          style: TextStyle(
-                            color: Colors.blue.shade900,
-                            fontWeight: FontWeight.w600,
-                            fontSize: widget.compact ? 12 : 14,
-                          ),
+                      Text(
+                        'Project Completed! All phases have been reviewed and approved.',
+                        style: TextStyle(
+                          color: Colors.blue.shade900,
+                          fontWeight: FontWeight.w600,
+                          fontSize: widget.compact ? 12 : 14,
                         ),
                       ),
                     ],

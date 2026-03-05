@@ -52,15 +52,15 @@ class _MyprojectState extends State<Myproject> {
         return;
       }
 
-      // Use optimized user-specific endpoint (includes memberships, no hydration needed)
+      // Load user-specific projects
       if (_isInitialLoad || forceRefresh) {
         await ctrl.loadUserProjects(userId);
       }
 
       if (!mounted) return;
 
-      // Filter projects for this user
-      final myProjects = ctrl.byAssigneeId(userId);
+      // Use the userProjects list that was populated by loadUserProjects
+      final myProjects = ctrl.userProjects.toList();
 
       if (mounted) {
         setState(() {

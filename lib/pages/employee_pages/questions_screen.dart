@@ -58,6 +58,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   final ScrollController _reviewerScroll = ScrollController();
   final Set<String> _highlightSubs = {};
   List<Question> checklist = []; // Checklist questions for current phase
+  Map<String, String> _checkpointIdMap =
+      {}; // Cache: subQuestion text/id -> checkpoint ID (for fast lookup)
 
   // Defect tracking and category state
   Map<String, int> _defectsByChecklist = {};
@@ -357,19 +359,17 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         if (groups.isNotEmpty) {
           loadedChecklist = Question.fromProjectChecklistGroups(groups);
 
-          // Calculate total cumulative defect count from all groups for this phase
+          // OPTIMIZATION: Process all groups in a single pass to calculate defects and extract categories
           int totalDefects = 0;
-          for (final group in groups) {
-            if (group is Map<String, dynamic>) {
-              final defectCount = group['defectCount'] as int? ?? 0;
-              totalDefects += defectCount;
-            }
-          }
-          _cumulativeDefectCount[phase] = totalDefects;
+          final defectCategories = <String, String?>{};
+          final defectSeverities = <String, String?>{};
 
-          // Extract defect category and severity from questions
           for (final group in groups) {
             if (group is! Map<String, dynamic>) continue;
+
+            // Calculate defects for this group
+            final defectCount = group['defectCount'] as int? ?? 0;
+            totalDefects += defectCount;
 
             // Process direct questions in group
             final directQuestions = group['questions'] as List<dynamic>? ?? [];
@@ -378,7 +378,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
               final questionId = (q['_id'] ?? '').toString();
               if (questionId.isEmpty) continue;
 
-              // Extract defect info from reviewer response
               final reviewerResp =
                   q['reviewerResponse'] as Map<String, dynamic>? ?? {};
               final defectCatId = (reviewerResp['categoryId'] ?? '').toString();
@@ -386,8 +385,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                   .toString();
 
               if (defectCatId.isNotEmpty) {
-                _selectedDefectCategory[questionId] = defectCatId;
-                _selectedDefectSeverity[questionId] = defectSeverity.isNotEmpty
+                defectCategories[questionId] = defectCatId;
+                defectSeverities[questionId] = defectSeverity.isNotEmpty
                     ? defectSeverity
                     : null;
               }
@@ -405,7 +404,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                 final questionId = (q['_id'] ?? '').toString();
                 if (questionId.isEmpty) continue;
 
-                // Extract defect info from reviewer response
                 final reviewerResp =
                     q['reviewerResponse'] as Map<String, dynamic>? ?? {};
                 final defectCatId = (reviewerResp['categoryId'] ?? '')
@@ -414,13 +412,19 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                     .toString();
 
                 if (defectCatId.isNotEmpty) {
-                  _selectedDefectCategory[questionId] = defectCatId;
-                  _selectedDefectSeverity[questionId] =
-                      defectSeverity.isNotEmpty ? defectSeverity : null;
+                  defectCategories[questionId] = defectCatId;
+                  defectSeverities[questionId] = defectSeverity.isNotEmpty
+                      ? defectSeverity
+                      : null;
                 }
               }
             }
           }
+
+          // OPTIMIZATION: Batch update all defect data in one setState
+          _cumulativeDefectCount[phase] = totalDefects;
+          _selectedDefectCategory.addAll(defectCategories);
+          _selectedDefectSeverity.addAll(defectSeverities);
         }
       } catch (e) {}
 
@@ -546,6 +550,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       setState(() {
         checklist = loadedChecklist;
       });
+      // Build checkpoint ID cache for fast lookup during answer changes
+      _buildCheckpointIdMap();
     } catch (e) {
       if (!mounted) return;
       // Don't show checkpoint-related errors to users
@@ -951,6 +957,30 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       }
     }
     return questions;
+  }
+
+  /// Builds a cache map of (subQuestion text/id) -> checkpoint ID for fast lookup
+  /// This is called once after checklist is loaded to avoid O(n) searches on every keystroke
+  void _buildCheckpointIdMap() {
+    _checkpointIdMap.clear();
+    for (final q in checklist) {
+      for (final sub in q.subQuestions) {
+        final subId = (sub['id'] ?? '').toString();
+        final subText = (sub['text'] ?? '').toString();
+        final checkpointId = (sub['id'] ?? '').toString();
+
+        // Map both the text and id to the checkpoint ID for flexible lookup
+        if (subText.isNotEmpty) {
+          _checkpointIdMap[subText] = checkpointId;
+        }
+        if (subId.isNotEmpty) {
+          _checkpointIdMap[subId] = checkpointId;
+        }
+      }
+    }
+    debugPrint(
+      '✓ Built checkpoint ID cache with ${_checkpointIdMap.length} entries',
+    );
   }
 
   void _recomputeDefects() {
@@ -1368,23 +1398,22 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                         borderRadius: BorderRadius.circular(8),
                         child: Padding(
                           padding: const EdgeInsets.all(12.0),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
                                 Icons.check_circle,
                                 color: Colors.blue.shade700,
                                 size: 24,
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  '🎉 Project Completed! All phases have been reviewed and approved. All phases are now in view-only mode.',
-                                  style: TextStyle(
-                                    color: Colors.blue.shade900,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Project Completed! All phases have been reviewed and approved. All phases are now in view-only mode.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.blue.shade900,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ],
@@ -1767,19 +1796,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                             );
 
                             // Also update the checkpoint with category and severity if available
-                            // Find checkpoint ID from the checklist Questions structure
-                            String? checkpointId;
-                            for (final q in checklist) {
-                              final sub = q.subQuestions.firstWhereOrNull(
-                                (s) =>
-                                    (s['text'] ?? '') == subQ ||
-                                    (s['id'] ?? '') == subQ,
-                              );
-                              if (sub != null) {
-                                checkpointId = (sub['id'] ?? '').toString();
-                                break;
-                              }
-                            }
+                            // Use cached checkpoint ID map instead of looping through checklist
+                            final checkpointId = _checkpointIdMap[subQ];
 
                             if (checkpointId != null &&
                                 checkpointId.isNotEmpty) {
@@ -1868,19 +1886,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                           onAnswer: (subQ, ans) async {
                             setState(() => reviewerAnswers[subQ] = ans);
 
-                            // Find checkpoint ID from the checklist Questions structure
-                            String? checkpointId;
-                            for (final q in checklist) {
-                              final sub = q.subQuestions.firstWhereOrNull(
-                                (s) =>
-                                    (s['text'] ?? '') == subQ ||
-                                    (s['id'] ?? '') == subQ,
-                              );
-                              if (sub != null) {
-                                checkpointId = (sub['id'] ?? '').toString();
-                                break;
-                              }
-                            }
+                            // Use cached checkpoint ID map instead of looping through checklist
+                            final checkpointId = _checkpointIdMap[subQ];
 
                             // Get category and severity from answer if provided, otherwise from maps
                             String? categoryId = (ans['categoryId'] ?? '')
