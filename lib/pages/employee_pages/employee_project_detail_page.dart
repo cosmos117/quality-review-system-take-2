@@ -705,9 +705,9 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
   List<TeamMemberFiltered> _filter(String q, {Set<String> exclude = const {}}) {
     final members = widget.teamCtrl.members;
     // Filter out members who are already assigned to other roles
-    // AND filter out admin users - only show users with 'user' role
+    // AND filter out admin users - only show users with 'employee' role
     final available = members.where(
-      (m) => !exclude.contains(m.id) && m.role.toLowerCase() == 'user',
+      (m) => !exclude.contains(m.id) && m.role.toLowerCase() == 'employee',
     );
 
     if (q.trim().isEmpty) {

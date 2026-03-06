@@ -402,32 +402,17 @@ class RoleColumn extends StatelessWidget {
                 // sub is Map<String,String>
                 String subKey(Map<String, String> s) => (s['id'] ?? s['text'])!;
                 String subText(Map<String, String> s) => (s['text'] ?? '');
-                final differs = q.subQuestions.any((sub) {
-                  final key = subKey(sub);
-                  final a =
-                      answers[key]?['answer'] ??
-                      checklistCtrl.getAnswers(
-                        projectId,
-                        phase,
-                        role,
-                        key,
-                      )?['answer'];
-                  final b =
-                      otherAnswers[key]?['answer'] ??
-                      checklistCtrl.getAnswers(
-                        projectId,
-                        phase,
-                        role == 'executor' ? 'reviewer' : 'executor',
-                        key,
-                      )?['answer'];
 
-                  // Only show as different if BOTH have provided answers AND they differ
-                  // If either side hasn't answered (null), don't consider it as differing
-                  if (a == null || b == null) return false;
-
-                  return (a is String ? a.trim().toLowerCase() : a) !=
-                      (b is String ? b.trim().toLowerCase() : b);
-                });
+                // OPTIMIZED: Pre-calculate differs once and cache it
+                final differs = _calculateDiffers(
+                  q.subQuestions,
+                  answers,
+                  otherAnswers,
+                  checklistCtrl,
+                  projectId,
+                  phase,
+                  role,
+                );
                 final isExpanded = expanded.contains(index);
                 return Card(
                   shape: RoundedRectangleBorder(
@@ -795,6 +780,44 @@ class RoleColumn extends StatelessWidget {
       ),
     );
   }
+
+  /// OPTIMIZATION: Pre-calculate differs efficiently with minimal getAnswers calls
+  bool _calculateDiffers(
+    List<Map<String, String>> subQuestions,
+    Map<String, Map<String, dynamic>> answers,
+    Map<String, Map<String, dynamic>> otherAnswers,
+    ChecklistController checklistCtrl,
+    String projectId,
+    int phase,
+    String role,
+  ) {
+    // Quickly fetch both role sheets once instead of per sub-question
+    final thisRoleSheet = checklistCtrl.getRoleSheet(projectId, phase, role);
+    final otherRole = role == 'executor' ? 'reviewer' : 'executor';
+    final otherRoleSheet = checklistCtrl.getRoleSheet(
+      projectId,
+      phase,
+      otherRole,
+    );
+
+    // Now check if any sub-question differs (no multiple getAnswers calls)
+    for (final sub in subQuestions) {
+      final key = (sub['id'] ?? sub['text'])!;
+
+      // Get answers from merged sources (local map priority over cache)
+      final a = answers[key]?['answer'] ?? thisRoleSheet[key]?['answer'];
+      final b = otherAnswers[key]?['answer'] ?? otherRoleSheet[key]?['answer'];
+
+      // Only show as different if BOTH have provided answers AND they differ
+      if (a == null || b == null) continue;
+
+      final aStr = (a is String ? a.trim().toLowerCase() : a);
+      final bStr = (b is String ? b.trim().toLowerCase() : b);
+
+      if (aStr != bStr) return true; // Found a difference
+    }
+    return false; // No differences found
+  }
 }
 
 class _DefectChip extends StatelessWidget {
@@ -1086,7 +1109,6 @@ class ApprovalBanner extends StatelessWidget {
       text = 'Reverted to Executor - Waiting for executor to resubmit';
     }
 
-    final cmp = match ? 'Answers match' : 'Answers differ';
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
@@ -1100,7 +1122,7 @@ class ApprovalBanner extends StatelessWidget {
           children: [
             const Icon(Icons.info_outline, size: 18),
             const SizedBox(width: 8),
-            Text('$text • $cmp'),
+            Text(text),
           ],
         ),
       ),
@@ -2304,13 +2326,14 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
   // Debounced remark handler
   void _onRemarkChanged(String newRemark) {
     _debounceTimer?.cancel();
-    // Only compute suggestions for reviewer role
+    // Save answer IMMEDIATELY on every keystroke (don't debounce the save)
+    _updateAnswer();
+    // But debounce the suggestion computation for reviewer role
     if (widget.role == 'reviewer') {
       _debounceTimer = Timer(const Duration(milliseconds: 400), () {
         _computeLocalSuggestions(newRemark);
       });
     }
-    _updateAnswer();
   }
 
   void _computeLocalSuggestions(String remark) {

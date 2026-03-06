@@ -35,20 +35,37 @@ class _EmployeePerformanceDetailPageState
 
     try {
       final projectsCtrl = Get.find<ProjectsController>();
+      final membershipService = Get.find<ProjectMembershipService>();
 
-      // Load user's projects
-      await projectsCtrl.loadUserProjects(widget.member.id);
+      // Refresh all projects first
+      await projectsCtrl.refreshProjects();
 
       if (!mounted) return;
 
-      // Get all assigned projects
-      final allProjects = projectsCtrl.byAssigneeId(widget.member.id);
+      // Get all projects for this employee through their memberships
+      final userProjectsData = await membershipService.getUserProjects(
+        widget.member.id,
+      );
+
+      // Extract project IDs from membership data
+      // Each element is a ProjectMembership with a populated project_id field
+      final employeeProjectIds = <String>{};
+      for (final membership in userProjectsData) {
+        final projectId = membership['project_id'];
+        if (projectId is Map && projectId['_id'] != null) {
+          employeeProjectIds.add(projectId['_id'].toString());
+        }
+      }
+
+      // Get the actual project objects
+      final allProjects = projectsCtrl.projects
+          .where((p) => employeeProjectIds.contains(p.id))
+          .toList();
 
       // Separate into current and completed
       bool isCompleted(Project p) => p.status.toLowerCase() == 'completed';
 
       // Fetch roles for each project
-      final membershipService = Get.find<ProjectMembershipService>();
       final rolesMap = <String, List<String>>{};
       final leaderProjects = <Project>[];
 

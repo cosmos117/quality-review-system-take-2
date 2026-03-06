@@ -52,15 +52,15 @@ class _MyprojectState extends State<Myproject> {
         return;
       }
 
-      // Use optimized user-specific endpoint (includes memberships, no hydration needed)
+      // Load user-specific projects
       if (_isInitialLoad || forceRefresh) {
         await ctrl.loadUserProjects(userId);
       }
 
       if (!mounted) return;
 
-      // Filter projects for this user
-      final myProjects = ctrl.byAssigneeId(userId);
+      // Use the userProjects list that was populated by loadUserProjects
+      final myProjects = ctrl.userProjects.toList();
 
       if (mounted) {
         setState(() {
@@ -636,7 +636,7 @@ class _MyProjectCardState extends State<_MyProjectCard> {
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE3F2FD),
+                              color: const Color(0xFF1976D2),
                               borderRadius: BorderRadius.circular(16),
                             ),
                             child: Text(
@@ -646,7 +646,7 @@ class _MyProjectCardState extends State<_MyProjectCard> {
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 fontWeight: FontWeight.w500,
-                                color: Color(0xFF135BEC),
+                                color: Colors.white,
                                 fontSize: 11,
                               ),
                             ),

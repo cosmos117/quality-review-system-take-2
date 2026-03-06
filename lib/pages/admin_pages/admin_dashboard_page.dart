@@ -808,7 +808,9 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                     initialValue: data.projectNo,
                     decoration: const InputDecoration(labelText: 'Project No.'),
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r'[a-zA-Z0-9-]'),
+                      ),
                     ],
                     onSaved: (v) => data.projectNo = v?.trim(),
                   ),

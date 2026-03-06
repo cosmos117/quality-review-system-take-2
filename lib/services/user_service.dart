@@ -16,7 +16,7 @@ class UserService {
     final email = (j['email'] ?? '').toString();
     // Backend role is either 'user' or 'admin'
     final roleRaw = (j['role'] ?? '').toString().toLowerCase();
-    final role = roleRaw == 'admin' ? 'Admin' : 'User';
+    final role = roleRaw == 'admin' ? 'Admin' : 'Employee';
     final createdAt = (j['createdAt'] ?? j['dateAdded'] ?? '').toString();
     final updatedAt = (j['updatedAt'] ?? j['lastActive'] ?? '').toString();
     return TeamMember(
