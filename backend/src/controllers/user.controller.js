@@ -5,6 +5,14 @@ import { User } from "../models/user.models.js";
 import ProjectMembership from "../models/projectMembership.models.js";
 import jwt from "jsonwebtoken";
 
+const isProduction = process.env.NODE_ENV === "production";
+
+const cookieOptions = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: isProduction ? "strict" : "lax",
+};
+
 
 const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password, role } = req.body;
@@ -66,11 +74,6 @@ const loginUser = asyncHandler(async (req, res) => {
   user.accessToken = accessToken;
   await user.save();
 
-  const options = {
-    httpOnly: true,
-    secure: false
-  }
-
   const loggedUser = await User.findById(user._id)
     .select("-password -accessToken");
 
@@ -83,7 +86,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .cookie("token", accessToken, options)
+    .cookie("token", accessToken, cookieOptions)
     .json(new ApiResponse(200, response, "User logged in successfully"));
 });
 
@@ -95,14 +98,9 @@ const logoutUser = asyncHandler(async (req, res) => {
 
   await User.findByIdAndUpdate(userId, { accessToken: null });
 
-  const options = {
-    httpOnly: true,
-    secure: false
-  }
-
   return res
     .status(200)
-    .clearCookie("token", options)
+    .clearCookie("token", cookieOptions)
     .json(new ApiResponse(200, {}, "User logged out successfully"));
 });
 

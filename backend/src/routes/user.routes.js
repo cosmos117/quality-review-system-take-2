@@ -12,15 +12,18 @@ import authMiddleware from "../middleware/auth.Middleware.js";
 
 const router = express.Router();
 
-router.get("/", getAllUsers);                         // GET /api/v1/users
+// Public routes
 router.post("/register", registerUser);
 router.post("/login", loginUser);
+
+// Protected routes
+router.get("/", authMiddleware, getAllUsers);
 router.post("/logout", authMiddleware, logoutUser);
-router.put("/:id", updateUser);                       // PUT /api/v1/users/:id
-router.delete("/:id", deleteUser);                    // DELETE /api/v1/users/:id
+router.put("/:id", authMiddleware, updateUser);
+router.delete("/:id", authMiddleware, deleteUser);
 
 // User projects route
-router.get("/:id/projects", getUserProjects);
+router.get("/:id/projects", authMiddleware, getUserProjects);
 
 
 export default router;
