@@ -369,9 +369,7 @@ const defaultCategories = [
 async function loadCategories() {
   try {
     console.log("🔄 Connecting to MongoDB...");
-    await mongoose.connect(
-      process.env.MONGO_DB_URI || "mongodb://localhost:27017/qrp"
-    );
+    await mongoose.connect(process.env.MONGODB_URI);
     console.log("✅ Connected to MongoDB");
 
     console.log("🔍 Finding template...");

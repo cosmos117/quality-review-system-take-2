@@ -95,14 +95,24 @@ flutter run
 
 ## Environment Variables (Backend)
 
-| Variable | Description |
-|---|---|
-| `PORT` | Server port (default: 8000) |
-| `MONGO_DB_URI` | MongoDB connection URI |
-| `DB_NAME` | Database name |
-| `CORS_ORIGIN` | Allowed CORS origins |
-| `ACCESS_TOKEN_SECRET` | JWT signing secret |
-| `ACCESS_TOKEN_EXPIRY` | JWT expiry duration (e.g., `1d`) |
+Create a `backend/.env` file from the template:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Then fill in the values:
+
+| Variable | Required | Description |
+|---|---|---|
+| `PORT` | No | Server port (default: `8000`) |
+| `MONGODB_URI` | **Yes** | Full MongoDB connection string including database name, e.g. `mongodb+srv://user:pass@cluster.mongodb.net/mydb` |
+| `ACCESS_TOKEN_SECRET` | **Yes** | Secret key for signing JWT tokens (use a long random string) |
+| `ACCESS_TOKEN_EXPIRY` | No | JWT expiry duration (default: `1d`) |
+| `CORS_ORIGIN` | No | Allowed CORS origins (default: `*`) |
+| `COOKIE_SECRET` | No | Secret for signed cookies |
+
+> **Security:** Never commit `.env` to version control. The `.gitignore` is already configured to exclude it.
 
 ---
 

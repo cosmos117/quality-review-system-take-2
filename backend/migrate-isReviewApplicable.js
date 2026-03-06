@@ -6,16 +6,16 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 
-dotenv.config({ path: "./.env" });
+dotenv.config();
 
-const MONGODB_URI = process.env.MONGO_DB_URI;
-const DB_NAME = process.env.DB_NAME || "authdb";
+const MONGODB_URI = process.env.MONGODB_URI;
+if (!MONGODB_URI) { console.error("❌ MONGODB_URI not set"); process.exit(1); }
 
 async function migrateIsReviewApplicable() {
   try {
-    await mongoose.connect(MONGODB_URI, { dbName: DB_NAME });
+    await mongoose.connect(MONGODB_URI);
     console.log("✓ Connected to MongoDB");
-    console.log(`✓ Using database: ${DB_NAME}\n`);
+    console.log(`✓ Using database: ${mongoose.connection.name}\n`);
 
     const db = mongoose.connection.db;
     const projectsCollection = db.collection("projects");

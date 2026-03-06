@@ -476,7 +476,9 @@ class ProjectsController extends GetxController {
 
           // Find current user's role in this project
           String? userRole;
-          if (currentUserId != null && currentUserId.isNotEmpty) {
+          if (currentUserId != null &&
+              currentUserId.isNotEmpty &&
+              memberships.isNotEmpty) {
             final userMembership = memberships.firstWhere(
               (m) => m.userId == currentUserId,
               orElse: () => memberships.first,

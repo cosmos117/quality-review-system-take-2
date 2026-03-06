@@ -268,10 +268,10 @@ class ProjectChecklist {
       stage: json['stage'] as String? ?? '',
       groups: groupsList,
       createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'] as String)
+          ? DateTime.parse(json['createdAt'].toString())
           : DateTime.now(),
       updatedAt: json['updatedAt'] != null
-          ? DateTime.parse(json['updatedAt'] as String)
+          ? DateTime.parse(json['updatedAt'].toString())
           : DateTime.now(),
     );
   }

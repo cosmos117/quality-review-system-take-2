@@ -217,9 +217,9 @@ export const getDefectsPerPhase = asyncHandler(async (req, res) => {
     const stageChecklists = checklists.filter(
       (c) => c.stage_id.toString() === stage._id.toString()
     );
-    const checklistIdsForStage = stageChecklists.map((c) => c._id);
+    const checklistIdsForStage = stageChecklists.map((c) => c._id.toString());
     const checkpointsInStage = checkpoints.filter((cp) =>
-      checklistIdsForStage.includes(cp.checklistId)
+      checklistIdsForStage.includes(cp.checklistId.toString())
     );
 
     const totalCheckpoints = checkpointsInStage.length;

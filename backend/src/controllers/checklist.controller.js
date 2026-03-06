@@ -3,6 +3,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import Checklist from "../models/checklist.models.js";
+import ChecklistHistory from "../models/checklistTransaction.models.js";
 const createChecklistForStage = asyncHandler(async (req, res) => {
   const { stageId } = req.params;
   const {

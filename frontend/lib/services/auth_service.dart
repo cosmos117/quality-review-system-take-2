@@ -28,4 +28,19 @@ class AuthService {
 
     return AuthUser.fromJson(data, token: token);
   }
+
+  Future<void> logout(String token) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/users/logout');
+    try {
+      await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+    } catch (_) {
+      // Best-effort: even if the server call fails, we still clear local state
+    }
+  }
 }

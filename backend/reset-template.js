@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 
-dotenv.config({ path: './.env' });
+dotenv.config();
 
 const templateSchema = new mongoose.Schema(
   {
@@ -19,7 +19,7 @@ const Template = mongoose.model("Template", templateSchema);
 
 async function resetTemplate() {
   try {
-    await mongoose.connect(process.env.MONGO_DB_URI);
+    await mongoose.connect(process.env.MONGODB_URI);
     console.log("MongoDB connected");
 
     const result = await Template.deleteMany({});

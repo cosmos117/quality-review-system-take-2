@@ -4,7 +4,6 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { User } from "../models/user.models.js";
 import ProjectMembership from "../models/projectMembership.models.js";
 import jwt from "jsonwebtoken";
-import bcrypt from "bcrypt"
 
 
 const registerUser = asyncHandler(async (req, res) => {

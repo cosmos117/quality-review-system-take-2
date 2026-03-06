@@ -50,10 +50,15 @@ class AuthController extends GetxController {
   }
 
   Future<void> logout() async {
+    final token = currentUser.value?.token ?? '';
     currentUser.value = null;
     _applyToken('');
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_user');
+    // Invalidate token on the server (best-effort)
+    if (token.isNotEmpty) {
+      _service.logout(token);
+    }
   }
 
   /// Preload projects for employee after login to ensure consistent data

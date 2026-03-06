@@ -6,9 +6,10 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 
-dotenv.config({ path: "./.env" });
+dotenv.config();
 
-const MONGODB_URI = process.env.MONGO_DB_URI;
+const MONGODB_URI = process.env.MONGODB_URI;
+if (!MONGODB_URI) { console.error("❌ MONGODB_URI not set"); process.exit(1); }
 // Check both test and authdb databases
 const DB_NAMES = ["test", "authdb"];
 

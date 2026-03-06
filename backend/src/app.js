@@ -5,7 +5,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: true,
+    origin: process.env.CORS_ORIGIN || true,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -15,7 +15,7 @@ app.use(
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 
-app.use(cookieParser());
+app.use(cookieParser(process.env.COOKIE_SECRET));
 
 //routes
 import userRouter from "./routes/user.routes.js";

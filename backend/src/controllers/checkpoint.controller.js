@@ -4,6 +4,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import Checkpoint from "../models/checkpoint.models.js";
 import Checklist from "../models/checklist.models.js";
+import ChecklistAnswer from "../models/checklistAnswer.models.js";
 
 /**
  * CREATE CHECKPOINT
@@ -310,7 +311,6 @@ export const getDefectStatsByChecklist = asyncHandler(async (req, res) => {
   const totalCheckpoints = checkpoints.length;
 
   // Get the checklist and its stage to find project_id and phase
-  const Checklist = require("../models/checklist.models.js").default;
   const checklist = await Checklist.findById(checklistId).populate("stage_id");
 
   if (!checklist || !checklist.stage_id) {
@@ -322,8 +322,6 @@ export const getDefectStatsByChecklist = asyncHandler(async (req, res) => {
   const phase = stage.phase;
 
   // Get all answers for this project and phase from ChecklistAnswer
-  const ChecklistAnswer =
-    require("../models/checklistAnswer.models.js").default;
   const allAnswers = await ChecklistAnswer.find({
     project_id: projectId,
     phase: phase,

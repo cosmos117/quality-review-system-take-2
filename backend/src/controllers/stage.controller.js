@@ -73,10 +73,10 @@ const cloneTemplateToProject = async (projectId, userId) => {
       return numA - numB;
     });
 
-  // Build stage definitions using phase names from template
-  const phaseNames = template.phaseNames || new Map();
+  // Build stage definitions using stage names from template
+  const stageNames = template.stageNames || {};
   const stageDefs = stageKeys.map((key) => ({
-    name: phaseNames.get ? phaseNames.get(key) : phaseNames[key] || `${key}`,
+    name: stageNames[key] || `${key}`,
     key: key,
   }));
 
