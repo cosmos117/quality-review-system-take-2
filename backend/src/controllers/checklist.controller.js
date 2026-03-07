@@ -2,280 +2,93 @@ import mongoose from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import Checklist from "../models/checklist.models.js";
-import ChecklistHistory from "../models/checklistTransaction.models.js";
-import { parsePagination, paginatedResponse } from "../utils/paginate.js";
+import * as checklistService from "../services/checklist.service.js";
+
 const createChecklistForStage = asyncHandler(async (req, res) => {
   const { stageId } = req.params;
-  const {
-    checklist_name,
-    description,
-    status,
-    answers,
-    defectCategory,
-    defectSeverity,
-    remark,
-  } = req.body;
-
-  if (!mongoose.isValidObjectId(stageId)) {
-    throw new ApiError(400, "Invalid stageId");
-  }
-
-  if (!checklist_name?.trim()) {
-    throw new ApiError(400, "checklist_name is required");
-  }
-
+  if (!mongoose.isValidObjectId(stageId)) throw new ApiError(400, "Invalid stageId");
+  if (!req.body.checklist_name?.trim()) throw new ApiError(400, "checklist_name is required");
   const created_by = req.user?._id;
-  if (!created_by) {
-    throw new ApiError(401, "Not authenticated");
-  }
+  if (!created_by) throw new ApiError(401, "Not authenticated");
 
-  const checklist = await Checklist.create({
-    stage_id: stageId,
-    created_by,
-    checklist_name,
-    description,
-    status, // optional; model defaults to 'draft'
-    answers: answers || {},
-    defectCategory: defectCategory || "",
-    defectSeverity: defectSeverity || "",
-    remark: remark || "",
-  });
-
-  return res
-    .status(201)
-    .json(new ApiResponse(201, checklist, "Checklist created successfully"));
+  const checklist = await checklistService.createChecklistForStage(stageId, req.body, created_by);
+  return res.status(201).json(new ApiResponse(201, checklist, "Checklist created successfully"));
 });
+
 const listChecklistsForStage = asyncHandler(async (req, res) => {
   const { stageId } = req.params;
+  if (!mongoose.isValidObjectId(stageId)) throw new ApiError(400, "Invalid stageId");
 
-  if (!mongoose.isValidObjectId(stageId)) {
-    throw new ApiError(400, "Invalid stageId");
-  }
-
-  const { page, limit, skip } = parsePagination(req.query);
-  const filter = { stage_id: stageId };
-  const total = await Checklist.countDocuments(filter);
-
-  let query = Checklist.find(filter).sort({ createdAt: 1 }).lean();
-  if (limit) query = query.skip(skip).limit(limit);
-
-  const checklists = await query;
-
-  return res
-    .status(200)
-    .json(paginatedResponse(checklists, total, { page, limit }));
+  const result = await checklistService.listChecklistsForStage(stageId, req.query);
+  return res.status(200).json(result);
 });
+
 const getChecklistById = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Invalid checklist id");
 
-  if (!mongoose.isValidObjectId(id)) {
-    throw new ApiError(400, "Invalid checklist id");
-  }
-
-  const checklist = await Checklist.findById(id).lean();
-  if (!checklist) {
-    throw new ApiError(404, "Checklist not found");
-  }
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, checklist, "Checklist fetched successfully"));
+  const checklist = await checklistService.getChecklistById(id);
+  return res.status(200).json(new ApiResponse(200, checklist, "Checklist fetched successfully"));
 });
+
 const updateChecklist = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const {
-    checklist_name,
-    description,
-    status,
-    answers,
-    defectCategory,
-    defectSeverity,
-    remark,
-  } = req.body;
+  if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Invalid checklist id");
 
-  if (!mongoose.isValidObjectId(id)) {
-    throw new ApiError(400, "Invalid checklist id");
-  }
-
-  // Only allow updating permitted fields
-  const update = {};
-  if (typeof checklist_name === "string")
-    update.checklist_name = checklist_name;
-  if (typeof description === "string") update.description = description;
-  if (typeof status === "string") update.status = status; // enum validated by model
-  if (answers && typeof answers === "object") update.answers = answers;
-  if (typeof defectCategory === "string")
-    update.defectCategory = defectCategory;
-  if (typeof defectSeverity === "string")
-    update.defectSeverity = defectSeverity;
-  if (typeof remark === "string") update.remark = remark;
-
-  if (Object.keys(update).length === 0) {
-    throw new ApiError(400, "No valid fields provided to update");
-  }
-
-  const checklist = await Checklist.findByIdAndUpdate(
-    id,
-    { $set: update },
-    { new: true, runValidators: true },
-  );
-
-  if (!checklist) {
-    throw new ApiError(404, "Checklist not found");
-  }
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, checklist, "Checklist updated successfully"));
+  const checklist = await checklistService.updateChecklist(id, req.body);
+  return res.status(200).json(new ApiResponse(200, checklist, "Checklist updated successfully"));
 });
+
 const deleteChecklist = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Invalid checklist id");
 
-  if (!mongoose.isValidObjectId(id)) {
-    throw new ApiError(400, "Invalid checklist id");
-  }
-
-  const deleted = await Checklist.findByIdAndDelete(id);
-  if (!deleted) {
-    throw new ApiError(404, "Checklist not found");
-  }
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, deleted, "Checklist deleted successfully"));
+  const deleted = await checklistService.deleteChecklist(id);
+  return res.status(200).json(new ApiResponse(200, deleted, "Checklist deleted successfully"));
 });
+
 const submitChecklist = async (req, res) => {
   try {
-    const checklistId = req.params.id;
-    const userId = req.body.user_id;
-
-    const checklist = await Checklist.findById(checklistId);
-    if (!checklist)
-      return res.status(404).json({ message: "Checklist not found" });
-
-    checklist.status = "pending";
-    checklist.revision_number += 1;
-    await checklist.save();
-
-    await ChecklistHistory.create({
-      checklist_id: checklist._id,
-      user_id: userId,
-      action_type: "SUBMITTED_FOR_REVIEW",
-      description: `Checklist "${checklist.checklist_name}" was submitted for review.`,
-    });
-
-    res
-      .status(200)
-      .json({
-        message: "Checklist submitted for review successfully",
-        checklist,
-      });
+    const checklist = await checklistService.submitChecklist(req.params.id, req.body.user_id);
+    res.status(200).json({ message: "Checklist submitted for review successfully", checklist });
   } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Error submitting checklist", error: err.message });
+    const status = err.statusCode || 500;
+    res.status(status).json({ message: "Error submitting checklist", error: err.message });
   }
 };
 
-/**
- * POST /api/checklists/:id/approve
- * Marks checklist as "approved" and logs the action.
- */
 const approveChecklist = async (req, res) => {
   try {
-    const checklistId = req.params.id;
-    const userId = req.body.user_id;
-
-    const checklist = await Checklist.findById(checklistId);
-    if (!checklist)
-      return res.status(404).json({ message: "Checklist not found" });
-
-    checklist.status = "approved";
-    await checklist.save();
-
-    await ChecklistHistory.create({
-      checklist_id: checklist._id,
-      user_id: userId,
-      action_type: "APPROVED",
-      description: `Checklist "${checklist.checklist_name}" was approved.`,
-    });
-
-    res
-      .status(200)
-      .json({ message: "Checklist approved successfully", checklist });
+    const checklist = await checklistService.approveChecklist(req.params.id, req.body.user_id);
+    res.status(200).json({ message: "Checklist approved successfully", checklist });
   } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Error approving checklist", error: err.message });
+    const status = err.statusCode || 500;
+    res.status(status).json({ message: "Error approving checklist", error: err.message });
   }
 };
 
-/**
- * POST /api/checklists/:id/request-changes
- * Marks checklist as "changes_requested" and logs the action.
- */
 const requestChanges = async (req, res) => {
   try {
-    const checklistId = req.params.id;
-    const userId = req.body.user_id;
-    const { message } = req.body;
-
-    const checklist = await Checklist.findById(checklistId);
-    if (!checklist)
-      return res.status(404).json({ message: "Checklist not found" });
-
-    checklist.status = "changes_requested";
-    await checklist.save();
-
-    await ChecklistHistory.create({
-      checklist_id: checklist._id,
-      user_id: userId,
-      action_type: "CHANGES_REQUESTED",
-      description:
-        message ||
-        `Changes were requested for checklist "${checklist.checklist_name}".`,
-    });
-
-    res
-      .status(200)
-      .json({ message: "Changes requested successfully", checklist });
+    const checklist = await checklistService.requestChanges(req.params.id, req.body.user_id, req.body.message);
+    res.status(200).json({ message: "Changes requested successfully", checklist });
   } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Error requesting changes", error: err.message });
+    const status = err.statusCode || 500;
+    res.status(status).json({ message: "Error requesting changes", error: err.message });
   }
 };
 
-/**
- * GET /api/checklists/:id/history
- * Fetches the full audit history of a checklist.
- */
 const getChecklistHistory = async (req, res) => {
   try {
-    const checklistId = req.params.id;
-
-    const history = await ChecklistHistory.find({ checklist_id: checklistId })
-      .populate("user_id", "name email")
-      .sort({ createdAt: 1 })
-      .lean();
-
+    const history = await checklistService.getChecklistHistory(req.params.id);
     if (!history.length) {
-      return res
-        .status(404)
-        .json({ message: "No history found for this checklist" });
+      return res.status(404).json({ message: "No history found for this checklist" });
     }
-
     res.status(200).json({ history });
   } catch (err) {
-    res
-      .status(500)
-      .json({
-        message: "Error fetching checklist history",
-        error: err.message,
-      });
+    res.status(500).json({ message: "Error fetching checklist history", error: err.message });
   }
 };
+
 export {
   listChecklistsForStage,
   getChecklistById,

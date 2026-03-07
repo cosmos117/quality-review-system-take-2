@@ -2,371 +2,78 @@ import mongoose from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import ProjectChecklist from "../models/projectChecklist.models.js";
-import ChecklistApproval from "../models/checklistApproval.models.js";
-import Stage from "../models/stage.models.js";
-import Project from "../models/project.models.js";
-import { accumulateDefectsForChecklist } from "./checklistAnswer.controller.js";
+import * as approvalService from "../services/approval.service.js";
 
-// Utility to compute match between executor and reviewer maps
-function answersMatch(execAns, revAns) {
-  // Only compare questions where BOTH executor and reviewer have provided answers
-  const execKeys = Object.keys(execAns);
-  const revKeys = Object.keys(revAns);
-
-  // Find common questions (where both have answered)
-  const commonKeys = execKeys.filter((k) => revKeys.includes(k));
-
-  // If no common answered questions, they don't differ (reviewer hasn't started yet)
-  if (commonKeys.length === 0) return true;
-
-  // Compare only the common answered questions
-  for (const k of commonKeys) {
-    const e = execAns[k] || {};
-    const r = revAns[k] || {};
-    // Only compare answers; ignore remark text
-    if ((e.answer || null) !== (r.answer || null)) return false;
-  }
-  return true;
-}
-
-// GET compare status
 const compareAnswers = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase } = req.query;
-  if (!mongoose.isValidObjectId(projectId))
-    throw new ApiError(400, "Invalid projectId");
+  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
   const phaseNum = parseInt(phase || "1");
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase");
-
-  // Find the stage for this phase
-  const stageKey = `stage${phaseNum}`;
-  const stage = await Stage.findOne({
-    project_id: projectId,
-    stage_key: stageKey,
-  });
-
-  if (!stage) {
-    return res
-      .status(200)
-      .json(
-        new ApiResponse(
-          200,
-          { match: true, stats: { exec_count: 0, rev_count: 0 } },
-          "No stage found",
-        ),
-      );
-  }
-
-  // Get project checklist for this stage
-  const checklist = await ProjectChecklist.findOne({
-    projectId: projectId,
-    stageId: stage._id,
-  });
-
-  if (!checklist) {
-    return res
-      .status(200)
-      .json(
-        new ApiResponse(
-          200,
-          { match: true, stats: { exec_count: 0, rev_count: 0 } },
-          "No checklist found",
-        ),
-      );
-  }
-
-  // Extract all questions from groups and sections
-  const execMap = {};
-  const revMap = {};
-  let execCount = 0;
-  let revCount = 0;
-
-  checklist.groups.forEach((group) => {
-    // Direct questions in group
-    group.questions.forEach((q) => {
-      const key = q.text;
-      if (q.executorAnswer !== null && q.executorAnswer !== undefined) {
-        execMap[key] = { answer: q.executorAnswer };
-        execCount++;
-      }
-      if (q.reviewerAnswer !== null && q.reviewerAnswer !== undefined) {
-        revMap[key] = { answer: q.reviewerAnswer };
-        revCount++;
-      }
-    });
-
-    // Questions in sections
-    group.sections.forEach((section) => {
-      section.questions.forEach((q) => {
-        const key = q.text;
-        if (q.executorAnswer !== null && q.executorAnswer !== undefined) {
-          execMap[key] = { answer: q.executorAnswer };
-          execCount++;
-        }
-        if (q.reviewerAnswer !== null && q.reviewerAnswer !== undefined) {
-          revMap[key] = { answer: q.reviewerAnswer };
-          revCount++;
-        }
-      });
-    });
-  });
-
-  const match = answersMatch(execMap, revMap);
-  const stats = { exec_count: execCount, rev_count: revCount };
-  return res
-    .status(200)
-    .json(new ApiResponse(200, { match, stats }, "Comparison complete"));
+  const data = await approvalService.compareAnswers(projectId, phaseNum);
+  return res.status(200).json(new ApiResponse(200, data, "Comparison complete"));
 });
 
-// POST request approval (creates/updates approval record to pending)
 const requestApproval = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase, notes } = req.body;
-  if (!mongoose.isValidObjectId(projectId))
-    throw new ApiError(400, "Invalid projectId");
+  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
   const phaseNum = parseInt(phase || "1");
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase");
-
-  const record = await ChecklistApproval.findOneAndUpdate(
-    { project_id: projectId, phase: phaseNum },
-    {
-      $set: { status: "pending", requested_at: new Date(), notes: notes || "" },
-    },
-    { new: true, upsert: true },
-  );
-  return res
-    .status(200)
-    .json(new ApiResponse(200, record, "Approval requested"));
+  const data = await approvalService.requestApproval(projectId, phaseNum, notes);
+  return res.status(200).json(new ApiResponse(200, data, "Approval requested"));
 });
 
-// POST approve: TeamLeader decides approved -> advance to next phase (create next stage if needed)
 const approve = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase } = req.body;
-  if (!mongoose.isValidObjectId(projectId))
-    throw new ApiError(400, "Invalid projectId");
+  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
   const phaseNum = parseInt(phase || "1");
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase");
-
-  const record = await ChecklistApproval.findOneAndUpdate(
-    { project_id: projectId, phase: phaseNum },
-    {
-      $set: {
-        status: "approved",
-        decided_at: new Date(),
-        decided_by: req.user?._id || null,
-      },
-    },
-    { new: true, upsert: true },
-  );
-
-  // Find current stage and mark it as completed
-  const currentStageKey = `stage${phaseNum}`;
-  await Stage.findOneAndUpdate(
-    { project_id: projectId, stage_key: currentStageKey },
-    { $set: { status: "completed" } },
-  );
-
-  // Find next stage and activate it
-  const nextPhaseNum = phaseNum + 1;
-  const nextStageKey = `stage${nextPhaseNum}`;
-  const nextStage = await Stage.findOne({
-    project_id: projectId,
-    stage_key: nextStageKey,
-  });
-
-  if (nextStage) {
-    // Activate the existing next stage
-    await Stage.findByIdAndUpdate(nextStage._id, {
-      $set: { status: "in_progress" },
-    });
-  } else {
-    // No more stages - mark project as completed
-    await Project.findByIdAndUpdate(projectId, {
-      status: "completed",
-    });
-  }
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, record, "Approved and advanced to next phase"));
+  const userId = req.user?._id || null;
+  const data = await approvalService.approve(projectId, phaseNum, userId);
+  return res.status(200).json(new ApiResponse(200, data, "Approved and advanced to next phase"));
 });
 
-// POST revert to executor: reviewer sends phase back to executor
-// This allows the executor to re-fill the checklist if the reviewer is not satisfied
-// The cycle can continue until the reviewer approves
 const revertToExecutor = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase, notes } = req.body;
-  if (!mongoose.isValidObjectId(projectId))
-    throw new ApiError(400, "Invalid projectId");
+  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
   const phaseNum = parseInt(phase || "1");
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase");
-
-  // Step 1: Find the stage to get stageId
-  const stageKey = `stage${phaseNum}`;
-  const stage = await Stage.findOne({
-    project_id: projectId,
-    stage_key: stageKey,
-  });
-
-  if (!stage) {
-    throw new ApiError(
-      404,
-      `Stage not found for project ${projectId}, phase ${phaseNum}`,
-    );
-  }
-
-  // Step 2: Find the ProjectChecklist to save current state as iteration
-  const checklist = await ProjectChecklist.findOne({
-    projectId: projectId,
-    stageId: stage._id,
-  });
-
-  let totalNewDefects = 0;
-
-  if (checklist) {
-    // FIRST: Accumulate defects before saving iteration
-    // (add current mismatches to existing defect count)
-    totalNewDefects = accumulateDefectsForChecklist(checklist);
-
-    console.log(
-      `✅ Reviewer revert: Added ${totalNewDefects} new defects to phase ${phaseNum}`,
-    );
-
-    // Get current approval record to capture submission timestamps
-    const approvalRecord = await ChecklistApproval.findOne({
-      project_id: projectId,
-      phase: phaseNum,
-    });
-
-    // Save current groups as an iteration before clearing
-    const newIteration = {
-      iterationNumber: checklist.currentIteration || 1,
-      groups: JSON.parse(JSON.stringify(checklist.groups)), // Deep copy with accumulated defects
-      revertedAt: new Date(),
-      revertedBy: req.user?._id || null,
-      revertNotes: notes || "",
-      executorSubmittedAt: approvalRecord?.executor_submitted_at || null,
-      reviewerSubmittedAt: approvalRecord?.reviewer_submitted_at || null,
-    };
-
-    checklist.iterations.push(newIteration);
-    checklist.currentIteration = (checklist.currentIteration || 1) + 1;
-
-    // Mark as modified and save
-    checklist.markModified("groups");
-    await checklist.save();
-  }
-
-  // Step 3: Update approval record to revert status
-  const record = await ChecklistApproval.findOneAndUpdate(
-    { project_id: projectId, phase: phaseNum },
-    {
-      $set: {
-        status: "reverted_to_executor",
-        decided_at: new Date(),
-        decided_by: req.user?._id || null,
-        notes: notes || "",
-        executor_submitted: false, // Reset submission flag so executor can resubmit
-        executor_submitted_at: null,
-      },
-    },
-    { new: true, upsert: true },
-  );
-
-  // Step 4: Increment conflict counter on the stage
-  await Stage.findOneAndUpdate(
-    { project_id: projectId, stage_key: stageKey },
-    { $inc: { conflict_count: 1 } },
-    { new: true, upsert: false },
-  );
-
-  const conflictCount = stage?.conflict_count + 1 || 1;
-
-  return res.status(200).json(
-    new ApiResponse(
-      200,
-      {
-        ...record.toObject(),
-        conflict_count: conflictCount,
-        iteration_saved: checklist?.currentIteration - 1 || null,
-        defects_added: totalNewDefects,
-      },
-      "Reverted to Executor - Previous iteration saved with accumulated defects",
-    ),
-  );
+  const userId = req.user?._id || null;
+  const data = await approvalService.revertToExecutor(projectId, phaseNum, notes, userId);
+  return res.status(200).json(new ApiResponse(200, data, "Reverted to Executor - Previous iteration saved with accumulated defects"));
 });
 
-// GET approval status
 const getApprovalStatus = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase } = req.query;
-  if (!mongoose.isValidObjectId(projectId))
-    throw new ApiError(400, "Invalid projectId");
+  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
   const phaseNum = parseInt(phase || "1");
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase");
-
-  const record = await ChecklistApproval.findOne({
-    project_id: projectId,
-    phase: phaseNum,
-  });
-  // Return null instead of throwing error - approval record may not exist yet
-  if (!record)
-    return res
-      .status(200)
-      .json(new ApiResponse(200, null, "No approval record found"));
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, record, "Approval status fetched"));
+  const data = await approvalService.getApprovalStatus(projectId, phaseNum);
+  if (!data) return res.status(200).json(new ApiResponse(200, null, "No approval record found"));
+  return res.status(200).json(new ApiResponse(200, data, "Approval status fetched"));
 });
 
-// GET revert count for a specific phase
 const getRevertCount = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase } = req.query;
-  if (!mongoose.isValidObjectId(projectId))
-    throw new ApiError(400, "Invalid projectId");
+  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
   const phaseNum = parseInt(phase || "1");
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase");
-
-  const record = await ChecklistApproval.findOne({
-    project_id: projectId,
-    phase: phaseNum,
-  });
-
-  const revertCount = record?.revertCount || 0;
-  return res
-    .status(200)
-    .json(new ApiResponse(200, { revertCount }, "Revert count fetched"));
+  const revertCount = await approvalService.getRevertCount(projectId, phaseNum);
+  return res.status(200).json(new ApiResponse(200, { revertCount }, "Revert count fetched"));
 });
 
-// POST increment revert count for a specific phase
 const incrementRevertCount = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase } = req.body;
-  if (!mongoose.isValidObjectId(projectId))
-    throw new ApiError(400, "Invalid projectId");
-  if (!phase || isNaN(phase) || phase < 1)
-    throw new ApiError(400, "Invalid phase");
-
-  const record = await ChecklistApproval.findOneAndUpdate(
-    { project_id: projectId, phase: parseInt(phase) },
-    { $inc: { revertCount: 1 } },
-    { new: true, upsert: true },
-  );
-
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        { revertCount: record.revertCount },
-        "Revert count incremented",
-      ),
-    );
+  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
+  if (!phase || isNaN(phase) || phase < 1) throw new ApiError(400, "Invalid phase");
+  const revertCount = await approvalService.incrementRevertCount(projectId, phase);
+  return res.status(200).json(new ApiResponse(200, { revertCount }, "Revert count incremented"));
 });
 
 export {

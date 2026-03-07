@@ -1,10 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import { User } from "../models/user.models.js";
-import ProjectMembership from "../models/projectMembership.models.js";
-import jwt from "jsonwebtoken";
-import { parsePagination, paginatedResponse } from "../utils/paginate.js";
+import * as userService from "../services/user.service.js";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -14,91 +11,45 @@ const cookieOptions = {
   sameSite: isProduction ? "strict" : "lax",
 };
 
-
 const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password, role } = req.body;
 
-  // Validate required fields
   if ([name, email, password].some((f) => !f?.trim())) {
     throw new ApiError(400, "All fields are required");
   }
 
-  // Validate role - only 'user' or 'admin' allowed
-  const validRoles = ['user', 'admin'];
-  const userRole = role || 'user'; // default to 'user' if not provided
-  
+  const validRoles = ["user", "admin"];
+  const userRole = role || "user";
   if (!validRoles.includes(userRole)) {
     throw new ApiError(400, "Role must be either 'user' or 'admin'");
   }
 
-  // Check if user exists
-  const existingUser = await User.findOne({ email });
-  if (existingUser) {
-    throw new ApiError(409, "User already exists with this email");
-  }
-
-  const user = await User.create({
-    name,
-    email,
-    password,
-    role: userRole,
-  });
-
-  const createdUser = await User.findById(user._id)
-    .select("-password -accessToken")
-    .lean();
-    
-  if(!createdUser){
-    throw new ApiError(500,"Something went wrong while registering user")
-  }
+  const createdUser = await userService.registerUser({ name, email, password, role: userRole });
 
   return res
     .status(201)
     .json(new ApiResponse(201, createdUser, "User registered successfully"));
 });
 
-
 const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
-
   if (!email || !password) {
     throw new ApiError(400, "Email and password are required");
   }
 
-  const user = await User.findOne({ email });
-  if (!user) throw new ApiError(404, "User not found");
-
-  const isPasswordValid = await user.isPasswordCorrect(password);
-  if (!isPasswordValid) throw new ApiError(404, "Invalid credentials");
-
-  // Generate new token and save (invalidate previous)
-  const accessToken = user.generateAccessToken();
-  user.accessToken = accessToken;
-  await user.save();
-
-  const loggedUser = await User.findById(user._id)
-    .select("-password -accessToken")
-    .lean();
-
-  // Include token in response for client-side storage
-  const response = {
-    ...loggedUser,
-    token: accessToken,
-  };
+  const response = await userService.loginUser({ email, password });
 
   return res
     .status(200)
-    .cookie("token", accessToken, cookieOptions)
+    .cookie("token", response.token, cookieOptions)
     .json(new ApiResponse(200, response, "User logged in successfully"));
 });
 
-
 const logoutUser = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-
   if (!userId) throw new ApiError(401, "Unauthorized");
 
-  await User.findByIdAndUpdate(userId, { accessToken: null });
+  await userService.logoutUser(userId);
 
   return res
     .status(200)
@@ -106,112 +57,40 @@ const logoutUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "User logged out successfully"));
 });
 
-// Get all users
 const getAllUsers = async (req, res) => {
   try {
-    const { page, limit, skip } = parsePagination(req.query);
-    const filter = {};
-    const total = await User.countDocuments(filter);
-
-    let query = User.find(filter)
-      .select("-password -accessToken")
-      .sort({ createdAt: -1 })
-      .lean();
-
-    if (limit) query = query.skip(skip).limit(limit);
-
-    const users = await query;
-
-    res.status(200).json(paginatedResponse(users, total, { page, limit }));
+    const result = await userService.getAllUsers(req.query);
+    res.status(200).json(result);
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Update user
 const updateUser = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
-    
-    // Validate role if provided
-    if (role && !['user', 'admin'].includes(role)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Role must be either "user" or "admin"'
-      });
+
+    if (role && !["user", "admin"].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Role must be either "user" or "admin"' });
     }
-    
-    // Check if user exists
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-    
-    // Check if email is being changed and is unique
-    if (email && email !== user.email) {
-      const existingUser = await User.findOne({ email });
-      if (existingUser) {
-        return res.status(409).json({
-          success: false,
-          message: 'Email already in use'
-        });
-      }
-    }
-    
-    // Update fields
-    if (name) user.name = name;
-    if (email) user.email = email;
-    if (role) user.role = role;
-    if (password) user.password = password; // Will be hashed by pre-save middleware
-    
-    await user.save();
-    
-    const updatedUser = await User.findById(user._id).select("-password -accessToken").lean();
-    
-    res.status(200).json({
-      success: true,
-      data: updatedUser,
-      message: 'User updated successfully'
-    });
+
+    const updatedUser = await userService.updateUser(req.params.id, { name, email, password, role });
+
+    res.status(200).json({ success: true, data: updatedUser, message: "User updated successfully" });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    const status = error.statusCode || 500;
+    res.status(status).json({ success: false, message: error.message });
   }
 };
 
-// Delete user
 const deleteUser = async (req, res) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
-    
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-    
-    // Cascade delete: Remove all project memberships associated with this user
-    const deletedMemberships = await ProjectMembership.deleteMany({ user_id: req.params.id });
-    
-    res.status(200).json({
-      success: true,
-      message: 'User deleted successfully',
-      deletedMemberships: deletedMemberships.deletedCount
-    });
+    const result = await userService.deleteUser(req.params.id);
+
+    res.status(200).json({ success: true, message: "User deleted successfully", deletedMemberships: result.deletedMemberships });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    const status = error.statusCode || 500;
+    res.status(status).json({ success: false, message: error.message });
   }
 };
 
