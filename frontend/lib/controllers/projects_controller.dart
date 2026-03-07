@@ -1,7 +1,8 @@
+import 'dart:async';
+
 import 'package:get/get.dart';
 import '../models/project.dart';
 import '../models/team_member.dart';
-import '../services/api_cache.dart';
 import '../services/project_service.dart';
 import '../services/project_membership_service.dart';
 import '../services/role_service.dart';
@@ -32,20 +33,23 @@ class ProjectsController extends GetxController {
 
   List<Project> get all => projects;
   late final ProjectService _service;
-  final ApiCache _cache = ApiCache(defaultTtl: const Duration(minutes: 2));
+  Timer? _refreshTimer;
   bool _hydratingInProgress = false;
 
   @override
   void onInit() {
     super.onInit();
     _service = Get.find<ProjectService>();
-    // Load data once on init instead of polling
     refreshProjects();
+    _refreshTimer = Timer.periodic(
+      const Duration(minutes: 5),
+      (_) => refreshProjects(forceRefresh: true),
+    );
   }
 
   @override
   void onClose() {
-    _cache.clear();
+    _refreshTimer?.cancel();
     super.onClose();
   }
 
@@ -190,13 +194,9 @@ class ProjectsController extends GetxController {
   }
 
   Future<void> refreshProjects({bool forceRefresh = false}) async {
-    if (forceRefresh) _cache.invalidate('projects:all');
     try {
       isLoading.value = true;
-      final projectsList = await _cache.get(
-        'projects:all',
-        () => _service.getAll(),
-      );
+      final projectsList = await _service.getAll(forceRefresh: forceRefresh);
       projects.assignAll(projectsList.map(_normalize));
       // Hydrate assignment membership data after loading projects
       await _hydrateAssignments();

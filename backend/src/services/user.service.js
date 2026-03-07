@@ -4,7 +4,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { parsePagination, paginatedResponse } from "../utils/paginate.js";
 
 export async function registerUser({ name, email, password, role }) {
-  const existingUser = await User.findOne({ email });
+  const existingUser = await User.findOne({ email }).select("_id").lean();
   if (existingUser) {
     throw new ApiError(409, "User already exists with this email");
   }
@@ -65,7 +65,7 @@ export async function updateUser(userId, { name, email, password, role }) {
   if (!user) throw new ApiError(404, "User not found");
 
   if (email && email !== user.email) {
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email }).select("_id").lean();
     if (existingUser) throw new ApiError(409, "Email already in use");
   }
 

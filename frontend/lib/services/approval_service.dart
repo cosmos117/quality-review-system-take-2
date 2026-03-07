@@ -1,9 +1,12 @@
 import 'package:quality_review/config/api_config.dart';
 
+import 'api_cache.dart';
 import 'http_client.dart';
 
 class ApprovalService {
   final SimpleHttp http;
+  final ApiCache _cache = ApiCache(defaultTtl: const Duration(minutes: 1));
+
   ApprovalService(this.http);
 
   Future<Map<String, dynamic>> compare(String projectId, int phase) async {
@@ -26,6 +29,7 @@ class ApprovalService {
       'phase': phase,
       if (notes != null) 'notes': notes,
     });
+    _cache.clear();
     return (json['data'] as Map<String, dynamic>).cast<String, dynamic>();
   }
 
@@ -34,6 +38,7 @@ class ApprovalService {
       '${ApiConfig.baseUrl}/projects/$projectId/approval/approve',
     );
     final json = await http.postJson(uri, {'phase': phase});
+    _cache.clear();
     return (json['data'] as Map<String, dynamic>).cast<String, dynamic>();
   }
 
@@ -49,29 +54,42 @@ class ApprovalService {
       'phase': phase,
       if (notes != null) 'notes': notes,
     });
+    _cache.clear();
     return (json['data'] as Map<String, dynamic>).cast<String, dynamic>();
   }
 
-  Future<Map<String, dynamic>?> getStatus(String projectId, int phase) async {
-    final uri = Uri.parse(
-      '${ApiConfig.baseUrl}/projects/$projectId/approval/status?phase=$phase',
-    );
-    final json = await http.getJson(uri);
-    return (json['data'] as Map<String, dynamic>?)?.cast<String, dynamic>();
+  Future<Map<String, dynamic>?> getStatus(
+    String projectId,
+    int phase, {
+    bool forceRefresh = false,
+  }) async {
+    return _cache.get('approval:$projectId:$phase', () async {
+      final uri = Uri.parse(
+        '${ApiConfig.baseUrl}/projects/$projectId/approval/status?phase=$phase',
+      );
+      final json = await http.getJson(uri);
+      return (json['data'] as Map<String, dynamic>?)?.cast<String, dynamic>();
+    }, forceRefresh: forceRefresh);
   }
 
   /// Fetch the revert count for a specific phase
-  Future<int> getRevertCount(String projectId, int phase) async {
-    try {
-      final uri = Uri.parse(
-        '${ApiConfig.baseUrl}/projects/$projectId/approval/revert-count?phase=$phase',
-      );
-      final json = await http.getJson(uri);
-      final data = json['data'] as Map<String, dynamic>?;
-      return data?['revertCount'] as int? ?? 0;
-    } catch (e) {
-      return 0;
-    }
+  Future<int> getRevertCount(
+    String projectId,
+    int phase, {
+    bool forceRefresh = false,
+  }) async {
+    return _cache.get('revertCount:$projectId:$phase', () async {
+      try {
+        final uri = Uri.parse(
+          '${ApiConfig.baseUrl}/projects/$projectId/approval/revert-count?phase=$phase',
+        );
+        final json = await http.getJson(uri);
+        final data = json['data'] as Map<String, dynamic>?;
+        return data?['revertCount'] as int? ?? 0;
+      } catch (e) {
+        return 0;
+      }
+    }, forceRefresh: forceRefresh);
   }
 
   /// Increment the revert count for a specific phase
@@ -82,9 +100,12 @@ class ApprovalService {
       );
       final json = await http.postJson(uri, {'phase': phase});
       final data = json['data'] as Map<String, dynamic>?;
+      _cache.clear();
       return data?['revertCount'] as int? ?? 0;
     } catch (e) {
       return 0;
     }
   }
+
+  void clearCache() => _cache.clear();
 }

@@ -15,12 +15,17 @@ class ApiCache {
   ///
   /// If the same [key] is already being fetched, the existing Future is
   /// returned (deduplication). Results are cached for [ttl] (defaults to
-  /// [defaultTtl]).
+  /// [defaultTtl]). Pass [forceRefresh] to bypass the cache and re-fetch.
   Future<T> get<T>(
     String key,
     Future<T> Function() loader, {
     Duration? ttl,
+    bool forceRefresh = false,
   }) async {
+    if (forceRefresh) {
+      _entries.remove(key);
+    }
+
     // Return cached value if still valid
     final entry = _entries[key];
     if (entry != null && !entry.isExpired) {

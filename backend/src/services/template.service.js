@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Template from "../models/template.models.js";
 import { ApiError } from "../utils/ApiError.js";
+import { getOrSet, keys, TTL, invalidateTemplate } from "../utils/cache.js";
 
 const isValidStage = (stage) => /^stage\d{1,2}$/.test(stage);
 
@@ -65,34 +66,39 @@ export async function createOrUpdateTemplate(name, userId) {
     if (name) template.name = name;
     template.modifiedBy = userId;
     await template.save();
+    invalidateTemplate();
     return { template, created: false };
   }
   template = await Template.create({
     name: name || "Default Quality Review Template",
     modifiedBy: userId,
   });
+  invalidateTemplate();
   return { template, created: true };
 }
 
 export async function getTemplate(stage) {
-  const template = await getTemplateSingleton();
+  return getOrSet(keys.template(stage), async () => {
+    const template = await getTemplateSingleton();
 
-  const wasModified = await ensureTemplateConsistency(template);
-  if (wasModified) await template.save();
+    const wasModified = await ensureTemplateConsistency(template);
+    if (wasModified) await template.save();
 
-  if (stage) {
-    validateStage(stage);
-    return {
-      _id: template._id, name: template.name, [stage]: template[stage],
-      modifiedBy: template.modifiedBy, createdAt: template.createdAt, updatedAt: template.updatedAt,
-    };
-  }
+    if (stage) {
+      validateStage(stage);
+      return {
+        _id: template._id, name: template.name, [stage]: template[stage],
+        modifiedBy: template.modifiedBy, createdAt: template.createdAt, updatedAt: template.updatedAt,
+      };
+    }
 
-  return template.toObject ? template.toObject() : JSON.parse(JSON.stringify(template));
+    return template.toObject ? template.toObject() : JSON.parse(JSON.stringify(template));
+  }, TTL.TEMPLATES);
 }
 
 export async function resetTemplate() {
   const result = await Template.deleteOne({});
+  invalidateTemplate();
   return { deletedCount: result.deletedCount };
 }
 
@@ -109,6 +115,7 @@ export async function addChecklistToTemplate(stage, text, userId) {
   template.markModified(stage);
   template.modifiedBy = userId;
   await template.save();
+  invalidateTemplate();
   return template;
 }
 
@@ -120,6 +127,7 @@ export async function updateChecklistInTemplate(checklistId, stage, text, userId
   template.markModified(stage);
   template.modifiedBy = userId;
   await template.save();
+  invalidateTemplate();
   return template;
 }
 
@@ -135,7 +143,8 @@ export async function deleteChecklistFromTemplate(checklistId, stage, userId) {
       $set: { modifiedBy: userId },
     },
   );
-  return Template.findOne();
+  invalidateTemplate();
+  return Template.findOne().lean();
 }
 
 // ── Checkpoint (question) management on checklists ──
@@ -151,6 +160,7 @@ export async function addCheckpointToTemplate(checklistId, stage, text, category
   template.markModified(stage);
   template.modifiedBy = userId;
   await template.save();
+  invalidateTemplate();
   return template;
 }
 
@@ -166,6 +176,7 @@ export async function updateCheckpointInTemplate(checkpointId, stage, checklistI
   template.markModified(stage);
   template.modifiedBy = userId;
   await template.save();
+  invalidateTemplate();
   return template;
 }
 
@@ -186,7 +197,8 @@ export async function deleteCheckpointFromTemplate(checkpointId, stage, checklis
     },
     { arrayFilters: [{ "checklist._id": new mongoose.Types.ObjectId(checklistId) }] },
   );
-  return Template.findOne();
+  invalidateTemplate();
+  return Template.findOne().lean();
 }
 
 // ── Section management ──
@@ -201,6 +213,7 @@ export async function addSectionToChecklist(checklistId, stage, text, userId) {
   template.markModified(stage);
   template.modifiedBy = userId;
   await template.save();
+  invalidateTemplate();
   return template;
 }
 
@@ -213,6 +226,7 @@ export async function updateSectionInChecklist(checklistId, sectionId, stage, te
   template.markModified(stage);
   template.modifiedBy = userId;
   await template.save();
+  invalidateTemplate();
   return template;
 }
 
@@ -233,7 +247,8 @@ export async function deleteSectionFromChecklist(checklistId, sectionId, stage, 
     },
     { arrayFilters: [{ "checklist._id": new mongoose.Types.ObjectId(checklistId) }] },
   );
-  return Template.findOne();
+  invalidateTemplate();
+  return Template.findOne().lean();
 }
 
 // ── Checkpoint management on sections ──
@@ -250,6 +265,7 @@ export async function addCheckpointToSection(checklistId, sectionId, stage, text
   template.markModified(stage);
   template.modifiedBy = userId;
   await template.save();
+  invalidateTemplate();
   return template;
 }
 
@@ -266,6 +282,7 @@ export async function updateCheckpointInSection(checklistId, sectionId, checkpoi
   template.markModified(stage);
   template.modifiedBy = userId;
   await template.save();
+  invalidateTemplate();
   return template;
 }
 
@@ -294,7 +311,8 @@ export async function deleteCheckpointFromSection(checklistId, sectionId, checkp
       ],
     },
   );
-  return Template.findOne();
+  invalidateTemplate();
+  return Template.findOne().lean();
 }
 
 // ── Stage management ──
@@ -314,7 +332,8 @@ export async function addStageToTemplate(stage, stageName, userId) {
   }
 
   await Template.collection.updateOne({ _id: template._id }, { $set: updateObj });
-  return Template.findOne();
+  invalidateTemplate();
+  return Template.findOne().lean();
 }
 
 export async function deleteStageFromTemplate(stage, userId) {
@@ -333,21 +352,24 @@ export async function deleteStageFromTemplate(stage, userId) {
     { _id: template._id },
     { $unset: unsetObj, $set: { modifiedBy: userId } },
   );
-  return Template.findOne();
+  invalidateTemplate();
+  return Template.findOne().lean();
 }
 
 export async function getAllStages() {
-  const template = await getTemplateSingleton();
+  return getOrSet(keys.template("allStages"), async () => {
+    const template = await getTemplateSingleton();
 
-  const stageKeys = Object.keys(template.toObject())
-    .filter((key) => /^stage\d{1,2}$/.test(key))
-    .sort((a, b) => parseInt(a.replace("stage", "")) - parseInt(b.replace("stage", "")));
+    const stageKeys = Object.keys(template.toObject())
+      .filter((key) => /^stage\d{1,2}$/.test(key))
+      .sort((a, b) => parseInt(a.replace("stage", "")) - parseInt(b.replace("stage", "")));
 
-  const stages = {};
-  for (const key of stageKeys) {
-    stages[key] = `Phase ${parseInt(key.replace("stage", ""))}`;
-  }
-  return stages;
+    const stages = {};
+    for (const key of stageKeys) {
+      stages[key] = `Phase ${parseInt(key.replace("stage", ""))}`;
+    }
+    return stages;
+  }, TTL.TEMPLATES);
 }
 
 // ── Defect categories ──
@@ -360,6 +382,7 @@ export async function updateDefectCategories(defectCategories, userId) {
   }));
   template.modifiedBy = userId;
   await template.save();
+  invalidateTemplate();
   return template;
 }
 
@@ -409,5 +432,6 @@ export async function seedTemplate(userId) {
     ],
     modifiedBy: userId,
   });
+  invalidateTemplate();
   return { template, alreadyExists: false };
 }

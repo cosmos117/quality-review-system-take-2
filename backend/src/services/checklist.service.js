@@ -53,7 +53,7 @@ export async function updateChecklist(id, data) {
     throw new ApiError(400, "No valid fields provided to update");
   }
 
-  const checklist = await Checklist.findByIdAndUpdate(id, { $set: update }, { new: true, runValidators: true });
+  const checklist = await Checklist.findByIdAndUpdate(id, { $set: update }, { new: true, runValidators: true }).lean();
   if (!checklist) throw new ApiError(404, "Checklist not found");
   return checklist;
 }

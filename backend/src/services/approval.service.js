@@ -24,7 +24,7 @@ export const compareAnswers = async (projectId, phaseNum) => {
   const stage = await Stage.findOne({
     project_id: projectId,
     stage_key: stageKey,
-  });
+  }).select("_id").lean();
 
   if (!stage) {
     return { match: true, stats: { exec_count: 0, rev_count: 0 } };
@@ -33,7 +33,7 @@ export const compareAnswers = async (projectId, phaseNum) => {
   const checklist = await ProjectChecklist.findOne({
     projectId,
     stageId: stage._id,
-  });
+  }).lean();
 
   if (!checklist) {
     return { match: true, stats: { exec_count: 0, rev_count: 0 } };
@@ -111,7 +111,7 @@ export const approve = async (projectId, phaseNum, userId) => {
   const nextStage = await Stage.findOne({
     project_id: projectId,
     stage_key: nextStageKey,
-  });
+  }).select("_id").lean();
 
   if (nextStage) {
     await Stage.findByIdAndUpdate(nextStage._id, {
@@ -129,7 +129,7 @@ export const revertToExecutor = async (projectId, phaseNum, notes, userId) => {
   const stage = await Stage.findOne({
     project_id: projectId,
     stage_key: stageKey,
-  });
+  }).select("_id conflict_count").lean();
 
   if (!stage) {
     throw new ApiError(
@@ -155,7 +155,7 @@ export const revertToExecutor = async (projectId, phaseNum, notes, userId) => {
     const approvalRecord = await ChecklistApproval.findOne({
       project_id: projectId,
       phase: phaseNum,
-    });
+    }).lean();
 
     const newIteration = {
       iterationNumber: checklist.currentIteration || 1,
@@ -209,7 +209,7 @@ export const getApprovalStatus = async (projectId, phaseNum) => {
   const record = await ChecklistApproval.findOne({
     project_id: projectId,
     phase: phaseNum,
-  });
+  }).lean();
   return record;
 };
 
@@ -217,7 +217,7 @@ export const getRevertCount = async (projectId, phaseNum) => {
   const record = await ChecklistApproval.findOne({
     project_id: projectId,
     phase: phaseNum,
-  });
+  }).select("revertCount").lean();
   return record?.revertCount || 0;
 };
 

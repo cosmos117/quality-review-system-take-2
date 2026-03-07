@@ -1,12 +1,14 @@
 ﻿import 'package:get/get.dart';
 import '../config/api_config.dart';
 import '../controllers/auth_controller.dart';
+import 'api_cache.dart';
 import 'http_client.dart';
 
 /// Service for Template Management API operations
 /// Handles admin template CRUD operations with backend integration
 class TemplateService {
   final SimpleHttp http;
+  final ApiCache _cache = ApiCache(defaultTtl: const Duration(minutes: 5));
 
   TemplateService(this.http);
 
@@ -25,21 +27,27 @@ class TemplateService {
 
   /// Fetch the complete template with all stages
   /// Optional [stage] parameter to filter by specific stage (stage1, stage2, stage3, stage4, etc.)
-  Future<Map<String, dynamic>> fetchTemplate({String? stage}) async {
-    try {
-      _ensureToken();
-      String urlString = _baseUrl;
-      if (stage != null && _isValidStage(stage)) {
-        urlString = '$urlString?stage=$stage';
-      }
+  Future<Map<String, dynamic>> fetchTemplate({
+    String? stage,
+    bool forceRefresh = false,
+  }) async {
+    final cacheKey = stage != null ? 'template:$stage' : 'template:full';
+    return _cache.get(cacheKey, () async {
+      try {
+        _ensureToken();
+        String urlString = _baseUrl;
+        if (stage != null && _isValidStage(stage)) {
+          urlString = '$urlString?stage=$stage';
+        }
 
-      final response = await http.getJson(Uri.parse(urlString));
-      // API responses are wrapped in { statusCode, data, message }
-      // Return only the payload to callers
-      return response['data'] as Map<String, dynamic>? ?? response;
-    } catch (e) {
-      throw Exception('Error fetching template: $e');
-    }
+        final response = await http.getJson(Uri.parse(urlString));
+        // API responses are wrapped in { statusCode, data, message }
+        // Return only the payload to callers
+        return response['data'] as Map<String, dynamic>? ?? response;
+      } catch (e) {
+        throw Exception('Error fetching template: $e');
+      }
+    }, forceRefresh: forceRefresh);
   }
 
   /// Validate if stage name is in correct format (stage1, stage2, stage3, stage4, etc.)
@@ -59,6 +67,7 @@ class TemplateService {
       }
 
       final response = await http.postJson(Uri.parse(_baseUrl), body);
+      _cache.clear();
       return response['data'] as Map<String, dynamic>? ?? response;
     } catch (e) {
       throw Exception('Error creating/updating template: $e');
@@ -84,6 +93,7 @@ class TemplateService {
         'stage': stage,
         'text': checklistName,
       });
+      _cache.clear();
       return response['data'] as Map<String, dynamic>? ?? response;
     } catch (e) {
       throw Exception('Error adding checklist: $e');
@@ -109,6 +119,7 @@ class TemplateService {
         Uri.parse('$_baseUrl/checklists/$checklistId'),
         {'stage': stage, 'text': newName},
       );
+      _cache.clear();
       return response['data'] as Map<String, dynamic>? ?? response;
     } catch (e) {
       throw Exception('Error updating checklist: $e');
@@ -131,6 +142,7 @@ class TemplateService {
       await http.deleteJson(Uri.parse('$_baseUrl/checklists/$checklistId'), {
         'stage': stage,
       });
+      _cache.clear();
     } catch (e) {
       throw Exception('Error deleting checklist: $e');
     }
@@ -168,6 +180,7 @@ class TemplateService {
       };
 
       final response = await http.postJson(Uri.parse(endpoint), body);
+      _cache.clear();
       return response['data'] as Map<String, dynamic>? ?? response;
     } catch (e) {
       throw Exception('Error adding checkpoint: $e');
@@ -208,6 +221,7 @@ class TemplateService {
       };
 
       final response = await http.patchJson(Uri.parse(endpoint), body);
+      _cache.clear();
       return response['data'] as Map<String, dynamic>? ?? response;
     } catch (e) {
       throw Exception('Error updating checkpoint: $e');
@@ -240,6 +254,7 @@ class TemplateService {
         'checklistId': checklistId,
         'stage': stage,
       });
+      _cache.clear();
       return response['data'] as Map<String, dynamic>? ?? response;
     } catch (e) {
       throw Exception('Error deleting checkpoint: $e');
@@ -254,6 +269,7 @@ class TemplateService {
       await http.patchJson(Uri.parse('$_baseUrl/defect-categories'), {
         'defectCategories': categories.map((c) => c.toJson()).toList(),
       });
+      _cache.clear();
     } catch (e) {
       throw Exception('Error updating defect categories: $e');
     }
@@ -278,6 +294,7 @@ class TemplateService {
         Uri.parse('$_baseUrl/checklists/$checklistId/sections'),
         {'stage': stage, 'text': sectionName},
       );
+      _cache.clear();
       return response['data'] as Map<String, dynamic>? ?? response;
     } catch (e) {
       throw Exception('Error adding section: $e');
@@ -305,6 +322,7 @@ class TemplateService {
         Uri.parse('$_baseUrl/checklists/$checklistId/sections/$sectionId'),
         {'stage': stage, 'text': newName},
       );
+      _cache.clear();
       return response['data'] as Map<String, dynamic>? ?? response;
     } catch (e) {
       throw Exception('Error updating section: $e');
@@ -330,6 +348,7 @@ class TemplateService {
         Uri.parse('$_baseUrl/checklists/$checklistId/sections/$sectionId'),
         {'stage': stage},
       );
+      _cache.clear();
     } catch (e) {
       throw Exception('Error deleting section: $e');
     }
@@ -358,6 +377,7 @@ class TemplateService {
       }
 
       final response = await http.postJson(Uri.parse('$_baseUrl/stages'), body);
+      _cache.clear();
       return response['data'] as Map<String, dynamic>? ?? response;
     } catch (e) {
       throw Exception('Error adding stage: $e');
@@ -376,25 +396,30 @@ class TemplateService {
       }
 
       await http.deleteJson(Uri.parse('$_baseUrl/stages/$stage'), {});
+      _cache.clear();
     } catch (e) {
       throw Exception('Error deleting stage: $e');
     }
   }
 
   /// Get all stages with their names from the template
-  Future<Map<String, String>> getStages() async {
-    try {
-      _ensureToken();
-      final response = await http.getJson(Uri.parse('$_baseUrl/stages'));
-      final stagesData = response['data'] as Map<String, dynamic>? ?? {};
+  Future<Map<String, String>> getStages({bool forceRefresh = false}) async {
+    return _cache.get('template:stages', () async {
+      try {
+        _ensureToken();
+        final response = await http.getJson(Uri.parse('$_baseUrl/stages'));
+        final stagesData = response['data'] as Map<String, dynamic>? ?? {};
 
-      return stagesData.map((key, value) {
-        return MapEntry(key.toString(), value.toString());
-      });
-    } catch (e) {
-      throw Exception('Error fetching stages: $e');
-    }
+        return stagesData.map((key, value) {
+          return MapEntry(key.toString(), value.toString());
+        });
+      } catch (e) {
+        throw Exception('Error fetching stages: $e');
+      }
+    }, forceRefresh: forceRefresh);
   }
+
+  void clearCache() => _cache.clear();
 
   /// Validate template completeness
   /// Returns a map with 'isComplete' boolean and 'incompletePhases' list

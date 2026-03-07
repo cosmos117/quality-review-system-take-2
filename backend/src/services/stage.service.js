@@ -7,6 +7,7 @@ import Checkpoint from "../models/checkpoint.models.js";
 import ProjectChecklist from "../models/projectChecklist.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { paginatedResponse } from "../utils/paginate.js";
+import { getOrSet, keys, TTL, invalidateStages } from "../utils/cache.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -41,15 +42,15 @@ const mapTemplateGroups = (stageTemplate = []) => {
 };
 
 async function cloneTemplateToProject(projectId, userId) {
-  const project = await Project.findById(projectId).populate("created_by", "name email");
+  const project = await Project.findById(projectId).select("created_by").populate("created_by", "_id").lean();
   if (!project) throw new ApiError(404, "Project not found");
 
-  const template = await Template.findOne();
+  const template = await Template.findOne().lean();
   if (!template) throw new ApiError(404, "Template not found. Please create a template first.");
 
   const creatorId = userId || project.created_by?._id;
 
-  const stageKeys = Object.keys(template.toObject())
+  const stageKeys = Object.keys(template)
     .filter((key) => /^stage\d{1,2}$/.test(key))
     .sort((a, b) => parseInt(a.replace("stage", "")) - parseInt(b.replace("stage", "")));
 
@@ -87,13 +88,14 @@ async function cloneTemplateToProject(projectId, userId) {
         answers: {},
       });
 
-      for (const cp of cl.checkpoints || []) {
-        await Checkpoint.create({
-          checklistId: checklist._id,
-          question: cp.text,
-          executorResponse: {},
-          reviewerResponse: {},
-        });
+      const checkpointDocs = (cl.checkpoints || []).map((cp) => ({
+        checklistId: checklist._id,
+        question: cp.text,
+        executorResponse: {},
+        reviewerResponse: {},
+      }));
+      if (checkpointDocs.length > 0) {
+        await Checkpoint.insertMany(checkpointDocs);
       }
     }
 
@@ -117,7 +119,7 @@ async function cloneTemplateToProject(projectId, userId) {
 
 async function ensureProjectChecklistsForStages(stages, projectId) {
   try {
-    const template = await Template.findOne();
+    const template = await Template.findOne().lean();
     for (const stage of stages) {
       let stageKey = stage.stage_key;
       if (!stageKey) stageKey = deriveStageKey(stage.stage_name);
@@ -144,37 +146,41 @@ async function ensureProjectChecklistsForStages(stages, projectId) {
 // ── Service functions ────────────────────────────────────────────────
 
 export async function listStagesForProject(projectId, userId) {
-  let stages = await Stage.find({ project_id: projectId }).sort({ createdAt: 1 }).lean();
+  return getOrSet(keys.stagesForProject(projectId), async () => {
+    let stages = await Stage.find({ project_id: projectId }).sort({ createdAt: 1 }).lean();
 
-  if (stages.length === 0) {
-    const project = await Project.findById(projectId);
-    if (!project) throw new ApiError(404, "Project not found");
+    if (stages.length === 0) {
+      const project = await Project.findById(projectId).select("_id").lean();
+      if (!project) throw new ApiError(404, "Project not found");
 
-    stages = await cloneTemplateToProject(projectId, userId);
-    stages = stages.map((s) => {
-      const obj = s.toObject ? s.toObject() : s;
-      return { ...obj, loopback_count: obj.loopback_count || 0, conflict_count: obj.conflict_count || 0 };
+      stages = await cloneTemplateToProject(projectId, userId);
+      stages = stages.map((s) => {
+        const obj = s.toObject ? s.toObject() : s;
+        return { ...obj, loopback_count: obj.loopback_count || 0, conflict_count: obj.conflict_count || 0 };
+      });
+    }
+
+    stages = stages.map((stage) => {
+      const obj = stage.toObject ? stage.toObject() : stage;
+      return {
+        ...obj,
+        loopback_count: obj.loopback_count ?? 0,
+        conflict_count: obj.conflict_count ?? 0,
+      };
     });
-  }
 
-  stages = stages.map((stage) => {
-    const obj = stage.toObject ? stage.toObject() : stage;
-    return {
-      ...obj,
-      loopback_count: obj.loopback_count ?? 0,
-      conflict_count: obj.conflict_count ?? 0,
-    };
-  });
+    await ensureProjectChecklistsForStages(stages, projectId);
 
-  await ensureProjectChecklistsForStages(stages, projectId);
-
-  return paginatedResponse(stages, stages.length, { page: 1, limit: null });
+    return paginatedResponse(stages, stages.length, { page: 1, limit: null });
+  }, TTL.STAGES);
 }
 
 export async function getStageById(id) {
-  const stage = await Stage.findById(id).lean();
-  if (!stage) throw new ApiError(404, "Stage not found");
-  return stage;
+  return getOrSet(keys.stageById(id), async () => {
+    const stage = await Stage.findById(id).lean();
+    if (!stage) throw new ApiError(404, "Stage not found");
+    return stage;
+  }, TTL.STAGES);
 }
 
 export async function createStage(projectId, { stage_name, stage_key, description, status }, createdBy) {
@@ -188,7 +194,7 @@ export async function createStage(projectId, { stage_name, stage_key, descriptio
   });
 
   try {
-    const template = await Template.findOne();
+    const template = await Template.findOne().lean();
     let key = stage_key;
     if (!key) key = deriveStageKey(stage_name);
     const groups = key ? mapTemplateGroups(template?.[key] || []) : [];
@@ -208,6 +214,7 @@ export async function createStage(projectId, { stage_name, stage_key, descriptio
     // Silent failure
   }
 
+  invalidateStages(projectId);
   return stage;
 }
 
@@ -221,14 +228,16 @@ export async function updateStage(id, { stage_name, description, status }) {
     throw new ApiError(400, "No valid fields provided to update");
   }
 
-  const stage = await Stage.findByIdAndUpdate(id, { $set: update }, { new: true, runValidators: true });
+  const stage = await Stage.findByIdAndUpdate(id, { $set: update }, { new: true, runValidators: true }).lean();
   if (!stage) throw new ApiError(404, "Stage not found");
+  invalidateStages(stage.project_id?.toString());
   return stage;
 }
 
 export async function deleteStage(id) {
   const deleted = await Stage.findByIdAndDelete(id);
   if (!deleted) throw new ApiError(404, "Stage not found");
+  invalidateStages(deleted.project_id?.toString());
   return deleted;
 }
 

@@ -50,7 +50,7 @@ export const getChecklistAnswers = async (projectId, phaseNum, normalizedRole) =
   const stage = await Stage.findOne({
     project_id: projectId,
     stage_key: stageKey,
-  });
+  }).select("_id stage_name").lean();
 
   if (!stage) {
     return {};
@@ -59,7 +59,7 @@ export const getChecklistAnswers = async (projectId, phaseNum, normalizedRole) =
   let checklist = await ProjectChecklist.findOne({
     projectId,
     stageId: stage._id,
-  });
+  }).lean();
 
   if (!checklist) {
     try {
@@ -133,7 +133,7 @@ export const saveChecklistAnswers = async (projectId, phaseNum, normalizedRole, 
   const stage = await Stage.findOne({
     project_id: projectId,
     stage_key: stageKey,
-  });
+  }).select("_id stage_name").lean();
 
   if (!stage) {
     throw new ApiError(404, "Stage not found for this phase");
@@ -262,19 +262,20 @@ export const saveChecklistAnswers = async (projectId, phaseNum, normalizedRole, 
 };
 
 export const submitChecklistAnswers = async (projectId, phaseNum, normalizedRole) => {
-  const existingRecord = await ChecklistApproval.findOne({
-    project_id: projectId,
-    phase: phaseNum,
-  });
+  const stageKey = `stage${phaseNum}`;
+  const [existingRecord, stage] = await Promise.all([
+    ChecklistApproval.findOne({
+      project_id: projectId,
+      phase: phaseNum,
+    }).lean(),
+    Stage.findOne({
+      project_id: projectId,
+      stage_key: stageKey,
+    }).select("_id").lean(),
+  ]);
 
   const wasReverted = existingRecord?.status === "reverted_to_executor";
-
   let totalNewDefects = 0;
-  const stageKey = `stage${phaseNum}`;
-  const stage = await Stage.findOne({
-    project_id: projectId,
-    stage_key: stageKey,
-  });
 
   if (stage) {
     const checklist = await ProjectChecklist.findOne({
@@ -333,7 +334,7 @@ export const getSubmissionStatus = async (projectId, phaseNum, normalizedRole) =
   const record = await ChecklistApproval.findOne({
     project_id: projectId,
     phase: phaseNum,
-  });
+  }).lean();
 
   return {
     is_submitted: record?.[`${normalizedRole}_submitted`] || false,

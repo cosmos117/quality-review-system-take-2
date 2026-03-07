@@ -1,10 +1,12 @@
 ﻿import 'dart:async';
 import '../config/api_config.dart';
 import '../models/project_membership.dart';
+import 'api_cache.dart';
 import 'http_client.dart';
 
 class ProjectMembershipService {
   final SimpleHttp http;
+  final ApiCache _cache = ApiCache(defaultTtl: const Duration(minutes: 2));
 
   ProjectMembershipService(this.http);
 
@@ -14,44 +16,49 @@ class ProjectMembershipService {
 
   /// Get all members for a specific project
   /// Backend expects: { "project_id": "..." } in request body
-  Future<List<ProjectMembership>> getProjectMembers(String projectId) async {
-    try {
-      final uri = Uri.parse(
-        '${ApiConfig.baseUrl}/projects/members?project_id=$projectId',
-      );
-      final json = await http.getJson(uri);
+  Future<List<ProjectMembership>> getProjectMembers(
+    String projectId, {
+    bool forceRefresh = false,
+  }) async {
+    return _cache.get('members:$projectId', () async {
+      try {
+        final uri = Uri.parse(
+          '${ApiConfig.baseUrl}/projects/members?project_id=$projectId',
+        );
+        final json = await http.getJson(uri);
 
-      // Check for API errors
-      if (json['success'] == false) {
-        return [];
-      }
-
-      if (json['data'] is Map) {
-        final data = json['data'] as Map<String, dynamic>;
-
-        if (data['members'] is List) {
-          final members = (data['members'] as List).cast<dynamic>();
-
-          // Parse each member with detailed logging
-          final result = <ProjectMembership>[];
-          for (var i = 0; i < members.length; i++) {
-            try {
-              final memberJson = members[i] as Map<String, dynamic>;
-              final membership = _fromApi(memberJson);
-              result.add(membership);
-            } catch (e) {}
-          }
-
-          return result;
+        // Check for API errors
+        if (json['success'] == false) {
+          return <ProjectMembership>[];
         }
-      }
 
-      return [];
-    } catch (_) {
-      // If fetching existing members fails (e.g., orphaned user references),
-      // return empty list so we can still add new valid members
-      return [];
-    }
+        if (json['data'] is Map) {
+          final data = json['data'] as Map<String, dynamic>;
+
+          if (data['members'] is List) {
+            final members = (data['members'] as List).cast<dynamic>();
+
+            // Parse each member with detailed logging
+            final result = <ProjectMembership>[];
+            for (var i = 0; i < members.length; i++) {
+              try {
+                final memberJson = members[i] as Map<String, dynamic>;
+                final membership = _fromApi(memberJson);
+                result.add(membership);
+              } catch (e) {}
+            }
+
+            return result;
+          }
+        }
+
+        return <ProjectMembership>[];
+      } catch (_) {
+        // If fetching existing members fails (e.g., orphaned user references),
+        // return empty list so we can still add new valid members
+        return <ProjectMembership>[];
+      }
+    }, forceRefresh: forceRefresh);
   }
 
   /// Add a member to a project
@@ -71,6 +78,7 @@ class ProjectMembershipService {
       'user_id': userId,
       'role_id': roleId,
     });
+    _cache.clear();
     return _fromApi(json['data'] as Map<String, dynamic>);
   }
 
@@ -87,6 +95,7 @@ class ProjectMembershipService {
       'user_id': userId,
       'role_id': roleId,
     });
+    _cache.clear();
     return _fromApi(json['data'] as Map<String, dynamic>);
   }
 
@@ -98,16 +107,24 @@ class ProjectMembershipService {
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/projects/members');
     await http.deleteJson(uri, {'project_id': projectId, 'user_id': userId});
+    _cache.clear();
   }
 
   /// Get all projects for a specific user
-  Future<List<Map<String, dynamic>>> getUserProjects(String userId) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/users/$userId/projects');
-    final json = await http.getJson(uri);
+  Future<List<Map<String, dynamic>>> getUserProjects(
+    String userId, {
+    bool forceRefresh = false,
+  }) async {
+    return _cache.get('userProjects:$userId', () async {
+      final uri = Uri.parse('${ApiConfig.baseUrl}/users/$userId/projects');
+      final json = await http.getJson(uri);
 
-    if (json['data'] is Map && json['data']['projects'] is List) {
-      return (json['data']['projects'] as List).cast<Map<String, dynamic>>();
-    }
-    return [];
+      if (json['data'] is Map && json['data']['projects'] is List) {
+        return (json['data']['projects'] as List).cast<Map<String, dynamic>>();
+      }
+      return <Map<String, dynamic>>[];
+    }, forceRefresh: forceRefresh);
   }
+
+  void clearCache() => _cache.clear();
 }

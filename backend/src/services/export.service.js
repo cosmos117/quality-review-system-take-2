@@ -19,12 +19,15 @@ const safeValue = (val, defaultVal = "") => {
 export const generateMasterExcel = async () => {
   const [users, projects, stages, roles, memberships, templates, projectChecklists] =
     await Promise.all([
-      User.find().lean(),
+      User.find({}, "-password -accessToken").lean(),
       Project.find().populate("created_by", "name email").lean(),
-      Stage.find().lean(),
-      Role.find().lean(),
-      ProjectMembership.find().populate(["user_id", "role"]).lean(),
-      mongoose.model("Template").find().lean(),
+      Stage.find({}, "_id project_id stage_name stage_key status conflict_count").lean(),
+      Role.find({}, "_id role_name").lean(),
+      ProjectMembership.find()
+        .populate("user_id", "name email _id")
+        .populate("role", "role_name")
+        .lean(),
+      mongoose.model("Template").find({}, "defectCategories").lean(),
       mongoose.model("ProjectChecklist").find().lean(),
     ]);
 

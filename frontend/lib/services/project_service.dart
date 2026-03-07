@@ -1,9 +1,11 @@
 import '../config/api_config.dart';
 import '../models/project.dart';
+import 'api_cache.dart';
 import 'http_client.dart';
 
 class ProjectService {
   final SimpleHttp http;
+  final ApiCache _cache = ApiCache(defaultTtl: const Duration(minutes: 2));
 
   ProjectService(this.http);
 
@@ -131,41 +133,56 @@ class ProjectService {
     };
   }
 
-  Future<List<Project>> getAll() async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/projects');
-    final json = await http.getJson(uri);
-    final data = (json['data'] as List).cast<dynamic>();
-    return data.map((e) => _fromApi(e as Map<String, dynamic>)).toList();
+  Future<List<Project>> getAll({bool forceRefresh = false}) async {
+    return _cache.get('all', () async {
+      final uri = Uri.parse('${ApiConfig.baseUrl}/projects');
+      final json = await http.getJson(uri);
+      final data = (json['data'] as List).cast<dynamic>();
+      return data.map((e) => _fromApi(e as Map<String, dynamic>)).toList();
+    }, forceRefresh: forceRefresh);
   }
 
   /// Get projects for a specific user (optimized - includes memberships)
-  Future<List<Project>> getForUser(String userId) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/projects/user/$userId');
-    final json = await http.getJson(uri);
-    final data = (json['data'] as List).cast<dynamic>();
-    return data.map((e) => _fromApi(e as Map<String, dynamic>)).toList();
+  Future<List<Project>> getForUser(
+    String userId, {
+    bool forceRefresh = false,
+  }) async {
+    return _cache.get('user:$userId', () async {
+      final uri = Uri.parse('${ApiConfig.baseUrl}/projects/user/$userId');
+      final json = await http.getJson(uri);
+      final data = (json['data'] as List).cast<dynamic>();
+      return data.map((e) => _fromApi(e as Map<String, dynamic>)).toList();
+    }, forceRefresh: forceRefresh);
   }
 
-  Future<Project> getById(String id) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/projects/$id');
-    final json = await http.getJson(uri);
-    return _fromApi(json['data'] as Map<String, dynamic>);
+  Future<Project> getById(String id, {bool forceRefresh = false}) async {
+    return _cache.get('id:$id', () async {
+      final uri = Uri.parse('${ApiConfig.baseUrl}/projects/$id');
+      final json = await http.getJson(uri);
+      return _fromApi(json['data'] as Map<String, dynamic>);
+    }, forceRefresh: forceRefresh);
   }
 
   Future<Project> create(Project p, {required String userId}) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/projects');
     final json = await http.postJson(uri, _toApi(p, userId: userId));
+    _cache.clear();
     return _fromApi(json['data'] as Map<String, dynamic>);
   }
 
   Future<Project> update(Project p) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/projects/${p.id}');
     final json = await http.putJson(uri, _toApi(p));
+    _cache.clear();
     return _fromApi(json['data'] as Map<String, dynamic>);
   }
 
   Future<void> delete(String id) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/projects/$id');
     await http.delete(uri);
+    _cache.clear();
   }
+
+  /// Clear all cached project data.
+  void clearCache() => _cache.clear();
 }

@@ -24,6 +24,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.19.1",
     "multer": "^2.0.0",
+    "node-cache": "^5.1.2",
     "winston": "^3.19.0"
   },
   "devDependencies": {

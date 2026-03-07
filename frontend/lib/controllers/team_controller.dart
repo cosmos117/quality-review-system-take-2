@@ -1,6 +1,7 @@
+import 'dart:async';
+
 import 'package:get/get.dart';
 import '../models/team_member.dart';
-import '../services/api_cache.dart';
 import '../services/user_service.dart';
 
 class TeamController extends GetxController {
@@ -8,19 +9,22 @@ class TeamController extends GetxController {
   final RxBool isLoading = false.obs;
   final RxString errorMessage = ''.obs;
   late final UserService _service;
-  final ApiCache _cache = ApiCache(defaultTtl: const Duration(minutes: 2));
+  Timer? _refreshTimer;
 
   @override
   void onInit() {
     super.onInit();
     _service = Get.find<UserService>();
-    // Load data once on init instead of polling
     refreshMembers();
+    _refreshTimer = Timer.periodic(
+      const Duration(minutes: 5),
+      (_) => refreshMembers(forceRefresh: true),
+    );
   }
 
   @override
   void onClose() {
-    _cache.clear();
+    _refreshTimer?.cancel();
     super.onClose();
   }
 
@@ -75,10 +79,9 @@ class TeamController extends GetxController {
   }
 
   Future<void> refreshMembers({bool forceRefresh = false}) async {
-    if (forceRefresh) _cache.invalidate('users:all');
     try {
       isLoading.value = true;
-      final users = await _cache.get('users:all', () => _service.getAll());
+      final users = await _service.getAll(forceRefresh: forceRefresh);
       members.assignAll(users.map(_normalize));
     } catch (e) {
       errorMessage.value = e.toString();

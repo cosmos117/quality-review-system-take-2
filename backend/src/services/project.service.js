@@ -11,27 +11,30 @@ import ChecklistTransaction from "../models/checklistTransaction.models.js";
 import { deleteImagesByFileIds } from "../gridfs.js";
 import { parsePagination, paginatedResponse } from "../utils/paginate.js";
 import { ApiError } from "../utils/ApiError.js";
+import { getOrSet, keys, TTL, invalidateProjects, invalidateStages } from "../utils/cache.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
 async function syncCheckpointsWithTemplate(projectId) {
   try {
-    const template = await Template.findOne();
+    const template = await Template.findOne().lean();
     if (!template) return;
 
-    const stages = await Stage.find({ project_id: projectId });
+    const stages = await Stage.find({ project_id: projectId }, "_id stage_name").lean();
 
     const deriveStageKeyFromName = (stageName) => {
       const match = stageName.toLowerCase().match(/(?:phase|stage)\s*(\d{1,2})/);
       return match ? `stage${parseInt(match[1])}` : null;
     };
 
+    const bulkOps = [];
+
     for (const stage of stages) {
       const templateStageKey = deriveStageKeyFromName(stage.stage_name);
       if (!templateStageKey) continue;
 
       const templateChecklists = template[templateStageKey] || [];
-      const checklists = await Checklist.find({ stage_id: stage._id });
+      const checklists = await Checklist.find({ stage_id: stage._id }, "_id checklist_name checkpoints").lean();
 
       for (const checklist of checklists) {
         const templateChecklist = templateChecklists.find(
@@ -44,13 +47,19 @@ async function syncCheckpointsWithTemplate(projectId) {
             (tcp) => tcp.text === checkpoint.question,
           );
           if (templateCheckpoint?.categoryId) {
-            await Checkpoint.updateOne(
-              { _id: checkpoint._id },
-              { categoryId: templateCheckpoint.categoryId },
-            );
+            bulkOps.push({
+              updateOne: {
+                filter: { _id: checkpoint._id },
+                update: { $set: { categoryId: templateCheckpoint.categoryId } },
+              },
+            });
           }
         }
       }
+    }
+
+    if (bulkOps.length > 0) {
+      await Checkpoint.bulkWrite(bulkOps);
     }
   } catch {
     // Don't throw
@@ -59,10 +68,10 @@ async function syncCheckpointsWithTemplate(projectId) {
 
 async function createStagesAndChecklistsFromTemplate(projectId) {
   try {
-    const template = await Template.findOne();
+    const template = await Template.findOne().lean();
     if (!template) return;
 
-    const stageKeys = Object.keys(template.toObject())
+    const stageKeys = Object.keys(template)
       .filter((key) => /^stage\d{1,2}$/.test(key))
       .sort((a, b) => parseInt(a.replace("stage", "")) - parseInt(b.replace("stage", "")));
 
@@ -117,24 +126,28 @@ async function createStagesAndChecklistsFromTemplate(projectId) {
 
 export async function getAllProjects(query) {
   const { page, limit, skip } = parsePagination(query);
-  const filter = {};
-  const total = await Project.countDocuments(filter);
+  const queryStr = `p${page}_l${limit}`;
+  return getOrSet(keys.allProjects(queryStr), async () => {
+    const filter = {};
+    const total = await Project.countDocuments(filter);
 
-  let q = Project.find(filter)
-    .populate("created_by", "name email")
-    .sort({ createdAt: -1 })
-    .lean();
+    let q = Project.find(filter)
+      .populate("created_by", "name email")
+      .sort({ createdAt: -1 })
+      .lean();
 
-  if (limit) q = q.skip(skip).limit(limit);
+    if (limit) q = q.skip(skip).limit(limit);
 
-  const projects = await q;
-  return paginatedResponse(projects, total, { page, limit });
+    const projects = await q;
+    return paginatedResponse(projects, total, { page, limit });
+  }, TTL.PROJECTS);
 }
 
 export async function getProjectsForUser(userId) {
   const memberships = await ProjectMembership.find({ user_id: userId })
     .populate({
       path: "project_id",
+      select: "project_name project_no status priority start_date end_date created_by isReviewApplicable reviewApplicableRemark createdAt",
       populate: { path: "created_by", select: "name email" },
     })
     .populate("role", "role_name")
@@ -144,9 +157,10 @@ export async function getProjectsForUser(userId) {
     .filter((m) => m.project_id)
     .map((m) => m.project_id._id);
 
-  const allMemberships = await ProjectMembership.find({
-    project_id: { $in: projectIds },
-  }).populate("role", "role_name").lean();
+  const allMemberships = await ProjectMembership.find(
+    { project_id: { $in: projectIds } },
+    "project_id user_id",
+  ).lean();
 
   const projectMembersMap = {};
   for (const m of allMemberships) {
@@ -170,14 +184,17 @@ export async function getProjectsForUser(userId) {
 }
 
 export async function getProjectById(id) {
-  const project = await Project.findById(id).populate("created_by", "name email").lean();
-  if (!project) throw new ApiError(404, "Project not found");
-  return project;
+  return getOrSet(keys.projectById(id), async () => {
+    const project = await Project.findById(id).populate("created_by", "name email").lean();
+    if (!project) throw new ApiError(404, "Project not found");
+    return project;
+  }, TTL.PROJECT_BY_ID);
 }
 
 export async function createProject(data) {
   const project = await Project.create(data);
-  return Project.findById(project._id).populate("created_by", "name email");
+  invalidateProjects();
+  return Project.findById(project._id).populate("created_by", "name email").lean();
 }
 
 export async function updateProject(projectId, data, requestingUserId) {
@@ -196,7 +213,7 @@ export async function updateProject(projectId, data, requestingUserId) {
     const assigned = await ProjectMembership.findOne({
       project_id: existing._id,
       user_id: requestingUserId,
-    });
+    }).select("_id").lean();
     if (!assigned) throw new ApiError(403, "Only assigned users can start this project");
   }
 
@@ -214,8 +231,9 @@ export async function updateProject(projectId, data, requestingUserId) {
     existing.reviewApplicableRemark = reviewApplicableRemark;
 
   await existing.save();
+  invalidateProjects();
 
-  const project = await Project.findById(existing._id).populate("created_by", "name email");
+  const project = await Project.findById(existing._id).populate("created_by", "name email").lean();
 
   if (prevStatus === "pending" && existing.status === "in_progress") {
     const existingStagesCount = await Stage.countDocuments({ project_id: existing._id });
@@ -232,35 +250,39 @@ export async function syncProjectCheckpointCategories(projectId) {
 }
 
 export async function getProjectStages(projectId) {
-  const stages = await Stage.find({ project_id: projectId }).sort({ createdAt: 1 }).lean();
-  return stages.map((stage) => ({
-    _id: stage._id,
-    stage_name: stage.stage_name,
-    stage_key: stage.stage_key,
-    status: stage.status,
-    loopback_count: stage.loopback_count || 0,
-    conflict_count: stage.conflict_count || 0,
-  }));
+  return getOrSet(keys.projectStages(projectId), async () => {
+    const stages = await Stage.find({ project_id: projectId }).sort({ createdAt: 1 }).lean();
+    return stages.map((stage) => ({
+      _id: stage._id,
+      stage_name: stage.stage_name,
+      stage_key: stage.stage_key,
+      status: stage.status,
+      loopback_count: stage.loopback_count || 0,
+      conflict_count: stage.conflict_count || 0,
+    }));
+  }, TTL.PROJECT_STAGES);
 }
 
 export async function deleteProject(projectId) {
-  const project = await Project.findById(projectId);
+  const project = await Project.findById(projectId).select("_id").lean();
   if (!project) throw new ApiError(404, "Project not found");
 
   const deletionStats = {};
 
-  const deletedMemberships = await ProjectMembership.deleteMany({ project_id: projectId });
+  // Parallelize independent delete operations
+  const [deletedMemberships, deletedAnswers, deletedApprovals, projectChecklists] =
+    await Promise.all([
+      ProjectMembership.deleteMany({ project_id: projectId }),
+      ChecklistAnswer.deleteMany({ project_id: projectId }),
+      ChecklistApproval.deleteMany({ project_id: projectId }),
+      ProjectChecklist.find({ projectId }, "groups.questions.executorImages groups.questions.reviewerImages groups.sections.questions.executorImages groups.sections.questions.reviewerImages iterations.groups.questions.executorImages iterations.groups.questions.reviewerImages iterations.groups.sections.questions.executorImages iterations.groups.sections.questions.reviewerImages").lean(),
+    ]);
+
   deletionStats.memberships = deletedMemberships.deletedCount;
-
-  const deletedAnswers = await ChecklistAnswer.deleteMany({ project_id: projectId });
   deletionStats.checklistAnswers = deletedAnswers.deletedCount;
-
-  const deletedApprovals = await ChecklistApproval.deleteMany({ project_id: projectId });
   deletionStats.checklistApprovals = deletedApprovals.deletedCount;
-
   // Collect and delete all images
   try {
-    const projectChecklists = await ProjectChecklist.find({ projectId });
     const allFileIds = [];
 
     for (const checklist of projectChecklists) {
@@ -304,26 +326,30 @@ export async function deleteProject(projectId) {
   const deletedProjectChecklists = await ProjectChecklist.deleteMany({ projectId });
   deletionStats.projectChecklists = deletedProjectChecklists.deletedCount;
 
-  const stages = await Stage.find({ project_id: projectId });
+  const stages = await Stage.find({ project_id: projectId }, "_id").lean();
   const stageIds = stages.map((s) => s._id);
   deletionStats.stages = stages.length;
 
-  const checklists = await Checklist.find({ stage_id: { $in: stageIds } });
+  const checklists = await Checklist.find({ stage_id: { $in: stageIds } }, "_id").lean();
   const checklistIds = checklists.map((c) => c._id);
 
-  const deletedCheckpoints = await Checkpoint.deleteMany({ checklistId: { $in: checklistIds } });
+  // Parallelize independent delete operations
+  const [deletedCheckpoints, deletedTransactions, deletedChecklists, deletedStages] =
+    await Promise.all([
+      Checkpoint.deleteMany({ checklistId: { $in: checklistIds } }),
+      ChecklistTransaction.deleteMany({ checklist_id: { $in: checklistIds } }),
+      Checklist.deleteMany({ stage_id: { $in: stageIds } }),
+      Stage.deleteMany({ project_id: projectId }),
+    ]);
+
   deletionStats.checkpoints = deletedCheckpoints.deletedCount;
-
-  const deletedTransactions = await ChecklistTransaction.deleteMany({ checklist_id: { $in: checklistIds } });
   deletionStats.checklistTransactions = deletedTransactions.deletedCount;
-
-  const deletedChecklists = await Checklist.deleteMany({ stage_id: { $in: stageIds } });
   deletionStats.checklists = deletedChecklists.deletedCount;
-
-  const deletedStages = await Stage.deleteMany({ project_id: projectId });
   deletionStats.stagesDeleted = deletedStages.deletedCount;
 
   await Project.findByIdAndDelete(projectId);
+  invalidateProjects();
+  invalidateStages(projectId);
 
   return deletionStats;
 }

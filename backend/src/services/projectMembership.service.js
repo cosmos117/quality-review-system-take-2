@@ -5,7 +5,7 @@ import { Role } from "../models/roles.models.js";
 import { parsePagination, paginatedResponse } from "../utils/paginate.js";
 
 export async function getProjectMembers(projectId, query) {
-  const project = await Project.findById(projectId);
+  const project = await Project.findById(projectId).select("_id project_name").lean();
   if (!project) return { error: 404, message: "Project not found" };
 
   const { page, limit, skip } = parsePagination(query);
@@ -33,13 +33,13 @@ export async function getProjectMembers(projectId, query) {
 }
 
 export async function addProjectMember(projectId, userId, roleId) {
-  const project = await Project.findById(projectId).select("_id").lean();
+  const [project, user, role] = await Promise.all([
+    Project.findById(projectId).select("_id").lean(),
+    User.findById(userId).select("_id").lean(),
+    Role.findById(roleId).select("_id").lean(),
+  ]);
   if (!project) return { error: 404, message: "Project not found" };
-
-  const user = await User.findById(userId).select("_id").lean();
   if (!user) return { error: 404, message: "User not found" };
-
-  const role = await Role.findById(roleId).select("_id").lean();
   if (!role) return { error: 404, message: "Role not found" };
 
   const membership = await ProjectMembership.create({
@@ -55,7 +55,7 @@ export async function addProjectMember(projectId, userId, roleId) {
 }
 
 export async function updateProjectMember(projectId, userId, roleId) {
-  const role = await Role.findById(roleId);
+  const role = await Role.findById(roleId).select("_id").lean();
   if (!role) return { error: 404, message: "Role not found" };
 
   const membership = await ProjectMembership.findOneAndUpdate(
@@ -64,7 +64,8 @@ export async function updateProjectMember(projectId, userId, roleId) {
     { new: true }
   )
     .populate("user_id", "name email")
-    .populate("role", "role_name description");
+    .populate("role", "role_name description")
+    .lean();
 
   if (!membership) return { error: 404, message: "Project membership not found" };
   return membership;

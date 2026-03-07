@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:get/get.dart';
 import '../models/project.dart';
 import '../services/approval_service.dart';
+import '../services/debouncer.dart';
 import '../services/stage_service.dart';
 import '../services/project_membership_service.dart';
 import 'auth_controller.dart';
@@ -11,6 +14,9 @@ class NotificationController extends GetxController {
   StageService get _stageService => Get.find<StageService>();
   ProjectMembershipService get _membershipService =>
       Get.find<ProjectMembershipService>();
+
+  final _debouncer = Debouncer(delay: const Duration(seconds: 2));
+  List<Project>? _pendingProjects;
 
   // Map of projectId to notification info
   final _projectNotifications = <String, ProjectNotification>{}.obs;
@@ -131,11 +137,28 @@ class NotificationController extends GetxController {
     }
   }
 
-  /// Update notifications for multiple projects
+  /// Update notifications for multiple projects (debounced).
+  /// Rapid successive calls within 2 seconds are coalesced into one batch.
   Future<void> updateMultipleProjects(List<Project> projects) async {
-    for (final project in projects) {
-      await updateProjectNotification(project);
-    }
+    _pendingProjects = projects;
+    final completer = Completer<void>();
+    _debouncer.run(() async {
+      final batch = _pendingProjects ?? projects;
+      _pendingProjects = null;
+      try {
+        await Future.wait(batch.map((p) => updateProjectNotification(p)));
+        completer.complete();
+      } catch (e) {
+        if (!completer.isCompleted) completer.complete();
+      }
+    });
+    return completer.future;
+  }
+
+  @override
+  void onClose() {
+    _debouncer.dispose();
+    super.onClose();
   }
 
   /// Clear notification for a project
