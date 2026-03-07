@@ -34,12 +34,10 @@ router.post(
 // Get a specific checkpoint by ID
 router.get("/checkpoints/:checkpointId", getCheckpointById);
 
-// Update checkpoint response (with optional images via multipart)
-// Note: If using multer for image uploads, add middleware here
+// Update checkpoint response (images are uploaded separately via GridFS /images route)
 router.patch(
   "/checkpoints/:checkpointId",
   authMiddleware,
-  // upload.array("images", 5), // Uncomment if using multer
   updateCheckpointResponse
 );
 

@@ -36,8 +36,7 @@ const checkpointSchema = new mongoose.Schema(
       },
       images: [
         {
-          data: Buffer, // Store image as Buffer (from V3)
-          contentType: String,
+          type: String, // GridFS file ID
         },
       ],
       remark: {
@@ -55,8 +54,7 @@ const checkpointSchema = new mongoose.Schema(
       },
       images: [
         {
-          data: Buffer,
-          contentType: String,
+          type: String, // GridFS file ID
         },
       ],
       remark: String,

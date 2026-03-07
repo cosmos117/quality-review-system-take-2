@@ -57,7 +57,6 @@ export const getCheckpointsByChecklistId = asyncHandler(async (req, res) => {
 
   // Exclude large image buffers from response for performance
   const checkpoints = await Checkpoint.find({ checklistId: checklistId })
-    .select("-executorResponse.images.data -reviewerResponse.images.data")
     .sort({ createdAt: 1 })
     .lean();
 
@@ -82,9 +81,7 @@ export const getCheckpointById = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid checkpoint id");
   }
 
-  const checkpoint = await Checkpoint.findById(checkpointId).select(
-    "-executorResponse.images.data -reviewerResponse.images.data",
-  ).lean();
+  const checkpoint = await Checkpoint.findById(checkpointId).lean();
 
   if (!checkpoint) {
     throw new ApiError(404, "Checkpoint not found");
@@ -134,16 +131,10 @@ export const updateCheckpointResponse = asyncHandler(async (req, res) => {
       ...executorResponse,
       respondedAt: new Date(),
     };
-  }
-
-  // Handle executor images from multipart upload (if using multer)
-  if (req.files?.length) {
-    req.files.forEach((file) => {
-      checkpoint.executorResponse.images.push({
-        data: file.buffer,
-        contentType: file.mimetype,
-      });
-    });
+    // Accept image file IDs (GridFS) if provided
+    if (Array.isArray(executorResponse.images)) {
+      checkpoint.executorResponse.images = executorResponse.images;
+    }
   }
 
   // Update reviewer response
@@ -153,6 +144,10 @@ export const updateCheckpointResponse = asyncHandler(async (req, res) => {
       ...reviewerResponse,
       reviewedAt: new Date(),
     };
+    // Accept image file IDs (GridFS) if provided
+    if (Array.isArray(reviewerResponse.images)) {
+      checkpoint.reviewerResponse.images = reviewerResponse.images;
+    }
   }
 
   // Update categoryId if provided (defect category for this checkpoint)
