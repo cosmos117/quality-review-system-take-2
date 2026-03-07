@@ -64,4 +64,7 @@ const projectSchema = new mongoose.Schema(
   },
 );
 
+projectSchema.index({ created_by: 1 });
+projectSchema.index({ status: 1 });
+
 export default mongoose.model("Project", projectSchema);

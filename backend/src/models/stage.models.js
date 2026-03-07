@@ -43,6 +43,9 @@ const stageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+stageSchema.index({ project_id: 1 });
+stageSchema.index({ project_id: 1, stage_key: 1 });
+
 const Stage = mongoose.model("Stage", stageSchema);
 
 export default Stage;

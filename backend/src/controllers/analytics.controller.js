@@ -19,7 +19,7 @@ export const getProjectAnalysis = asyncHandler(async (req, res) => {
   }
 
   // Get all stages for the project
-  const stages = await Stage.find({ project_id: projectId });
+  const stages = await Stage.find({ project_id: projectId }).lean();
   if (stages.length === 0) {
     return res.status(200).json(
       new ApiResponse(
@@ -40,7 +40,7 @@ export const getProjectAnalysis = asyncHandler(async (req, res) => {
 
   // Get all checklists for these stages
   const stageIds = stages.map((s) => s._id);
-  const checklists = await Checklist.find({ stage_id: { $in: stageIds } });
+  const checklists = await Checklist.find({ stage_id: { $in: stageIds } }).lean();
 
   if (checklists.length === 0) {
     return res.status(200).json(
@@ -64,7 +64,9 @@ export const getProjectAnalysis = asyncHandler(async (req, res) => {
   const checklistIds = checklists.map((c) => c._id);
   const checkpoints = await Checkpoint.find({
     checklistId: { $in: checklistIds },
-  });
+  })
+    .select("defect checklistId")
+    .lean();
 
   // Calculate defect statistics
   const totalCheckpoints = checkpoints.length;
@@ -205,13 +207,15 @@ export const getDefectsPerPhase = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid projectId");
   }
 
-  const stages = await Stage.find({ project_id: projectId });
+  const stages = await Stage.find({ project_id: projectId }).lean();
   const stageIds = stages.map((s) => s._id);
-  const checklists = await Checklist.find({ stage_id: { $in: stageIds } });
+  const checklists = await Checklist.find({ stage_id: { $in: stageIds } }).lean();
   const checklistIds = checklists.map((c) => c._id);
   const checkpoints = await Checkpoint.find({
     checklistId: { $in: checklistIds },
-  });
+  })
+    .select("defect checklistId")
+    .lean();
 
   const result = stages.map((stage) => {
     const stageChecklists = checklists.filter(
@@ -258,13 +262,15 @@ export const getDefectsPerChecklist = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid projectId");
   }
 
-  const stages = await Stage.find({ project_id: projectId });
+  const stages = await Stage.find({ project_id: projectId }).lean();
   const stageIds = stages.map((s) => s._id);
-  const checklists = await Checklist.find({ stage_id: { $in: stageIds } });
+  const checklists = await Checklist.find({ stage_id: { $in: stageIds } }).lean();
   const checklistIds = checklists.map((c) => c._id);
   const checkpoints = await Checkpoint.find({
     checklistId: { $in: checklistIds },
-  });
+  })
+    .select("defect checklistId")
+    .lean();
 
   const result = checklists.map((checklist) => {
     const checkpointsInChecklist = checkpoints.filter(
@@ -312,13 +318,15 @@ export const getCategoryDistribution = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid projectId");
   }
 
-  const stages = await Stage.find({ project_id: projectId });
+  const stages = await Stage.find({ project_id: projectId }).lean();
   const stageIds = stages.map((s) => s._id);
-  const checklists = await Checklist.find({ stage_id: { $in: stageIds } });
+  const checklists = await Checklist.find({ stage_id: { $in: stageIds } }).lean();
   const checklistIds = checklists.map((c) => c._id);
   const checkpoints = await Checkpoint.find({
     checklistId: { $in: checklistIds },
-  });
+  })
+    .select("defect checklistId")
+    .lean();
 
   // Get only defected checkpoints
   const defectedCheckpoints = checkpoints.filter((cp) => cp.defect.isDetected);

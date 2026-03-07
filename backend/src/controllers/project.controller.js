@@ -101,7 +101,8 @@ export const getProjectsForUser = async (req, res) => {
         path: "project_id",
         populate: { path: "created_by", select: "name email" },
       })
-      .populate("role", "role_name");
+      .populate("role", "role_name")
+      .lean();
 
     // Extract unique project IDs
     const projectIds = memberships
@@ -111,7 +112,7 @@ export const getProjectsForUser = async (req, res) => {
     // Get all memberships for these projects to build complete member lists
     const allMemberships = await ProjectMembership.find({
       project_id: { $in: projectIds },
-    }).populate("role", "role_name");
+    }).populate("role", "role_name").lean();
 
     // Build a map of project_id -> array of member user_ids
     const projectMembersMap = {};
@@ -127,7 +128,7 @@ export const getProjectsForUser = async (req, res) => {
     const projectsWithMemberships = memberships
       .filter((m) => m.project_id) // Filter out invalid project references
       .map((m) => {
-        const project = m.project_id.toObject();
+        const project = m.project_id;
         const pid = project._id.toString();
         return {
           ...project,
@@ -155,7 +156,7 @@ export const getProjectById = async (req, res) => {
     const project = await Project.findById(req.params.id).populate(
       "created_by",
       "name email",
-    );
+    ).lean();
 
     if (!project) {
       return res.status(404).json({
@@ -410,7 +411,7 @@ export const getProjectStages = async (req, res) => {
 
     const stages = await Stage.find({ project_id: projectId }).sort({
       createdAt: 1,
-    });
+    }).lean();
 
     if (!stages || stages.length === 0) {
       return res.status(200).json({

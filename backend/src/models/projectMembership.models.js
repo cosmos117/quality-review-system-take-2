@@ -37,6 +37,8 @@ const projectMembershipSchema = new mongoose.Schema({
  * to the exact same project with the exact same role twice.
  */
 projectMembershipSchema.index({ project_id: 1, user_id: 1, role: 1 }, { unique: true });
+projectMembershipSchema.index({ project_id: 1 });
+projectMembershipSchema.index({ user_id: 1 });
 
 const ProjectMembership = mongoose.model('ProjectMembership', projectMembershipSchema);
 

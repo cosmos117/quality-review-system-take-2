@@ -110,6 +110,8 @@ const checklistSchema = new mongoose.Schema(
   },
 );
 
+checklistSchema.index({ stage_id: 1 });
+
 const Checklist = mongoose.model("Checklist", checklistSchema);
 
 export default Checklist;
