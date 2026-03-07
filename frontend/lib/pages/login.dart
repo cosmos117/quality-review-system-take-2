@@ -53,9 +53,9 @@ class LoginController extends GetxController {
 
 // ---------- Login Screen ----------
 class LoginPage extends StatelessWidget {
-  final LoginController controller = Get.put(LoginController());
-
   LoginPage({super.key});
+
+  final LoginController controller = Get.find<LoginController>();
 
   final TextEditingController email = TextEditingController();
   final TextEditingController password = TextEditingController();

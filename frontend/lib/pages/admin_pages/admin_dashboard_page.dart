@@ -12,7 +12,7 @@ import '../../controllers/team_controller.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../services/excel_import_service.dart';
 import '../../components/project_statistics_card.dart';
-import '../../services/project_membership_service.dart';
+import '../../components/sortable_header_cell.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -25,6 +25,13 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   int _currentPage = 1;
   final int _itemsPerPage = 12;
   final ScrollController _horizontalScrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Refresh projects once when the page is entered, not on every build
+    Get.find<ProjectsController>().refreshProjects();
+  }
 
   @override
   void dispose() {
@@ -81,8 +88,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     return list;
   }
 
-  void _ensureSeed(ProjectsController ctrl) {}
-
   Widget _buildFilterChip(AdminDashboardUIController ui, String status) {
     return Builder(
       builder: (context) {
@@ -123,13 +128,10 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   Widget build(BuildContext context) {
     // Get screen dimensions for responsive sizing
     final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
 
     // Responsive sizing helpers
     double responsiveWidth(double baseWidth) =>
         screenWidth * (baseWidth / 1920);
-    double responsiveHeight(double baseHeight) =>
-        screenHeight * (baseHeight / 1080);
     double responsiveFontSize(double baseFontSize) =>
         screenWidth * (baseFontSize / 1920) + 8;
     double responsivePadding(double basePadding) =>
@@ -137,9 +139,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
     final projCtrl = Get.find<ProjectsController>();
     final ui = Get.find<AdminDashboardUIController>();
-    // Refresh data when navigating to dashboard
-    projCtrl.refreshProjects();
-    _ensureSeed(projCtrl);
 
     final teamCtrl = Get.isRegistered<TeamController>()
         ? Get.find<TeamController>()
@@ -598,7 +597,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                   ),
                                   SizedBox(
                                     width: responsiveWidth(120),
-                                    child: _HeaderCell(
+                                    child: SortableHeaderCell(
                                       label: 'Defect Rate',
                                       active: sortKey == 'defectRate',
                                       ascending: asc,
@@ -608,7 +607,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                   ),
                                   SizedBox(
                                     width: responsiveWidth(120),
-                                    child: _HeaderCell(
+                                    child: SortableHeaderCell(
                                       label: 'Started',
                                       active: sortKey == 'started',
                                       ascending: asc,
@@ -618,7 +617,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                   ),
                                   SizedBox(
                                     width: responsiveWidth(120),
-                                    child: _HeaderCell(
+                                    child: SortableHeaderCell(
                                       label: 'Priority',
                                       active: sortKey == 'priority',
                                       ascending: asc,
@@ -628,7 +627,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                   ),
                                   SizedBox(
                                     width: responsiveWidth(120),
-                                    child: _HeaderCell(
+                                    child: SortableHeaderCell(
                                       label: 'Status',
                                       active: sortKey == 'status',
                                       ascending: asc,
@@ -642,16 +641,14 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                               ),
                             ),
                             SizedBox(height: responsivePadding(8)),
-                            // Project rows without individual scrollbars
-                            ...projects
-                                .map(
-                                  (proj) => _AdminProjectCard(
-                                    key: ValueKey(proj.id),
-                                    project: proj,
-                                    parentContext: context,
-                                  ),
-                                )
-                                .toList(),
+                            // Project rows
+                            ...projects.map(
+                              (proj) => _AdminProjectCard(
+                                key: ValueKey(proj.id),
+                                project: proj,
+                                parentContext: context,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -1124,52 +1121,6 @@ class _AdminProjectCard extends StatelessWidget {
             ],
           );
         }),
-      ),
-    );
-  }
-}
-
-class _HeaderCell extends StatelessWidget {
-  final String label;
-  final bool active;
-  final bool ascending;
-  final VoidCallback onTap;
-  final double fontSize;
-
-  const _HeaderCell({
-    required this.label,
-    required this.active,
-    required this.ascending,
-    required this.onTap,
-    required this.fontSize,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final icon = active
-        ? (ascending
-              ? Icons.arrow_upward_rounded
-              : Icons.arrow_downward_rounded)
-        : Icons.unfold_more_rounded;
-    final color = active ? Colors.blueGrey[800] : Colors.blueGrey[600];
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: color,
-              fontSize: fontSize,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(width: 4),
-          Icon(icon, size: fontSize + 3, color: color),
-        ],
       ),
     );
   }

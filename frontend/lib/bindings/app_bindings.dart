@@ -16,6 +16,8 @@ import '../services/project_checklist_service.dart';
 import '../services/defect_categorization_service.dart';
 import '../controllers/auth_controller.dart';
 import '../pages/employee_pages/checklist_controller.dart';
+import '../pages/login.dart'; // LoginController
+import '../controllers/admin_checklist_template_controller.dart';
 import '../services/checklist_answer_service.dart';
 import '../services/approval_service.dart';
 import '../services/excel_export_service.dart';
@@ -111,6 +113,11 @@ class AppBindings extends Bindings {
     );
     Get.lazyPut<NotificationController>(
       () => NotificationController(),
+      fenix: true,
+    );
+    Get.lazyPut<LoginController>(() => LoginController(), fenix: true);
+    Get.lazyPut<AdminChecklistTemplateController>(
+      () => AdminChecklistTemplateController(),
       fenix: true,
     );
   }

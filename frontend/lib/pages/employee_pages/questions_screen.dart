@@ -553,34 +553,28 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       }
     }
 
-    // Step 5: Load answers
+    // Step 5: Load answers and approval status in parallel
     try {
-      checklistCtrl.clearProjectCache(widget.projectId);
-
       await Future.wait([
         checklistCtrl.loadAnswers(widget.projectId, phase, 'executor'),
         checklistCtrl.loadAnswers(widget.projectId, phase, 'reviewer'),
+        // Load approval data in parallel with answers
+        _approvalService
+            .compare(widget.projectId, phase)
+            .then((status) {
+              if (mounted) _compareStatus = status;
+            })
+            .catchError((_) {}),
+        _approvalService
+            .getStatus(widget.projectId, phase)
+            .then((appr) {
+              if (mounted) _approvalStatus = appr;
+            })
+            .catchError((_) {}),
+        _approvalService
+            .getRevertCount(widget.projectId, phase)
+            .catchError((_) => 0),
       ]);
-
-      try {
-        final status = await _approvalService.compare(widget.projectId, phase);
-        if (mounted) _compareStatus = status;
-      } catch (_) {}
-
-      try {
-        final appr = await _approvalService.getStatus(widget.projectId, phase);
-        if (mounted) _approvalStatus = appr;
-      } catch (_) {}
-
-      // Step 5b: Fetch revert count for this phase from DB
-      try {
-        await _approvalService.getRevertCount(widget.projectId, phase);
-      } catch (e) {}
-
-      // Force refresh submission status to ensure it's up to date
-      // This is critical for proper UI state when logging back in
-      await checklistCtrl.loadAnswers(widget.projectId, phase, 'executor');
-      await checklistCtrl.loadAnswers(widget.projectId, phase, 'reviewer');
 
       final executorSheet = checklistCtrl.getRoleSheet(
         widget.projectId,
@@ -674,16 +668,13 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       // Silently fail on answer loading
     }
 
-    // Load defect rates
-    await _loadDefectRates();
+    // Load defect rates and compute active phase in parallel
+    await Future.wait([_loadDefectRates(), _computeActivePhase()]);
 
     if (!mounted) return;
     setState(() {
       _isLoadingData = false;
     });
-
-    // Compute active phase
-    await _computeActivePhase();
 
     // If an initial sub-question was provided, expand and scroll to it
     if (widget.initialSubQuestion != null) {
@@ -731,16 +722,17 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     try {
       final checklistService = Get.find<ProjectChecklistService>();
 
-      // Load defect rates per iteration for current phase
-      final iterationData = await checklistService.getDefectRatesPerIteration(
-        widget.projectId,
-        _selectedPhase,
-      );
+      // Load both defect rate calls in parallel
+      final results = await Future.wait([
+        checklistService.getDefectRatesPerIteration(
+          widget.projectId,
+          _selectedPhase,
+        ),
+        checklistService.getOverallDefectRate(widget.projectId),
+      ]);
 
-      // Load overall defect rate
-      final overallData = await checklistService.getOverallDefectRate(
-        widget.projectId,
-      );
+      final iterationData = results[0];
+      final overallData = results[1];
 
       if (!mounted) return;
 
@@ -998,18 +990,20 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     int active = 1;
     bool allPhasesCompleted = false;
     try {
-      // Dynamically check all phases based on _maxActualPhase
-      for (int phase = 1; phase <= _maxActualPhase; phase++) {
-        final status = await _approvalService.getStatus(
-          widget.projectId,
-          phase,
-        );
+      // Fetch all phase statuses in parallel instead of sequential loop
+      final statusFutures = List.generate(
+        _maxActualPhase,
+        (i) => _approvalService
+            .getStatus(widget.projectId, i + 1)
+            .catchError((_) => null),
+      );
+      final statuses = await Future.wait(statusFutures);
 
+      for (int i = 0; i < statuses.length; i++) {
+        final status = statuses[i];
         if (status != null && status['status'] == 'approved') {
-          // If this phase is approved, the next phase becomes active
-          active = phase + 1;
+          active = i + 2; // next phase becomes active
         } else {
-          // If this phase is not approved, stop checking
           break;
         }
       }
@@ -1023,43 +1017,32 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     if (!mounted) return;
     setState(() {
       _isProjectCompleted = allPhasesCompleted;
-      // active represents the next phase that's now active
-      // active = 1 means phase 1 is active, active = 2 means phase 2 is active, etc.
       _activePhase = active;
-      // Only clamp selected phase for non-TeamLeader users
-      // TeamLeader can view any phase including pending ones
       final currentUserName = Get.isRegistered<AuthController>()
           ? Get.find<AuthController>().currentUser.value?.name
           : null;
       final isTeamLeader =
           currentUserName != null && authRoleIsTeamLeader(currentUserName);
       if (!isTeamLeader) {
-        // Non-TeamLeader users: clamp to active phase
         if (_selectedPhase > _activePhase) _selectedPhase = _activePhase;
       }
-      // Always ensure phase is at least 1
       if (_selectedPhase < 1) _selectedPhase = 1;
     });
-    // Refresh approval/compare for the currently selected phase
-    try {
-      // Use phase number when comparing approval status
-      final status = await _approvalService.compare(
-        widget.projectId,
-        _selectedPhase,
-      );
-      if (mounted) setState(() => _compareStatus = status);
-    } catch (_) {}
-    try {
-      final appr = await _approvalService.getStatus(
-        widget.projectId,
-        _selectedPhase,
-      );
-      if (mounted) {
-        setState(() {
-          _approvalStatus = appr;
-        });
-      }
-    } catch (_) {}
+    // Refresh approval/compare for the currently selected phase in parallel
+    await Future.wait([
+      _approvalService
+          .compare(widget.projectId, _selectedPhase)
+          .then((status) {
+            if (mounted) setState(() => _compareStatus = status);
+          })
+          .catchError((_) {}),
+      _approvalService
+          .getStatus(widget.projectId, _selectedPhase)
+          .then((appr) {
+            if (mounted) setState(() => _approvalStatus = appr);
+          })
+          .catchError((_) {}),
+    ]);
   }
 
   @override

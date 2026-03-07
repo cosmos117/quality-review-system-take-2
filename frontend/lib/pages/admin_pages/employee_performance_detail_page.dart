@@ -421,10 +421,11 @@ class _ProjectListSection extends StatelessWidget {
             ),
           )
         else
-          ...projects.map(
-            (project) => _ProjectCard(
-              project: project,
-              roles: projectRoles[project.id] ?? [],
+          ...List.generate(
+            projects.length,
+            (i) => _ProjectCard(
+              project: projects[i],
+              roles: projectRoles[projects[i].id] ?? [],
             ),
           ),
       ],

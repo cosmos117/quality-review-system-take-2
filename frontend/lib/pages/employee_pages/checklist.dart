@@ -10,6 +10,7 @@ import 'dart:convert';
 import 'checklist_controller.dart';
 import '../../services/phase_checklist_service.dart';
 import '../../services/iteration_service.dart';
+import '../../controllers/auth_controller.dart';
 
 import '../../config/api_config.dart';
 
@@ -1288,12 +1289,21 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       0; // 0 means current, 1+ means viewing past iteration
   bool _loadingIterations = false;
 
+  Map<String, String> get _authHeaders {
+    if (Get.isRegistered<AuthController>()) {
+      final token = Get.find<AuthController>().currentUser.value?.token;
+      if (token != null && token.isNotEmpty) {
+        return {'Authorization': 'Bearer $token'};
+      }
+    }
+    return {};
+  }
+
   @override
   void initState() {
     super.initState();
 
-    if (kDebugMode && widget.role == 'reviewer') {
-    }
+    if (kDebugMode && widget.role == 'reviewer') {}
 
     // Initialize category and severity from widget props first
     // Convert empty strings to null for dropdown compatibility
@@ -1317,8 +1327,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
           .where((id) => id.isNotEmpty)
           .toSet();
       if (!categoryIds.contains(selectedCategory)) {
-        if (kDebugMode) {
-        }
+        if (kDebugMode) {}
         selectedCategory = null;
       }
     }
@@ -1328,8 +1337,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       _loadIterations();
     }
 
-    if (kDebugMode && widget.role == 'reviewer') {
-    }
+    if (kDebugMode && widget.role == 'reviewer') {}
 
     // Images are already loaded from initialData['images'] which correctly
     // separates executorImages and reviewerImages from ProjectChecklist
@@ -1343,8 +1351,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
 
     if (kDebugMode && widget.role == 'reviewer') {
       if (widget.selectedCategoryId != oldWidget.selectedCategoryId ||
-          widget.selectedSeverity != oldWidget.selectedSeverity) {
-      }
+          widget.selectedSeverity != oldWidget.selectedSeverity) {}
     }
 
     // Sync category and severity from parent when they change
@@ -1374,15 +1381,13 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
         final catId = (widget.initialData!['categoryId'] ?? '').toString();
         if (catId.isNotEmpty) {
           selectedCategory = catId;
-          if (kDebugMode) {
-          }
+          if (kDebugMode) {}
         }
 
         final sev = (widget.initialData!['severity'] ?? '').toString();
         if (sev.isNotEmpty) {
           selectedSeverity = sev;
-          if (kDebugMode) {
-          }
+          if (kDebugMode) {}
         }
       }
     }
@@ -1415,12 +1420,10 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
           _loadingIterations = false;
         });
 
-        if (kDebugMode) {
-        }
+        if (kDebugMode) {}
       }
     } catch (e) {
-      if (kDebugMode) {
-      }
+      if (kDebugMode) {}
       if (mounted) {
         setState(() => _loadingIterations = false);
       }
@@ -1453,8 +1456,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     );
 
     if (questionData == null) {
-      if (kDebugMode) {
-      }
+      if (kDebugMode) {}
       return;
     }
 
@@ -1463,8 +1465,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
 
     if (kDebugMode) {
       if (widget.role == 'executor') {
-      } else {
-      }
+      } else {}
     }
 
     setState(() {
@@ -1491,8 +1492,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       }
     });
 
-    if (kDebugMode) {
-    }
+    if (kDebugMode) {}
   }
 
   @override
@@ -1514,8 +1514,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       answerData['categoryId'] = selectedCategory ?? '';
       answerData['severity'] = selectedSeverity ?? '';
 
-      if (kDebugMode) {
-      }
+      if (kDebugMode) {}
     }
 
     return widget.onAnswer(answerData);
@@ -1533,12 +1532,13 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
         for (final f in result.files) {
           if (f.bytes == null) continue;
           try {
-            final req = await http.MultipartRequest(
+            final req = http.MultipartRequest(
               'POST',
               Uri.parse(
                 '$_imageBaseUrl/images/${widget.checkpointId ?? widget.subQuestion}?role=${widget.role}',
               ),
             );
+            req.headers.addAll(_authHeaders);
             req.files.add(
               http.MultipartFile.fromBytes('image', f.bytes!, filename: f.name),
             );
@@ -1964,8 +1964,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
               itemBuilder: (context, i) {
                 final img = _images[i];
 
-                if (kDebugMode) {
-                }
+                if (kDebugMode) {}
 
                 final bytes = img['bytes'] is Uint8List
                     ? img['bytes'] as Uint8List
@@ -1980,8 +1979,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                 // Handle both string and ObjectId formats
                 final fileId = (img['fileId'] ?? '').toString();
 
-                if (kDebugMode) {
-                }
+                if (kDebugMode) {}
 
                 if (bytes == null && fileId.isEmpty)
                   return const SizedBox.shrink();
@@ -2007,6 +2005,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                                 )
                               : Image.network(
                                   '$_imageBaseUrl/images/file/$fileId',
+                                  headers: _authHeaders,
                                   width: 100,
                                   height: 100,
                                   fit: BoxFit.cover,
@@ -2034,8 +2033,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                                         );
                                       },
                                   errorBuilder: (_, error, ___) {
-                                    if (kDebugMode) {
-                                    }
+                                    if (kDebugMode) {}
                                     return Container(
                                       width: 100,
                                       height: 100,
@@ -2102,6 +2100,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                                       Uri.parse(
                                         '$_imageBaseUrl/images/file/$fileId',
                                       ),
+                                      headers: _authHeaders,
                                     );
                                     // Remove from local list only after deletion confirmed
                                     setState(() => _images.removeAt(i));
@@ -2177,6 +2176,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
         } else if (fileId != null && fileId.isNotEmpty) {
           image = Image.network(
             '$_imageBaseUrl/images/file/$fileId',
+            headers: _authHeaders,
             fit: BoxFit.contain,
             loadingBuilder: (context, child, loadingProgress) {
               if (loadingProgress == null) return child;
@@ -2191,8 +2191,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
               );
             },
             errorBuilder: (_, error, ___) {
-              if (kDebugMode) {
-              }
+              if (kDebugMode) {}
               return Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

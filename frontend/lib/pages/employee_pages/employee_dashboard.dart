@@ -7,7 +7,7 @@ import '../../controllers/team_controller.dart';
 import '../../controllers/export_controller.dart';
 import '../../components/project_statistics_card.dart';
 import '../../components/employee_performance_card.dart';
-import '../../services/project_membership_service.dart';
+import '../../components/sortable_header_cell.dart';
 
 class EmployeeDashboard extends StatefulWidget {
   const EmployeeDashboard({super.key});
@@ -454,7 +454,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                                   ),
                                   SizedBox(
                                     width: responsiveWidth(120),
-                                    child: _HeaderCell(
+                                    child: SortableHeaderCell(
                                       label: 'Defect Rate',
                                       active: _sortKey == 'defectRate',
                                       ascending: _ascending,
@@ -464,7 +464,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                                   ),
                                   SizedBox(
                                     width: responsiveWidth(120),
-                                    child: _HeaderCell(
+                                    child: SortableHeaderCell(
                                       label: 'Started',
                                       active: _sortKey == 'started',
                                       ascending: _ascending,
@@ -474,7 +474,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                                   ),
                                   SizedBox(
                                     width: responsiveWidth(120),
-                                    child: _HeaderCell(
+                                    child: SortableHeaderCell(
                                       label: 'Priority',
                                       active: _sortKey == 'priority',
                                       ascending: _ascending,
@@ -484,7 +484,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                                   ),
                                   SizedBox(
                                     width: responsiveWidth(120),
-                                    child: _HeaderCell(
+                                    child: SortableHeaderCell(
                                       label: 'Status',
                                       active: _sortKey == 'status',
                                       ascending: _ascending,
@@ -497,16 +497,14 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                               ),
                             ),
                             SizedBox(height: responsivePadding(8)),
-                            // Project rows without individual scrollbars
-                            ...projects
-                                .map(
-                                  (proj) => _EmployeeProjectCard(
-                                    key: ValueKey(proj.id),
-                                    project: proj,
-                                    context: context,
-                                  ),
-                                )
-                                .toList(),
+                            // Project rows
+                            ...projects.map(
+                              (proj) => _EmployeeProjectCard(
+                                key: ValueKey(proj.id),
+                                project: proj,
+                                context: context,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -1000,52 +998,6 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _HeaderCell extends StatelessWidget {
-  final String label;
-  final bool active;
-  final bool ascending;
-  final VoidCallback onTap;
-  final double fontSize;
-
-  const _HeaderCell({
-    required this.label,
-    required this.active,
-    required this.ascending,
-    required this.onTap,
-    required this.fontSize,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final icon = active
-        ? (ascending
-              ? Icons.arrow_upward_rounded
-              : Icons.arrow_downward_rounded)
-        : Icons.unfold_more_rounded;
-    final color = active ? Colors.blueGrey[800] : Colors.blueGrey[600];
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: color,
-              fontSize: fontSize,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(width: 4),
-          Icon(icon, size: fontSize + 3, color: color),
-        ],
       ),
     );
   }

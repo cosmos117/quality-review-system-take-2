@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -6,6 +6,7 @@ import '../../models/project.dart';
 import '../../controllers/projects_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/notification_controller.dart';
+import '../../components/sortable_header_cell.dart';
 import 'my_project_detail_page.dart';
 
 class Myproject extends StatefulWidget {
@@ -391,7 +392,7 @@ class _MyprojectState extends State<Myproject> {
                                           ),
                                           Expanded(
                                             flex: 4,
-                                            child: _HeaderCell(
+                                            child: SortableHeaderCell(
                                               label: 'Project Title',
                                               active: _sortKey == 'title',
                                               ascending: _ascending,
@@ -400,7 +401,7 @@ class _MyprojectState extends State<Myproject> {
                                           ),
                                           Expanded(
                                             flex: 2,
-                                            child: _HeaderCell(
+                                            child: SortableHeaderCell(
                                               label: 'Started',
                                               active: _sortKey == 'started',
                                               ascending: _ascending,
@@ -410,7 +411,7 @@ class _MyprojectState extends State<Myproject> {
                                           ),
                                           Expanded(
                                             flex: 2,
-                                            child: _HeaderCell(
+                                            child: SortableHeaderCell(
                                               label: 'Priority',
                                               active: _sortKey == 'priority',
                                               ascending: _ascending,
@@ -420,7 +421,7 @@ class _MyprojectState extends State<Myproject> {
                                           ),
                                           Expanded(
                                             flex: 2,
-                                            child: _HeaderCell(
+                                            child: SortableHeaderCell(
                                               label: 'Status',
                                               active: _sortKey == 'status',
                                               ascending: _ascending,
@@ -430,7 +431,7 @@ class _MyprojectState extends State<Myproject> {
                                           ),
                                           Expanded(
                                             flex: 2,
-                                            child: _HeaderCell(
+                                            child: SortableHeaderCell(
                                               label: 'Defect Rate',
                                               active:
                                                   _sortKey ==
@@ -723,53 +724,6 @@ class _MyProjectCardState extends State<_MyProjectCard> {
             ],
           );
         }),
-      ),
-    );
-  }
-}
-
-class _HeaderCell extends StatelessWidget {
-  final String label;
-  final bool active;
-  final bool ascending;
-  final VoidCallback? onTap;
-  final bool showIcon;
-
-  const _HeaderCell({
-    required this.label,
-    required this.active,
-    required this.ascending,
-    this.onTap,
-    this.showIcon = true,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final icon = active
-        ? (ascending
-              ? Icons.arrow_upward_rounded
-              : Icons.arrow_downward_rounded)
-        : Icons.unfold_more_rounded;
-    final color = active ? Colors.blueGrey[800] : Colors.blueGrey[600];
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: color,
-                fontSize: 13,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (showIcon && onTap != null) Icon(icon, size: 16, color: color),
-        ],
       ),
     );
   }

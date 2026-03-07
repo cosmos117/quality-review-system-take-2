@@ -27,12 +27,14 @@ class MyApp extends StatelessWidget {
       transitionDuration: Duration.zero,
       initialBinding: AppBindings(),
       // Pick initial screen based on restored auth state (reactive)
-      home: _HomeRouter(),
+      home: const _HomeRouter(),
     );
   }
 }
 
 class _HomeRouter extends StatelessWidget {
+  const _HomeRouter();
+
   @override
   Widget build(BuildContext context) {
     final auth = Get.find<AuthController>();
