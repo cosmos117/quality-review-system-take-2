@@ -73,7 +73,7 @@ const getChecklistById = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid checklist id");
   }
 
-  const checklist = await Checklist.findById(id);
+  const checklist = await Checklist.findById(id).lean();
   if (!checklist) {
     throw new ApiError(404, "Checklist not found");
   }
@@ -256,8 +256,9 @@ const getChecklistHistory = async (req, res) => {
     const checklistId = req.params.id;
 
     const history = await ChecklistHistory.find({ checklist_id: checklistId })
-      .populate("user_id", "name email") // populate user info if available
-      .sort({ createdAt: 1 });
+      .populate("user_id", "name email")
+      .sort({ createdAt: 1 })
+      .lean();
 
     if (!history.length) {
       return res

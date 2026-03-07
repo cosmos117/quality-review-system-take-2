@@ -8,7 +8,9 @@ const authMiddleware = async (req, _, next) => {
     if (!token) throw new ApiError(401, "Not authenticated");
 
     const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-    const user = await User.findById(decoded?._id);
+    const user = await User.findById(decoded?._id)
+      .select("-password")
+      .lean();
 
     if (!user || user.accessToken !== token)
       throw new ApiError(401, "Session expired, please log in again");

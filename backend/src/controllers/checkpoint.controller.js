@@ -24,7 +24,7 @@ export const createCheckpoint = asyncHandler(async (req, res) => {
   }
 
   // Verify checklist exists
-  const checklist = await Checklist.findById(checklistId);
+  const checklist = await Checklist.findById(checklistId).select("_id").lean();
   if (!checklist) {
     throw new ApiError(404, "Checklist not found");
   }
@@ -58,7 +58,8 @@ export const getCheckpointsByChecklistId = asyncHandler(async (req, res) => {
   // Exclude large image buffers from response for performance
   const checkpoints = await Checkpoint.find({ checklistId: checklistId })
     .select("-executorResponse.images.data -reviewerResponse.images.data")
-    .sort({ createdAt: 1 });
+    .sort({ createdAt: 1 })
+    .lean();
 
 
 
@@ -83,7 +84,7 @@ export const getCheckpointById = asyncHandler(async (req, res) => {
 
   const checkpoint = await Checkpoint.findById(checkpointId).select(
     "-executorResponse.images.data -reviewerResponse.images.data",
-  );
+  ).lean();
 
   if (!checkpoint) {
     throw new ApiError(404, "Checkpoint not found");
@@ -307,11 +308,15 @@ export const getDefectStatsByChecklist = asyncHandler(async (req, res) => {
   }
 
   // Get all checkpoints for this checklist to know the questions
-  const checkpoints = await Checkpoint.find({ checklistId: checklistId });
+  const checkpoints = await Checkpoint.find({ checklistId: checklistId })
+    .select("question defect")
+    .lean();
   const totalCheckpoints = checkpoints.length;
 
   // Get the checklist and its stage to find project_id and phase
-  const checklist = await Checklist.findById(checklistId).populate("stage_id");
+  const checklist = await Checklist.findById(checklistId)
+    .populate("stage_id", "project_id phase")
+    .lean();
 
   if (!checklist || !checklist.stage_id) {
     throw new ApiError(404, "Checklist or stage not found");
@@ -325,7 +330,7 @@ export const getDefectStatsByChecklist = asyncHandler(async (req, res) => {
   const allAnswers = await ChecklistAnswer.find({
     project_id: projectId,
     phase: phase,
-  });
+  }).lean();
 
   // Group answers by sub_question
   const answersByQuestion = {};
@@ -401,7 +406,7 @@ export const suggestDefectCategory = asyncHandler(async (req, res) => {
   // Skip checkpoint verification for dummy requests
   if (checkpointId !== "dummy") {
     // Fetch checkpoint to verify it exists
-    const checkpoint = await Checkpoint.findById(checkpointId);
+    const checkpoint = await Checkpoint.findById(checkpointId).select("_id").lean();
     if (!checkpoint) {
       throw new ApiError(404, "Checkpoint not found");
     }
@@ -413,7 +418,7 @@ export const suggestDefectCategory = asyncHandler(async (req, res) => {
 
   // Fetch template to get categories with keywords
   const Template = (await import("../models/template.models.js")).default;
-  const template = await Template.findOne();
+  const template = await Template.findOne().lean();
 
   if (!template || !template.defectCategories) {
     return res.status(200).json(

@@ -73,7 +73,7 @@ export const addProjectMember = async (req, res) => {
         const { project_id, user_id, role_id } = req.body;
 
         // Check if project exists
-        const project = await Project.findById(project_id);
+        const project = await Project.findById(project_id).select("_id").lean();
         if (!project) {
             return res.status(404).json({
                 success: false,
@@ -82,7 +82,7 @@ export const addProjectMember = async (req, res) => {
         }
 
         // Check if user exists
-        const user = await User.findById(user_id);
+        const user = await User.findById(user_id).select("_id").lean();
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -91,7 +91,7 @@ export const addProjectMember = async (req, res) => {
         }
 
         // Check if role exists
-        const role = await Role.findById(role_id);
+        const role = await Role.findById(role_id).select("_id").lean();
         if (!role) {
             return res.status(404).json({
                 success: false,
@@ -107,7 +107,8 @@ export const addProjectMember = async (req, res) => {
 
         const populatedMembership = await ProjectMembership.findById(membership._id)
             .populate('user_id', 'name email')
-            .populate('role', 'role_name description');
+            .populate('role', 'role_name description')
+            .lean();
 
         res.status(201).json({
             success: true,
@@ -204,7 +205,7 @@ export const getUserProjects = async (req, res) => {
         const { id } = req.params; // user id
 
         // Check if user exists
-        const user = await User.findById(id);
+        const user = await User.findById(id).select("_id name").lean();
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -214,7 +215,8 @@ export const getUserProjects = async (req, res) => {
 
         const projects = await ProjectMembership.find({ user_id: id })
             .populate('project_id', 'project_name status start_date end_date')
-            .populate('role', 'role_name description');
+            .populate('role', 'role_name description')
+            .lean();
 
         res.status(200).json({
             success: true,

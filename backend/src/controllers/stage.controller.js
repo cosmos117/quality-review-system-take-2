@@ -229,7 +229,7 @@ const getStageById = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid stage id");
   }
 
-  const stage = await Stage.findById(id);
+  const stage = await Stage.findById(id).lean();
   if (!stage) {
     throw new ApiError(404, "Stage not found");
   }

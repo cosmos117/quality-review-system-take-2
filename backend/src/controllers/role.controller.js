@@ -3,7 +3,7 @@ import { Role } from '../models/roles.models.js';
 // Get all roles
 export const getAllRoles = async (req, res) => {
     try {
-        const roles = await Role.find({}).sort({ role_name: 1 });
+        const roles = await Role.find({}).sort({ role_name: 1 }).lean();
         res.status(200).json({
             success: true,
             data: roles
@@ -19,7 +19,7 @@ export const getAllRoles = async (req, res) => {
 // Get role by ID
 export const getRoleById = async (req, res) => {
     try {
-        const role = await Role.findById(req.params.id);
+        const role = await Role.findById(req.params.id).lean();
         
         if (!role) {
             return res.status(404).json({

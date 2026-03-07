@@ -45,7 +45,8 @@ const registerUser = asyncHandler(async (req, res) => {
   });
 
   const createdUser = await User.findById(user._id)
-    .select("-password -accessToken");
+    .select("-password -accessToken")
+    .lean();
     
   if(!createdUser){
     throw new ApiError(500,"Something went wrong while registering user")
@@ -76,12 +77,12 @@ const loginUser = asyncHandler(async (req, res) => {
   await user.save();
 
   const loggedUser = await User.findById(user._id)
-    .select("-password -accessToken");
+    .select("-password -accessToken")
+    .lean();
 
   // Include token in response for client-side storage
-  const userObj = loggedUser.toObject ? loggedUser.toObject() : loggedUser;
   const response = {
-    ...userObj,
+    ...loggedUser,
     token: accessToken,
   };
 
@@ -171,7 +172,7 @@ const updateUser = async (req, res) => {
     
     await user.save();
     
-    const updatedUser = await User.findById(user._id).select("-password -accessToken");
+    const updatedUser = await User.findById(user._id).select("-password -accessToken").lean();
     
     res.status(200).json({
       success: true,
