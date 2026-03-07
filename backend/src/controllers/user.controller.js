@@ -4,6 +4,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { User } from "../models/user.models.js";
 import ProjectMembership from "../models/projectMembership.models.js";
 import jwt from "jsonwebtoken";
+import { parsePagination, paginatedResponse } from "../utils/paginate.js";
 
 
 const registerUser = asyncHandler(async (req, res) => {
@@ -109,12 +110,20 @@ const logoutUser = asyncHandler(async (req, res) => {
 // Get all users
 const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find({}).select("-password -accessToken").sort({ createdAt: -1 });
-    
-    res.status(200).json({
-      success: true,
-      data: users
-    });
+    const { page, limit, skip } = parsePagination(req.query);
+    const filter = {};
+    const total = await User.countDocuments(filter);
+
+    let query = User.find(filter)
+      .select("-password -accessToken")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (limit) query = query.skip(skip).limit(limit);
+
+    const users = await query;
+
+    res.status(200).json(paginatedResponse(users, total, { page, limit }));
   } catch (error) {
     res.status(500).json({
       success: false,

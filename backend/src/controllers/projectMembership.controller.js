@@ -2,6 +2,7 @@ import ProjectMembership from '../models/projectMembership.models.js';
 import Project from '../models/project.models.js';
 import { User } from '../models/user.models.js';
 import { Role } from '../models/roles.models.js';
+import { parsePagination, paginatedResponse } from '../utils/paginate.js';
 
 // GET /api/v1/projects/members - Get project members
 export const getProjectMembers = async (req, res) => {
@@ -27,10 +28,18 @@ export const getProjectMembers = async (req, res) => {
             });
         }
 
-        const members = await ProjectMembership.find({ project_id: project_id })
+        const { page, limit, skip } = parsePagination(req.query);
+        const filter = { project_id: project_id };
+        const total = await ProjectMembership.countDocuments(filter);
+
+        let query = ProjectMembership.find(filter)
             .populate('user_id', 'name email role')
             .populate('role', 'role_name description')
-            .lean(); // Use lean for better performance
+            .lean();
+
+        if (limit) query = query.skip(skip).limit(limit);
+
+        const members = await query;
 
         // Filter out memberships where user_id or role population failed (deleted users/roles)
         const validMembers = members.filter(m => {
@@ -44,7 +53,7 @@ export const getProjectMembers = async (req, res) => {
         });
         
         res.status(200).json({
-            success: true,
+            ...paginatedResponse(validMembers, total, { page, limit }),
             data: {
                 project: project.project_name,
                 members: validMembers
