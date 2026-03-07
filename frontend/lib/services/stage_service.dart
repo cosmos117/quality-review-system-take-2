@@ -1,4 +1,4 @@
-import '../config/api_config.dart';
+﻿import '../config/api_config.dart';
 import 'http_client.dart';
 import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
@@ -22,29 +22,19 @@ class StageService {
     final uri = Uri.parse(
       '${ApiConfig.checklistBaseUrl}/projects/$projectId/stages',
     );
-    print('📍 API Call: GET $uri');
     final json = await http.getJson(uri);
-    print('📦 Full Response: $json');
 
     final data = (json['data'] as List?) ?? [];
-    print('✓ Stages parsed: ${data.length} items');
 
     // Convert to proper Map and ensure counter fields exist
     final stages = data.map((item) {
       final stage = Map<String, dynamic>.from(item as Map);
 
-      print('\n🔍 RAW STAGE DATA for ${stage['stage_key']}:');
-      print('   - Raw loopback_count: ${stage['loopback_count']}');
-      print('   - Raw conflict_count: ${stage['conflict_count']}');
 
       // Ensure counters exist with default 0
       stage['loopback_count'] = stage['loopback_count'] ?? 0;
       stage['conflict_count'] = stage['conflict_count'] ?? 0;
 
-      print('  📊 Stage: ${stage['stage_name']} (${stage['stage_key']})');
-      print(
-        '     - conflict_count: ${stage['conflict_count']} (type: ${stage['conflict_count'].runtimeType})',
-      );
 
       return stage;
     }).toList();

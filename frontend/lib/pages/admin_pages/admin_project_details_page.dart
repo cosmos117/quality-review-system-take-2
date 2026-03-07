@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:quality_review/components/admin_dialog.dart';
@@ -63,7 +63,6 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
       _detailsCtrl.seed(latestProject);
     } catch (e) {
       // If fetch fails, continue with the passed project data
-      debugPrint('Failed to fetch latest project: $e');
     }
   }
 
@@ -72,30 +71,13 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
     setState(() => _loadingAssignments = true);
     try {
       if (!Get.isRegistered<ProjectMembershipService>()) {
-        debugPrint(
-          '[AdminProjectDetail] ProjectMembershipService not registered',
-        );
         if (mounted) setState(() => _loadingAssignments = false);
         return;
       }
 
       final svc = Get.find<ProjectMembershipService>();
-      debugPrint(
-        '[AdminProjectDetail] Loading assignments for project ${widget.project.id}',
-      );
 
       final memberships = await svc.getProjectMembers(widget.project.id);
-      debugPrint(
-        '[AdminProjectDetail] Loaded ${memberships.length} memberships',
-      );
-
-      // Log each membership for debugging
-      for (var i = 0; i < memberships.length; i++) {
-        final m = memberships[i];
-        debugPrint(
-          '[AdminProjectDetail] Member $i: ${m.userName} (${m.userEmail}) - Role: ${m.roleName}',
-        );
-      }
 
       final leaders = memberships.where((m) {
         final role = (m.roleName?.toLowerCase() ?? '').replaceAll(' ', '');
@@ -108,10 +90,6 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
           .where((m) => (m.roleName?.toLowerCase() ?? '') == 'reviewer')
           .toList();
 
-      debugPrint(
-        '[AdminProjectDetail] Found: ${leaders.length} leaders, ${execs.length} executors, ${reviewers.length} reviewers',
-      );
-
       if (mounted) {
         setState(() {
           _teamLeaders = leaders;
@@ -119,16 +97,10 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
           _reviewers = reviewers;
           _loadingAssignments = false;
         });
-
-        debugPrint(
-          '[AdminProjectDetail] State updated - displaying ${_teamLeaders.length + _executors.length + _reviewers.length} total members',
-        );
       }
       // Refresh projects controller to update dashboard immediately
       await _projectsCtrl.refreshProjects();
-    } catch (e, stackTrace) {
-      debugPrint('[AdminProjectDetail] loadAssignments error: $e');
-      debugPrint('[AdminProjectDetail] Stack trace: $stackTrace');
+    } catch (e) {
       if (mounted) {
         setState(() {
           _teamLeaders = [];

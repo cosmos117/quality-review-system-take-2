@@ -28,8 +28,6 @@ class ExportController extends GetxController {
       isExporting.value = true;
       exportError.value = null;
 
-      print('🚀 Starting export for project: $projectName');
-
       // Generate Excel file bytes
       final excelBytesList = await excelExportService.exportProjectToExcel(
         projectId,
@@ -54,9 +52,7 @@ class ExportController extends GetxController {
 
       isExporting.value = false;
       return true;
-    } catch (e, stackTrace) {
-      print('❌ Export error: $e');
-      print('Stack trace: $stackTrace');
+    } catch (e) {
       exportError.value = 'Export failed: $e';
       Get.snackbar(
         'Export Failed',
@@ -76,8 +72,6 @@ class ExportController extends GetxController {
       isExporting.value = true;
       exportError.value = null;
 
-      print('🚀 Starting master Excel export for all projects...');
-
       // Download master Excel from backend
       final fileBytes = await masterExcelExportService.downloadMasterExcel();
 
@@ -96,9 +90,7 @@ class ExportController extends GetxController {
 
       isExporting.value = false;
       return true;
-    } catch (e, stackTrace) {
-      print('❌ Master export error: $e');
-      print('Stack trace: $stackTrace');
+    } catch (e) {
       exportError.value = 'Master export failed: $e';
       Get.snackbar(
         'Master Export Failed',
@@ -128,10 +120,7 @@ class ExportController extends GetxController {
 
       html.Url.revokeObjectUrl(url);
       anchor.remove();
-
-      print('✓ Web file downloaded');
     } catch (e) {
-      print('❌ Web download error: $e');
       throw Exception('Web download failed: $e');
     }
   }

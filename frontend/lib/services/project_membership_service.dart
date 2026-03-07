@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import '../config/api_config.dart';
 import '../models/project_membership.dart';
 import 'http_client.dart';
@@ -19,78 +19,35 @@ class ProjectMembershipService {
       final uri = Uri.parse(
         '${ApiConfig.baseUrl}/projects/members?project_id=$projectId',
       );
-      // ignore: avoid_print
-      print('[ProjectMembershipService] getProjectMembers -> GET $uri');
       final json = await http.getJson(uri);
-      // ignore: avoid_print
-      print(
-        '[ProjectMembershipService] getProjectMembers <- Full response: $json',
-      );
 
       // Check for API errors
       if (json['success'] == false) {
-        // ignore: avoid_print
-        print(
-          '[ProjectMembershipService] getProjectMembers API returned success=false: ${json['message']}',
-        );
         return [];
       }
 
       if (json['data'] is Map) {
         final data = json['data'] as Map<String, dynamic>;
-        // ignore: avoid_print
-        print(
-          '[ProjectMembershipService] getProjectMembers data keys: ${data.keys.join(', ')}',
-        );
 
         if (data['members'] is List) {
           final members = (data['members'] as List).cast<dynamic>();
-          // ignore: avoid_print
-          print(
-            '[ProjectMembershipService] getProjectMembers found ${members.length} members',
-          );
 
           // Parse each member with detailed logging
           final result = <ProjectMembership>[];
           for (var i = 0; i < members.length; i++) {
             try {
               final memberJson = members[i] as Map<String, dynamic>;
-              // ignore: avoid_print
-              print(
-                '[ProjectMembershipService] Parsing member $i: ${memberJson.keys.join(', ')}',
-              );
               final membership = _fromApi(memberJson);
-              // ignore: avoid_print
-              print(
-                '[ProjectMembershipService] Parsed member $i: ${membership.userName} (${membership.roleName})',
-              );
               result.add(membership);
-            } catch (e, stack) {
-              // ignore: avoid_print
-              print(
-                '[ProjectMembershipService] Failed to parse member $i: $e\n$stack',
-              );
-            }
+            } catch (e) {}
           }
 
-          // ignore: avoid_print
-          print(
-            '[ProjectMembershipService] Successfully parsed ${result.length}/${members.length} members',
-          );
           return result;
         }
       }
 
-      // ignore: avoid_print
-      print(
-        '[ProjectMembershipService] getProjectMembers - unexpected response structure',
-      );
       return [];
-    } catch (e, stack) {
-      // ignore: avoid_print
-      print(
-        '[ProjectMembershipService] getProjectMembers failed for project=$projectId: $e\n$stack',
-      );
+    } catch (_) {
       // If fetching existing members fails (e.g., orphaned user references),
       // return empty list so we can still add new valid members
       return [];
@@ -109,10 +66,6 @@ class ProjectMembershipService {
     // Remove or silence if too noisy after resolving the issue.
     // Prints the payload being sent to backend.
     // Note: Keeping this lightweight; no additional error handling here.
-    // ignore: avoid_print
-    print(
-      '[ProjectMembershipService] addMember -> project_id=$projectId user_id=$userId role_id=$roleId',
-    );
     final json = await http.postJson(uri, {
       'project_id': projectId,
       'user_id': userId,
@@ -144,10 +97,6 @@ class ProjectMembershipService {
     required String userId,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/projects/members');
-    // ignore: avoid_print
-    print(
-      '[ProjectMembershipService] removeMember -> project_id=$projectId user_id=$userId',
-    );
     await http.deleteJson(uri, {'project_id': projectId, 'user_id': userId});
   }
 

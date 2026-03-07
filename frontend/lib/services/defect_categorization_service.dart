@@ -17,18 +17,12 @@ class DefectCategorizationService {
       '${ApiConfig.baseUrl}/checkpoints/$checkpointId/suggest-category',
     );
 
-    print('🌐 POST: $uri');
-    print('📝 Remark: "$remark"');
-
     try {
       final json = await http.postJson(uri, {'remark': remark});
-
-      print('📥 Response: ${json.toString()}');
 
       final data = json['data'] as Map<String, dynamic>?;
 
       if (data == null) {
-        print('⚠️ No suggestion data returned');
         return {
           'suggestedCategoryId': null,
           'confidence': 0,
@@ -44,10 +38,7 @@ class DefectCategorizationService {
         'matchCount': data['matchCount'] ?? 0,
         'tokenCount': data['tokenCount'] ?? 0,
       };
-    } catch (e, stackTrace) {
-      print('❌ Error suggesting category: $e');
-      print('📍 Stack trace: $stackTrace');
-
+    } catch (e) {
       // Return empty suggestion on error (fail gracefully)
       return {
         'suggestedCategoryId': null,

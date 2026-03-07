@@ -10,7 +10,13 @@ class AuthController extends GetxController {
   final Rx<AuthUser?> currentUser = Rx<AuthUser?>(null);
   final RxBool isLoading = false.obs;
   final RxBool isPreloadingProjects = false.obs;
-  final _service = AuthService();
+  late final AuthService _service;
+
+  @override
+  void onInit() {
+    super.onInit();
+    _service = AuthService(Get.find<SimpleHttp>());
+  }
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
@@ -72,19 +78,11 @@ class AuthController extends GetxController {
     try {
       if (Get.isRegistered<ProjectsController>()) {
         final projectsCtrl = Get.find<ProjectsController>();
-        final userId = currentUser.value!.id;
 
         // Load ALL projects so employee dashboard shows all projects
         await projectsCtrl.refreshProjects();
-
-        final myProjects = projectsCtrl.byAssigneeId(userId);
-
-        print(
-          '[AuthController] Preloaded all projects; ${myProjects.length} assigned to employee $userId',
-        );
       }
-    } catch (e) {
-      print('[AuthController] Error preloading projects: $e');
+    } catch (_) {
     } finally {
       isPreloadingProjects.value = false;
     }

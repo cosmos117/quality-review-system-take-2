@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../controllers/team_controller.dart';
@@ -371,16 +371,14 @@ class EmployeePage extends StatelessWidget {
               projectRoles[project.title] = employeeRoles;
             }
           } catch (e) {
-            print('[EmployeePage] Error checking project ${project.id}: $e');
           }
         }
       }
     } catch (e) {
-      print('[EmployeePage] Error checking active projects: $e');
     }
 
     final String warningMessage = hasActiveProjects
-        ? 'Warning: "${m.name}" is currently assigned to ${projectRoles.length} in-progress project(s):\n\n${projectRoles.entries.map((e) => '• ${e.key} (${e.value.join(', ')})').join('\n')}\n\nDeleting this employee may affect these projects. Are you sure you want to proceed?'
+        ? 'Warning: "${m.name}" is currently assigned to ${projectRoles.length} in-progress project(s):\n\n${projectRoles.entries.map((e) => 'â€¢ ${e.key} (${e.value.join(', ')})').join('\n')}\n\nDeleting this employee may affect these projects. Are you sure you want to proceed?'
         : 'Are you sure you want to delete "${m.name}"? This action cannot be undone.';
 
     final String deleteButtonText = hasActiveProjects

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../services/template_service.dart';
 
@@ -799,18 +799,11 @@ class PhaseEditor extends StatelessWidget {
                                     );
                                     if (confirm != true) return;
                                     try {
-                                      print(
-                                        '🗑️ UI: Deleting checklist group - ID: ${group.id}, Stage: $stage',
-                                      );
                                       await c.templateService.deleteChecklist(
                                         checklistId: group.id,
                                         stage: stage,
                                       );
-                                      print(
-                                        '✅ UI: Checklist deleted, reloading template...',
-                                      );
                                       await c.loadTemplate();
-                                      print('✅ UI: Template reloaded');
                                       Get.snackbar(
                                         'Deleted',
                                         'Checklist group "${group.name}" has been deleted',
@@ -819,9 +812,6 @@ class PhaseEditor extends StatelessWidget {
                                         colorText: Colors.white,
                                       );
                                     } catch (e) {
-                                      print(
-                                        '❌ UI: Error deleting checklist - $e',
-                                      );
                                       Get.snackbar(
                                         'Error',
                                         'Failed to delete: $e',

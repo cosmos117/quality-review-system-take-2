@@ -1,4 +1,4 @@
-import 'package:http/http.dart' as http;
+﻿import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../services/http_client.dart';
 
@@ -13,7 +13,6 @@ class MasterExcelExportService {
   /// Returns file bytes that can be downloaded
   Future<List<int>> downloadMasterExcel() async {
     try {
-      print('📥 Downloading master Excel export...');
 
       final uri = Uri.parse('${ApiConfig.baseUrl}/admin/export/master-excel');
 
@@ -32,10 +31,8 @@ class MasterExcelExportService {
         );
       }
 
-      print('✓ Master Excel downloaded successfully');
       return response.bodyBytes;
     } catch (e) {
-      print('❌ Error downloading master Excel: $e');
       rethrow;
     }
   }

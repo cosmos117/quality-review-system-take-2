@@ -1,4 +1,4 @@
-import 'package:get/get.dart';
+﻿import 'package:get/get.dart';
 import '../config/api_config.dart';
 import '../controllers/auth_controller.dart';
 import 'http_client.dart';
@@ -128,16 +128,10 @@ class TemplateService {
         throw Exception('Invalid stage format');
       }
 
-      print(
-        '🗑️ DELETE checklist - ID: $checklistId, Stage: $stage, URL: $_baseUrl/checklists/$checklistId',
-      );
-      final response = await http.deleteJson(
-        Uri.parse('$_baseUrl/checklists/$checklistId'),
-        {'stage': stage},
-      );
-      print('✅ DELETE checklist response: $response');
+      await http.deleteJson(Uri.parse('$_baseUrl/checklists/$checklistId'), {
+        'stage': stage,
+      });
     } catch (e) {
-      print('❌ DELETE checklist error: $e');
       throw Exception('Error deleting checklist: $e');
     }
   }
@@ -363,12 +357,9 @@ class TemplateService {
         body['stageName'] = stageName.trim();
       }
 
-      print('🔵 POST /templates/stages - Body: $body');
       final response = await http.postJson(Uri.parse('$_baseUrl/stages'), body);
-      print('🟢 POST /templates/stages - Response: $response');
       return response['data'] as Map<String, dynamic>? ?? response;
     } catch (e) {
-      print('🔴 POST /templates/stages - Error: $e');
       throw Exception('Error adding stage: $e');
     }
   }

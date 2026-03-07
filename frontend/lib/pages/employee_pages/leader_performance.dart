@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -49,29 +49,13 @@ class _LeaderPerformanceState extends State<LeaderPerformance> {
 
       // Load projects if needed
       if (_isInitialLoad || forceRefresh) {
-        print('[LeaderPerformance] Loading projects for team leader $userId');
         await ctrl.loadUserProjects(userId);
       }
 
       if (!mounted) return;
 
-      // Debug: Log all projects and their userRole
-      print(
-        '[LeaderPerformance] Total projects loaded: ${ctrl.projects.length}',
-      );
-      for (final p in ctrl.projects) {
-        print('[LeaderPerformance]   - ${p.title} (userRole: ${p.userRole})');
-      }
-
       // Filter projects where this user is the team leader
       final leaderProjects = ctrl.byTeamLeaderId(userId);
-
-      print(
-        '[LeaderPerformance] Found ${leaderProjects.length} projects where user is team leader',
-      );
-      for (final p in leaderProjects) {
-        print('[LeaderPerformance]   - ${p.title} (userRole: ${p.userRole})');
-      }
 
       if (mounted) {
         setState(() {
@@ -80,7 +64,6 @@ class _LeaderPerformanceState extends State<LeaderPerformance> {
         });
       }
     } catch (e) {
-      print('[LeaderPerformance] Error loading projects: $e');
       if (mounted) {
         setState(() {
           _cachedProjects = [];

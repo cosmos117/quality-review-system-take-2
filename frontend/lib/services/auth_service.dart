@@ -1,24 +1,18 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/auth_user.dart';
+import 'http_client.dart';
 
 class AuthService {
+  final SimpleHttp http;
+
+  AuthService(this.http);
+
   Future<AuthUser> login(String email, String password) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/users/login');
-    final res = await http.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'password': password}),
-    );
-
-    final body = res.body.isNotEmpty ? jsonDecode(res.body) : {};
-    if (res.statusCode >= 400) {
-      final msg = body is Map && body['message'] != null
-          ? body['message'].toString()
-          : 'Login failed (${res.statusCode})';
-      throw Exception(msg);
-    }
+    final body = await http.postJson(uri, {
+      'email': email,
+      'password': password,
+    });
 
     // Extract token from response body (backend now includes it)
     final data = (body is Map && body['data'] is Map)
@@ -32,13 +26,11 @@ class AuthService {
   Future<void> logout(String token) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/users/logout');
     try {
-      await http.post(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      );
+      // Temporarily set token for this request
+      final previousToken = http.accessToken;
+      http.accessToken = token;
+      await http.postJson(uri, {});
+      http.accessToken = previousToken;
     } catch (_) {
       // Best-effort: even if the server call fails, we still clear local state
     }

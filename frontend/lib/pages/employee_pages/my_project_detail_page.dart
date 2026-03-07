@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:quality_review/pages/employee_pages/questions_screen.dart';
 
@@ -28,7 +28,6 @@ class MyProjectDetailPage extends GetView<MyProjectDetailController> {
         controller.project.value = latestProject;
       }
     } catch (e) {
-      debugPrint('Failed to refresh project data: $e');
     }
   }
 

@@ -51,8 +51,7 @@ class MyProjectDetailController extends GetxController {
             .toList();
       }
     } catch (e) {
-      // ignore: avoid_print
-      print('[MyProjectDetailController] Error loading assignments: $e');
+      // Assignment loading failed silently
     } finally {
       isLoadingAssignments.value = false;
     }
@@ -81,10 +80,6 @@ class MyProjectDetailController extends GetxController {
         .contains(userId);
     final fallback =
         assignedContainsUser && executors.isEmpty && reviewers.isEmpty;
-    // ignore: avoid_print
-    print(
-      '[MyProjectDetailController] showStartButton status=${project.value.status} executors=${executors.length} reviewers=${reviewers.length} userId=$userId isExecutor=$isExecutor isReviewer=$isReviewer assignedContainsUser=$assignedContainsUser fallback=$fallback',
-    );
     return isExecutor || isReviewer || fallback;
   }
 
@@ -116,9 +111,7 @@ class MyProjectDetailController extends GetxController {
 
       return true;
     } catch (e) {
-      // If validation fails, log error and let user proceed
-      // ignore: avoid_print
-      print('[MyProjectDetailController] Template validation error: $e');
+      // If validation fails, let user proceed
       return true;
     }
   }

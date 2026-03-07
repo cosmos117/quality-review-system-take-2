@@ -1,7 +1,7 @@
-import 'dart:async';
 import 'package:get/get.dart';
 import '../models/project.dart';
 import '../models/team_member.dart';
+import '../services/api_cache.dart';
 import '../services/project_service.dart';
 import '../services/project_membership_service.dart';
 import '../services/role_service.dart';
@@ -32,57 +32,20 @@ class ProjectsController extends GetxController {
 
   List<Project> get all => projects;
   late final ProjectService _service;
-  StreamSubscription? _projectsSubscription;
+  final ApiCache _cache = ApiCache(defaultTtl: const Duration(minutes: 2));
   bool _hydratingInProgress = false;
-
-  /// True when in user-specific mode (employee side); kept for backward compatibility
-  /// but no longer used since we load user-specific projects into a separate list.
-  bool _userMode = false;
 
   @override
   void onInit() {
     super.onInit();
     _service = Get.find<ProjectService>();
-    _startRealtimeSync();
-  }
-
-  void _startRealtimeSync() {
-    _projectsSubscription?.cancel();
-    _userMode = false;
-    isLoading.value = true;
-    _projectsSubscription = _service.getProjectsStream().listen(
-      (projectsList) async {
-        // Skip if we switched to user-specific mode while waiting
-        if (_userMode) return;
-        projects.assignAll(projectsList.map(_normalize));
-        // Hydrate assignments for each project
-        await _hydrateAssignments();
-        if (!_userMode) isLoading.value = false;
-        errorMessage.value = '';
-      },
-      onError: (e) {
-        errorMessage.value = e.toString();
-        isLoading.value = false;
-      },
-    );
-  }
-
-  /// Restart the global polling stream (call from admin pages if needed).
-  void ensureRealtimeSync() {
-    if (!_userMode) return; // already running
-    _startRealtimeSync();
-  }
-
-  /// Stop the global polling stream (used when switching to employee view).
-  void stopRealtimeSync() {
-    _projectsSubscription?.cancel();
-    _projectsSubscription = null;
-    _userMode = true;
+    // Load data once on init instead of polling
+    refreshProjects();
   }
 
   @override
   void onClose() {
-    _projectsSubscription?.cancel();
+    _cache.clear();
     super.onClose();
   }
 
@@ -197,7 +160,7 @@ class ProjectsController extends GetxController {
         throw Exception('User not logged in');
       }
       final created = await _service.create(p, userId: userId);
-      await refreshProjects();
+      await refreshProjects(forceRefresh: true);
       return created;
     } catch (e) {
       errorMessage.value = e.toString();
@@ -208,7 +171,7 @@ class ProjectsController extends GetxController {
   Future<Project> saveProjectRemote(Project p) async {
     try {
       final saved = await _service.update(p);
-      await refreshProjects();
+      await refreshProjects(forceRefresh: true);
       return saved;
     } catch (e) {
       errorMessage.value = e.toString();
@@ -219,21 +182,28 @@ class ProjectsController extends GetxController {
   Future<void> removeProjectRemoteAndRefresh(String id) async {
     try {
       await _service.delete(id);
-      await refreshProjects();
+      await refreshProjects(forceRefresh: true);
     } catch (e) {
       errorMessage.value = e.toString();
       rethrow;
     }
   }
 
-  Future<void> refreshProjects() async {
+  Future<void> refreshProjects({bool forceRefresh = false}) async {
+    if (forceRefresh) _cache.invalidate('projects:all');
     try {
-      final projectsList = await _service.getAll();
+      isLoading.value = true;
+      final projectsList = await _cache.get(
+        'projects:all',
+        () => _service.getAll(),
+      );
       projects.assignAll(projectsList.map(_normalize));
       // Hydrate assignment membership data after loading projects
       await _hydrateAssignments();
     } catch (e) {
       errorMessage.value = e.toString();
+    } finally {
+      isLoading.value = false;
     }
   }
 
@@ -292,14 +262,7 @@ class ProjectsController extends GetxController {
       if (userService != null) {
         try {
           backendUsers = await userService.getAll();
-          // ignore: avoid_print
-          print(
-            '[ProjectsController] Fetched ${backendUsers.length} users from backend',
-          );
-        } catch (e) {
-          // ignore: avoid_print
-          print('[ProjectsController] Failed to fetch users: $e');
-        }
+        } catch (e) {}
       }
 
       // Resolve incoming memberIds to valid backend user IDs
@@ -342,23 +305,10 @@ class ProjectsController extends GetxController {
 
         if (matched.id.isNotEmpty) {
           normalizedDesired.add(matched.id);
-          // ignore: avoid_print
-          print(
-            '[ProjectsController] Resolved "$trimmed" → userId=${matched.id} (${matched.name})',
-          );
-        } else {
-          // ignore: avoid_print
-          print(
-            '[ProjectsController] WARNING: Could not resolve "$trimmed" to any backend user - SKIPPING',
-          );
-        }
+        } else {}
       }
 
       // Fetch existing memberships from backend
-      // ignore: avoid_print
-      print(
-        '[ProjectsController] Fetching existing memberships for project=$projectId',
-      );
       final existingMemberships = await membershipService.getProjectMembers(
         projectId,
       );
@@ -366,46 +316,25 @@ class ProjectsController extends GetxController {
       final desiredIds = normalizedDesired;
 
       // Debug logging to trace assignment diff calculations.
-      // ignore: avoid_print
-      print(
-        '[ProjectsController] setProjectAssignments project=$projectId\n  existingIds=$existingIds\n  incomingMemberIds=$memberIds\n  normalizedDesired=$desiredIds',
-      );
 
       final toAdd = desiredIds.difference(existingIds);
       final toRemove = existingIds.difference(desiredIds);
 
-      // ignore: avoid_print
-      print(
-        '[ProjectsController] Diff result -> toAdd=$toAdd toRemove=$toRemove',
-      );
-
       // Apply additions
       for (final userId in toAdd) {
-        // ignore: avoid_print
-        print(
-          '[ProjectsController] Adding userId=$userId roleId=$defaultRoleId',
-        );
         try {
           await membershipService.addMember(
             projectId: projectId,
             userId: userId,
             roleId: defaultRoleId,
           );
-          // ignore: avoid_print
-          print('[ProjectsController] ✓ Successfully added userId=$userId');
         } catch (addError) {
-          // ignore: avoid_print
-          print(
-            '[ProjectsController] ✗ FAILED to add userId=$userId: $addError',
-          );
           rethrow;
         }
       }
 
       // Apply removals
       for (final userId in toRemove) {
-        // ignore: avoid_print
-        print('[ProjectsController] Removing userId=$userId');
         await membershipService.removeMember(
           projectId: projectId,
           userId: userId,
@@ -419,14 +348,8 @@ class ProjectsController extends GetxController {
           assignedEmployees: desiredIds.toList(),
         );
         projects[idx] = _normalize(updated);
-        // ignore: avoid_print
-        print(
-          '[ProjectsController] ✓✓✓ setProjectAssignments SUCCESS: Updated project "${projects[idx].title}" with assignedEmployees=${desiredIds.toList()}',
-        );
       }
     } catch (e) {
-      // ignore: avoid_print
-      print('[ProjectsController] ✗✗✗ setProjectAssignments FAILED: $e');
       errorMessage.value = e.toString();
       rethrow;
     }
@@ -445,10 +368,6 @@ class ProjectsController extends GetxController {
 
   Future<void> _doHydrateAssignments() async {
     if (!Get.isRegistered<ProjectMembershipService>()) {
-      // ignore: avoid_print
-      print(
-        '[ProjectsController] _hydrateAssignments: ProjectMembershipService not registered',
-      );
       return;
     }
     final membershipService = Get.find<ProjectMembershipService>();
@@ -456,11 +375,6 @@ class ProjectsController extends GetxController {
     // Get current user ID for setting userRole
     final authCtrl = Get.find<AuthController>();
     final currentUserId = authCtrl.currentUser.value?.id;
-
-    // ignore: avoid_print
-    print(
-      '[ProjectsController] _hydrateAssignments: Starting for ${projects.length} projects (currentUserId=$currentUserId)',
-    );
 
     // Process all projects in parallel for faster hydration
     await Future.wait(
@@ -488,11 +402,6 @@ class ProjectsController extends GetxController {
             }
           }
 
-          // ignore: avoid_print
-          print(
-            '[ProjectsController] Project "${project.title}" (${project.id}): Found ${memberships.length} memberships → userIds=$ids, userRole=$userRole',
-          );
-
           final idx = projects.indexWhere((p) => p.id == project.id);
           if (idx != -1) {
             projects[idx] = _normalize(
@@ -500,10 +409,6 @@ class ProjectsController extends GetxController {
                 assignedEmployees: ids,
                 userRole: userRole,
               ),
-            );
-            // ignore: avoid_print
-            print(
-              '[ProjectsController] ✓ Updated project "${project.title}" assignedEmployees=$ids, userRole=$userRole',
             );
           }
 
@@ -528,17 +433,9 @@ class ProjectsController extends GetxController {
                 .map((m) => m.userName ?? 'Unknown')
                 .toList(),
           );
-        } catch (e) {
-          // ignore: avoid_print
-          print(
-            '[ProjectsController] ✗ Failed to hydrate assignments for project "${project.title}": $e',
-          );
-        }
+        } catch (e) {}
       }),
     );
-
-    // ignore: avoid_print
-    print('[ProjectsController] _hydrateAssignments: Complete');
   }
 
   /// Refresh membership cache for a single project. Call this after saving
@@ -585,14 +482,6 @@ class ProjectsController extends GetxController {
         final updated = projects[idx].copyWith(assignedEmployees: memberIds);
         projects[idx] = _normalize(updated);
       }
-
-      print(
-        '[ProjectsController] ✓ Refreshed memberships for project=$projectId',
-      );
-    } catch (e) {
-      print(
-        '[ProjectsController] refreshProjectMemberships($projectId) failed: $e',
-      );
-    }
+    } catch (e) {}
   }
 }

@@ -1,6 +1,6 @@
-import 'dart:async';
 import 'package:get/get.dart';
 import '../models/team_member.dart';
+import '../services/api_cache.dart';
 import '../services/user_service.dart';
 
 class TeamController extends GetxController {
@@ -8,33 +8,19 @@ class TeamController extends GetxController {
   final RxBool isLoading = false.obs;
   final RxString errorMessage = ''.obs;
   late final UserService _service;
-  StreamSubscription? _usersSubscription;
+  final ApiCache _cache = ApiCache(defaultTtl: const Duration(minutes: 2));
 
   @override
   void onInit() {
     super.onInit();
     _service = Get.find<UserService>();
-    _startRealtimeSync();
-  }
-
-  void _startRealtimeSync() {
-    isLoading.value = true;
-    _usersSubscription = _service.getUsersStream().listen(
-      (usersList) {
-        members.assignAll(usersList.map(_normalize));
-        isLoading.value = false;
-        errorMessage.value = '';
-      },
-      onError: (e) {
-        errorMessage.value = e.toString();
-        isLoading.value = false;
-      },
-    );
+    // Load data once on init instead of polling
+    refreshMembers();
   }
 
   @override
   void onClose() {
-    _usersSubscription?.cancel();
+    _cache.clear();
     super.onClose();
   }
 
@@ -61,8 +47,7 @@ class TeamController extends GetxController {
   Future<void> createMember(TeamMember m) async {
     try {
       await _service.create(m);
-      // Immediately refresh the list
-      await refreshMembers();
+      await refreshMembers(forceRefresh: true);
     } catch (e) {
       errorMessage.value = e.toString();
       rethrow;
@@ -72,8 +57,7 @@ class TeamController extends GetxController {
   Future<void> saveMember(TeamMember m) async {
     try {
       await _service.update(m);
-      // Immediately refresh the list
-      await refreshMembers();
+      await refreshMembers(forceRefresh: true);
     } catch (e) {
       errorMessage.value = e.toString();
       rethrow;
@@ -83,20 +67,23 @@ class TeamController extends GetxController {
   Future<void> removeMember(String id) async {
     try {
       await _service.delete(id);
-      // Immediately refresh the list
-      await refreshMembers();
+      await refreshMembers(forceRefresh: true);
     } catch (e) {
       errorMessage.value = e.toString();
       rethrow;
     }
   }
 
-  Future<void> refreshMembers() async {
+  Future<void> refreshMembers({bool forceRefresh = false}) async {
+    if (forceRefresh) _cache.invalidate('users:all');
     try {
-      final users = await _service.getAll();
+      isLoading.value = true;
+      final users = await _cache.get('users:all', () => _service.getAll());
       members.assignAll(users.map(_normalize));
     } catch (e) {
       errorMessage.value = e.toString();
+    } finally {
+      isLoading.value = false;
     }
   }
 

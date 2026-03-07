@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'dart:async';
@@ -1190,7 +1190,7 @@ class _SubmitBar extends StatelessWidget {
                 const Icon(Icons.check_circle, color: Colors.green, size: 18),
                 const SizedBox(width: 6),
                 Text(
-                  'Submitted${when != null ? ' • $when' : ''}',
+                  'Submitted${when != null ? ' â€¢ $when' : ''}',
                   style: const TextStyle(color: Colors.green),
                 ),
               ],
@@ -1293,12 +1293,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     super.initState();
 
     if (kDebugMode && widget.role == 'reviewer') {
-      print('\n🔷 SubQuestionCard.initState()');
-      print('   Question: ${widget.subQuestion}');
-      print('   CheckpointId: ${widget.checkpointId}');
-      print('   selectedCategoryId prop: ${widget.selectedCategoryId}');
-      print('   selectedSeverity prop: ${widget.selectedSeverity}');
-      print('   initialData: ${widget.initialData}');
     }
 
     // Initialize category and severity from widget props first
@@ -1324,9 +1318,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
           .toSet();
       if (!categoryIds.contains(selectedCategory)) {
         if (kDebugMode) {
-          print(
-            '⚠️ Selected category ID "$selectedCategory" not found in available categories. Resetting to null.',
-          );
         }
         selectedCategory = null;
       }
@@ -1338,8 +1329,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     }
 
     if (kDebugMode && widget.role == 'reviewer') {
-      print('   AFTER init - selectedCategory: $selectedCategory');
-      print('   AFTER init - selectedSeverity: $selectedSeverity');
     }
 
     // Images are already loaded from initialData['images'] which correctly
@@ -1355,12 +1344,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     if (kDebugMode && widget.role == 'reviewer') {
       if (widget.selectedCategoryId != oldWidget.selectedCategoryId ||
           widget.selectedSeverity != oldWidget.selectedSeverity) {
-        print('\n🔄 SubQuestionCard.didUpdateWidget()');
-        print('   Question: ${widget.subQuestion}');
-        print('   Old categoryId: ${oldWidget.selectedCategoryId}');
-        print('   New categoryId: ${widget.selectedCategoryId}');
-        print('   Old severity: ${oldWidget.selectedSeverity}');
-        print('   New severity: ${widget.selectedSeverity}');
       }
     }
 
@@ -1392,7 +1375,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
         if (catId.isNotEmpty) {
           selectedCategory = catId;
           if (kDebugMode) {
-            print('   📌 Set selectedCategory from initialData: $catId');
           }
         }
 
@@ -1400,7 +1382,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
         if (sev.isNotEmpty) {
           selectedSeverity = sev;
           if (kDebugMode) {
-            print('   📌 Set selectedSeverity from initialData: $sev');
           }
         }
       }
@@ -1435,14 +1416,10 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
         });
 
         if (kDebugMode) {
-          print(
-            '📚 Loaded ${_iterations.length} iterations for question: ${widget.subQuestion}',
-          );
         }
       }
     } catch (e) {
       if (kDebugMode) {
-        print('❌ Error loading iterations: $e');
       }
       if (mounted) {
         setState(() => _loadingIterations = false);
@@ -1477,7 +1454,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
 
     if (questionData == null) {
       if (kDebugMode) {
-        print('⚠️ Question not found in iteration $iterationNumber');
       }
       return;
     }
@@ -1486,14 +1462,8 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     final answers = iterationService.extractAnswersFromQuestion(questionData);
 
     if (kDebugMode) {
-      print(
-        '👁️ Viewing iteration $iterationNumber for question: ${widget.subQuestion}',
-      );
-      print('   Role: ${widget.role}');
       if (widget.role == 'executor') {
-        print('   Executor images: ${answers['executorImages']}');
       } else {
-        print('   Reviewer images: ${answers['reviewerImages']}');
       }
     }
 
@@ -1522,8 +1492,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     });
 
     if (kDebugMode) {
-      print('   Images set in state: $_images');
-      print('   Images count: ${_images.length}');
     }
   }
 
@@ -1547,12 +1515,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       answerData['severity'] = selectedSeverity ?? '';
 
       if (kDebugMode) {
-        print('📝 SubQuestionCard._updateAnswer()');
-        print('   Question: ${widget.subQuestion}');
-        print('   CheckpointId: ${widget.checkpointId}');
-        print('   Answer: ${answerData['answer']}');
-        print('   CategoryId: ${answerData['categoryId']}');
-        print('   Severity: ${answerData['severity']}');
       }
     }
 
@@ -2003,7 +1965,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                 final img = _images[i];
 
                 if (kDebugMode) {
-                  print('🖼️ Rendering image $i: $img');
                 }
 
                 final bytes = img['bytes'] is Uint8List
@@ -2020,9 +1981,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                 final fileId = (img['fileId'] ?? '').toString();
 
                 if (kDebugMode) {
-                  print('   bytes: ${bytes != null ? "present" : "null"}');
-                  print('   fileId: $fileId');
-                  print('   name: $name');
                 }
 
                 if (bytes == null && fileId.isEmpty)
@@ -2077,9 +2035,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                                       },
                                   errorBuilder: (_, error, ___) {
                                     if (kDebugMode) {
-                                      print(
-                                        '❌ Failed to load image $fileId: $error',
-                                      );
                                     }
                                     return Container(
                                       width: 100,
@@ -2237,7 +2192,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
             },
             errorBuilder: (_, error, ___) {
               if (kDebugMode) {
-                print('❌ Image viewer failed to load $fileId: $error');
               }
               return Center(
                 child: Column(
@@ -2360,7 +2314,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     for (final cat in widget.availableCategories) {
       final name = (cat['name'] ?? '').toString();
       final id = (cat['_id'] ?? '').toString();
-      // Gather keywords with graceful fallbacks: keywords[] → aliases[] → name tokens
+      // Gather keywords with graceful fallbacks: keywords[] â†’ aliases[] â†’ name tokens
       final kwFromArray = (cat['keywords'] as List<dynamic>? ?? [])
           .map((k) => k.toString().toLowerCase())
           .where((k) => k.trim().isNotEmpty)

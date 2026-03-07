@@ -70,7 +70,6 @@ class ApprovalService {
       final data = json['data'] as Map<String, dynamic>?;
       return data?['revertCount'] as int? ?? 0;
     } catch (e) {
-      print('⚠️ Error fetching revert count: $e');
       return 0;
     }
   }
@@ -85,7 +84,6 @@ class ApprovalService {
       final data = json['data'] as Map<String, dynamic>?;
       return data?['revertCount'] as int? ?? 0;
     } catch (e) {
-      print('⚠️ Error incrementing revert count: $e');
       return 0;
     }
   }

@@ -1,12 +1,9 @@
-import 'dart:async';
 import '../config/api_config.dart';
 import '../models/team_member.dart';
 import 'http_client.dart';
 
 class UserService {
   final SimpleHttp http;
-  Timer? _pollTimer;
-  final _usersController = StreamController<List<TeamMember>>.broadcast();
 
   UserService(this.http);
 
@@ -61,41 +58,5 @@ class UserService {
   Future<void> delete(String id) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/users/$id');
     await http.delete(uri);
-  }
-
-  Stream<List<TeamMember>> getUsersStream({
-    Duration interval = const Duration(seconds: 3),
-  }) {
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(interval, (_) async {
-      try {
-        final users = await getAll();
-        if (!_usersController.isClosed) {
-          _usersController.add(users);
-        }
-      } catch (e) {
-        if (!_usersController.isClosed) {
-          _usersController.addError(e);
-        }
-      }
-    });
-    // Immediately fetch initial data
-    getAll()
-        .then((users) {
-          if (!_usersController.isClosed) {
-            _usersController.add(users);
-          }
-        })
-        .catchError((e) {
-          if (!_usersController.isClosed) {
-            _usersController.addError(e);
-          }
-        });
-    return _usersController.stream;
-  }
-
-  void dispose() {
-    _pollTimer?.cancel();
-    _usersController.close();
   }
 }

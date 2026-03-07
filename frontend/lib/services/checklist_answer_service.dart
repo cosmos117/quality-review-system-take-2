@@ -18,20 +18,11 @@ class ChecklistAnswerService {
       '${ApiConfig.baseUrl}/projects/$projectId/checklist-answers?phase=$phase&role=${role.toLowerCase()}',
     );
 
-    print('🌐 GET: $uri');
-
     try {
       final json = await http.getJson(uri);
-      print(
-        '📥 Raw response: ${json.toString().substring(0, json.toString().length > 200 ? 200 : json.toString().length)}...',
-      );
-
       final data = json['data'] as Map<String, dynamic>?;
 
-      print('📦 Response data keys: ${data?.keys.toList()}');
-
       if (data == null) {
-        print('⚠️ No data returned from API');
         return {};
       }
 
@@ -40,16 +31,11 @@ class ChecklistAnswerService {
       data.forEach((key, value) {
         if (value is Map) {
           result[key] = Map<String, dynamic>.from(value);
-          print('  ↳ Question: "$key" has answer: ${result[key]?['answer']}');
         }
       });
 
-      print('✓ Parsed ${result.length} answer entries for $role');
-
       return result;
-    } catch (e, stackTrace) {
-      print('❌ Error fetching checklist answers: $e');
-      print('Stack trace: $stackTrace');
+    } catch (e) {
       return {};
     }
   }
@@ -72,19 +58,10 @@ class ChecklistAnswerService {
       'answers': answers,
     };
 
-    print('🌐 PUT: $uri');
-    print('📤 Saving ${answers.length} answers for $role');
-    answers.forEach((question, data) {
-      print('  ↳ "$question": ${data['answer']} (remark: "${data['remark']}")');
-    });
-
     try {
-      final response = await http.putJson(uri, body);
-      print('✓ Successfully saved answers - Response: $response');
+      await http.putJson(uri, body);
       return true;
-    } catch (e, stackTrace) {
-      print('❌ Error saving checklist answers: $e');
-      print('Stack trace: $stackTrace');
+    } catch (e) {
       return false;
     }
   }
@@ -101,7 +78,6 @@ class ChecklistAnswerService {
       await http.postJson(uri, body);
       return true;
     } catch (e) {
-      print('Error submitting checklist: $e');
       return false;
     }
   }
@@ -133,7 +109,6 @@ class ChecklistAnswerService {
             : null,
       };
     } catch (e) {
-      print('Error fetching submission status: $e');
       return {'is_submitted': false, 'answer_count': 0, 'submitted_at': null};
     }
   }

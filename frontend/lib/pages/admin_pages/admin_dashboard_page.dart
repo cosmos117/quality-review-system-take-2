@@ -137,8 +137,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
     final projCtrl = Get.find<ProjectsController>();
     final ui = Get.find<AdminDashboardUIController>();
-    // Ensure the polling stream is active (may have been stopped by employee view)
-    projCtrl.ensureRealtimeSync();
+    // Refresh data when navigating to dashboard
+    projCtrl.refreshProjects();
     _ensureSeed(projCtrl);
 
     final teamCtrl = Get.isRegistered<TeamController>()

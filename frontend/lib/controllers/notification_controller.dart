@@ -54,7 +54,6 @@ class NotificationController extends GetxController {
           }
         }
       } catch (e) {
-        print('Could not fetch memberships for ${project.id}: $e');
         // Fallback to old logic if membership service fails
         return;
       }
@@ -75,7 +74,7 @@ class NotificationController extends GetxController {
       try {
         stages = await _stageService.listStages(project.id);
       } catch (e) {
-        print('Could not fetch stages for ${project.id}: $e');
+        // Stage fetch failed, continue with empty stages
       }
 
       // Check all phases (1 to 7 typically)
@@ -128,7 +127,7 @@ class NotificationController extends GetxController {
 
       _updateNotificationCount();
     } catch (e) {
-      print('Error updating notification for ${project.id}: $e');
+      // Notification update failed silently
     }
   }
 

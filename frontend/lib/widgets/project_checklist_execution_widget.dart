@@ -1,6 +1,6 @@
-/// Hierarchical checklist execution widget for ProjectChecklist structure.
+﻿/// Hierarchical checklist execution widget for ProjectChecklist structure.
 /// This widget handles role-based editing (Executor, Reviewer, TeamLeader) and renders
-/// the hierarchical structure: Group → Sections (optional) → Questions.
+/// the hierarchical structure: Group â†’ Sections (optional) â†’ Questions.
 ///
 /// This is distinct from the template editor (checklist.dart) and is used
 /// when displaying a project's execution-mode checklist.
@@ -242,15 +242,10 @@ class _ProjectChecklistExecutionWidgetState
                 .trim()
                 .toLowerCase();
 
-            debugPrint(
-              '${group.groupName} - Direct Q: "${question.text}" - Executor: "${question.executorAnswer}" (normalized: "$executorNormalized"), Reviewer: "${question.reviewerAnswer}" (normalized: "$reviewerNormalized")',
-            );
 
             if (executorNormalized != reviewerNormalized) {
               currentGroupDefects++;
-              debugPrint('  -> DEFECT COUNTED (mismatch)');
             } else {
-              debugPrint('  -> Match - no defect');
             }
           }
         }
@@ -274,23 +269,15 @@ class _ProjectChecklistExecutionWidgetState
                   .trim()
                   .toLowerCase();
 
-              debugPrint(
-                '${group.groupName} - Section Q (${section.sectionName}): "${question.text}" - Executor: "${question.executorAnswer}" (normalized: "$executorNormalized"), Reviewer: "${question.reviewerAnswer}" (normalized: "$reviewerNormalized")',
-              );
 
               if (executorNormalized != reviewerNormalized) {
                 currentGroupDefects++;
-                debugPrint('  -> DEFECT COUNTED (mismatch)');
               } else {
-                debugPrint('  -> Match - no defect');
               }
             }
           }
         }
 
-        debugPrint(
-          '>>> GROUP: ${group.groupName} - TOTAL DEFECTS: $currentGroupDefects <<<',
-        );
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

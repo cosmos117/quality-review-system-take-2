@@ -1,12 +1,9 @@
-import 'dart:async';
 import '../config/api_config.dart';
 import '../models/role.dart';
 import 'http_client.dart';
 
 class RoleService {
   final SimpleHttp http;
-  Timer? _pollTimer;
-  final _rolesController = StreamController<List<Role>>.broadcast();
 
   RoleService(this.http);
 
@@ -46,43 +43,5 @@ class RoleService {
   Future<void> delete(String id) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/roles/$id');
     await http.delete(uri);
-  }
-
-  Stream<List<Role>> getRolesStream({
-    Duration interval = const Duration(seconds: 3),
-  }) {
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(interval, (_) async {
-      try {
-        final roles = await getAll();
-        if (!_rolesController.isClosed) {
-          _rolesController.add(roles);
-        }
-      } catch (e) {
-        if (!_rolesController.isClosed) {
-          _rolesController.addError(e);
-        }
-      }
-    });
-
-    // Immediately fetch initial data
-    getAll()
-        .then((roles) {
-          if (!_rolesController.isClosed) {
-            _rolesController.add(roles);
-          }
-        })
-        .catchError((e) {
-          if (!_rolesController.isClosed) {
-            _rolesController.addError(e);
-          }
-        });
-
-    return _rolesController.stream;
-  }
-
-  void dispose() {
-    _pollTimer?.cancel();
-    _rolesController.close();
   }
 }

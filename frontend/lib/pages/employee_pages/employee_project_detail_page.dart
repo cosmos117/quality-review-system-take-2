@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../models/project.dart';
 import '../../controllers/team_controller.dart';
@@ -60,9 +60,7 @@ class _EmployeeProjectDetailsPageState
       final projectService = Get.find<ProjectService>();
       final latestProject = await projectService.getById(widget.project.id);
       _detailsCtrl.seed(latestProject);
-    } catch (e) {
-      debugPrint('Failed to fetch latest project: $e');
-    }
+    } catch (e) {}
   }
 
   Future<void> _loadAssignments() async {
@@ -70,22 +68,13 @@ class _EmployeeProjectDetailsPageState
     setState(() => _loadingAssignments = true);
     try {
       if (!Get.isRegistered<ProjectMembershipService>()) {
-        debugPrint(
-          '[EmployeeProjectDetail] ProjectMembershipService not registered',
-        );
         if (mounted) setState(() => _loadingAssignments = false);
         return;
       }
 
       final svc = Get.find<ProjectMembershipService>();
-      debugPrint(
-        '[EmployeeProjectDetail] Loading assignments for project ${widget.project.id}',
-      );
 
       final memberships = await svc.getProjectMembers(widget.project.id);
-      debugPrint(
-        '[EmployeeProjectDetail] Loaded ${memberships.length} memberships',
-      );
 
       final leaders = memberships.where((m) {
         final role = (m.roleName?.toLowerCase() ?? '').replaceAll(' ', '');
@@ -98,10 +87,6 @@ class _EmployeeProjectDetailsPageState
           .where((m) => (m.roleName?.toLowerCase() ?? '') == 'reviewer')
           .toList();
 
-      debugPrint(
-        '[EmployeeProjectDetail] Found: ${leaders.length} leaders, ${execs.length} executors, ${reviewers.length} reviewers',
-      );
-
       if (mounted) {
         setState(() {
           _teamLeaders = leaders;
@@ -112,9 +97,7 @@ class _EmployeeProjectDetailsPageState
       }
       // Refresh projects controller to update dashboard immediately
       await _projectsCtrl.refreshProjects();
-    } catch (e, stackTrace) {
-      debugPrint('[EmployeeProjectDetail] loadAssignments error: $e');
-      debugPrint('[EmployeeProjectDetail] Stack trace: $stackTrace');
+    } catch (e) {
       if (mounted) {
         setState(() {
           _teamLeaders = [];

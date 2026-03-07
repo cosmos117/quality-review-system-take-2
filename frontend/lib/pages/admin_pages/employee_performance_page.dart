@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/team_controller.dart';
 import '../../controllers/projects_controller.dart';
@@ -39,10 +39,6 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
       // Load all projects
       await projectsCtrl.refreshProjects();
 
-      print(
-        '[EmployeePerformance] Projects loaded: ${projectsCtrl.projects.length}',
-      );
-      print('[EmployeePerformance] Team members: ${teamCtrl.members.length}');
 
       // Calculate and store employee stats using project memberships
       final stats = <String, Map<String, int>>{};
@@ -83,14 +79,8 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
           };
 
           if (allProjects.isNotEmpty) {
-            print(
-              '[EmployeePerformance] ${employee.name}: ${allProjects.length} projects (completed: $completed, in progress: $inProgress)',
-            );
           }
         } catch (employeeError) {
-          print(
-            '[EmployeePerformance] Error loading projects for ${employee.name}: $employeeError',
-          );
           // Set empty stats for this employee
           stats[employee.id] = {'total': 0, 'completed': 0, 'inProgress': 0};
         }
@@ -102,11 +92,7 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
         });
       }
 
-      print(
-        '[EmployeePerformance] Stats calculated for ${stats.length} employees',
-      );
     } catch (e) {
-      print('[EmployeePerformance] Error loading projects: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

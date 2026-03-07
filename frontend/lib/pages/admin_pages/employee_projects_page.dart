@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/projects_controller.dart';
 import '../../models/team_member.dart';
@@ -59,17 +59,6 @@ class _EmployeeProjectsPageState extends State<EmployeeProjectsPage> {
           .where((p) => employeeProjectIds.contains(p.id))
           .toList();
 
-      // Debug logging
-      print(
-        '[EmployeeProjectsPage] Loaded projects for ${widget.member.name} (${widget.member.id}):',
-      );
-      print(
-        '[EmployeeProjectsPage] Total projects found: ${allProjects.length}',
-      );
-      for (final p in allProjects) {
-        print('[EmployeeProjectsPage]   - ${p.title} (id: ${p.id})');
-      }
-
       // Separate into current and completed
       bool isCompleted(Project p) => p.status.toLowerCase() == 'completed';
 
@@ -87,9 +76,6 @@ class _EmployeeProjectsPageState extends State<EmployeeProjectsPage> {
               .toList();
           rolesMap[project.id] = userRoles;
         } catch (e) {
-          print(
-            '[EmployeeProjectsPage] Error fetching roles for project ${project.id}: $e',
-          );
           rolesMap[project.id] = [];
         }
       }
@@ -101,13 +87,8 @@ class _EmployeeProjectsPageState extends State<EmployeeProjectsPage> {
           _projectRoles = rolesMap;
           _isLoading = false;
         });
-
-        print(
-          '[EmployeeProjectsPage] Current: ${_current.length}, Completed: ${_completed.length}',
-        );
       }
     } catch (e) {
-      print('[EmployeeProjectsPage] Error loading projects: $e');
       if (mounted) {
         setState(() {
           _current = [];
@@ -295,7 +276,7 @@ class _ProjectTile extends StatelessWidget {
                     if (roles.isNotEmpty) ...[
                       const SizedBox(width: 8),
                       const Text(
-                        '•',
+                        'â€¢',
                         style: TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                       const SizedBox(width: 8),

@@ -1,6 +1,5 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:quality_review/controllers/auth_controller.dart';
 import 'package:quality_review/pages/employee_pages/checklist.dart';
@@ -259,9 +258,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         final stageKey = (s['stage_key'] ?? '').toString();
         stageMap[stageKey] = {'name': name, ...s};
 
-        print('\n🔍 Processing stage: $stageKey');
-        print('   Full stage data: $s');
-
         // Extract phase number from stage_key (e.g., "stage1" => 1, "stage2" => 2)
         // This is reliable because stage_key is always in format "stageN"
         final match = RegExp(
@@ -274,16 +270,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
           // Load conflict counter for this phase - handle both int and double
           final conflictValue = s['conflict_count'];
-          print(
-            '   🔢 Phase $p - conflictValue from stage: $conflictValue (type: ${conflictValue.runtimeType})',
-          );
           final conflictCount = conflictValue is int
               ? conflictValue
               : (conflictValue is double ? conflictValue.toInt() : 0);
           conflictCountersMap[p] = conflictCount;
-          debugPrint(
-            '✓ Phase $p: Loaded conflict counter = $conflictCount (from: $conflictValue, type: ${conflictValue.runtimeType})',
-          );
         }
       }
 
@@ -293,12 +283,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         // Clear and update conflict counters for all phases
         _conflictCounters.clear();
         _conflictCounters.addAll(conflictCountersMap);
-        debugPrint('✓ Conflict counters updated: $_conflictCounters');
 
         // Loopback counter is the same as conflict counter (tracks reviewer reverts)
         _loopbackCounters.clear();
         _loopbackCounters.addAll(conflictCountersMap);
-        debugPrint('✓ Loopback counters updated: $_loopbackCounters');
       });
 
       if (stages.isEmpty) {
@@ -336,10 +324,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       _currentStageId = stageId;
 
       // Debug: Log the complete stage object to verify fields
-      debugPrint('📦 Current stage object: $stage');
-      debugPrint(
-        '📊 Stage fields - conflict_count: ${stage['conflict_count']}',
-      );
 
       // Ensure conflict counter exists for this phase
       if (!_conflictCounters.containsKey(phase)) {
@@ -595,7 +579,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
       // Force refresh submission status to ensure it's up to date
       // This is critical for proper UI state when logging back in
-      debugPrint('🔄 Force refreshing submission status for phase $phase');
       await checklistCtrl.loadAnswers(widget.projectId, phase, 'executor');
       await checklistCtrl.loadAnswers(widget.projectId, phase, 'reviewer');
 
@@ -640,9 +623,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       reviewerSheet.remove(_reviewerSummaryKey);
 
       // Extract category and severity from reviewer answers and populate the maps
-      debugPrint(
-        '🔍 Extracting category/severity from ${checklist.length} checklists...',
-      );
       for (final question in checklist) {
         for (final subQuestion in question.subQuestions) {
           final questionId = (subQuestion['id'] ?? '').toString();
@@ -673,26 +653,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
             if (severity.isNotEmpty) {
               _selectedDefectSeverity[key] = severity;
             }
-
-            debugPrint('📥 Loaded category/severity:');
-            debugPrint('   Key: $key');
-            debugPrint('   QuestionId: $questionId');
-            debugPrint('   QuestionText: $questionText');
-            debugPrint('   CategoryId: $categoryId');
-            debugPrint('   Severity: $severity');
-          } else {
-            debugPrint(
-              '⚠️  No answer found for key: $key (id: $questionId, text: $questionText)',
-            );
-          }
+          } else {}
         }
       }
-      debugPrint(
-        '📊 Total categories loaded: ${_selectedDefectCategory.length}',
-      );
-      debugPrint(
-        '📊 Total severities loaded: ${_selectedDefectSeverity.length}',
-      );
 
       if (!mounted) return;
       setState(() {
@@ -785,10 +748,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         // Parse iterations data
         final iterations = iterationData['iterations'] as List<dynamic>? ?? [];
 
-        debugPrint(
-          'Raw iterations from backend: ${iterations.map((i) => i['iterationNumber']).toList()}',
-        );
-
         // Deduplicate iterations by iteration number
         final Map<int, Map<String, dynamic>> uniqueIterations = {};
         for (final iter in iterations) {
@@ -811,9 +770,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
         // Parse current iteration data
         final current = iterationData['current'] as Map<String, dynamic>?;
-        debugPrint(
-          'Current iteration from backend: ${current?['iterationNumber']}',
-        );
         if (current != null) {
           _currentIterationStats = {
             'iterationNumber': current['iterationNumber'] ?? 1,
@@ -838,7 +794,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         _rebuildDropdownItems();
       });
     } catch (e) {
-      debugPrint('Error loading defect rates: $e');
       // Silently fail - don't disrupt the UI
     }
   }
@@ -871,9 +826,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     }).toList();
 
     // Debug logging
-    debugPrint(
-      'Rebuilt dropdown items values: ${_cachedDropdownItems.map((i) => i.value).toList()}',
-    );
 
     // Validate _selectedIterationNumber is in the items
     if (_selectedIterationNumber != null && _cachedDropdownItems.isNotEmpty) {
@@ -881,9 +833,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         (item) => item.value == _selectedIterationNumber,
       );
       if (!hasSelectedValue) {
-        debugPrint(
-          'WARNING: Selected value $_selectedIterationNumber not in dropdown items!',
-        );
         _selectedIterationNumber = _cachedDropdownItems.first.value;
       }
     }
@@ -978,9 +927,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         }
       }
     }
-    debugPrint(
-      '✓ Built checkpoint ID cache with ${_checkpointIdMap.length} entries',
-    );
   }
 
   void _recomputeDefects() {
@@ -1166,16 +1112,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     final reviewerSubmitted = reviewerSubmissionInfo?['is_submitted'] == true;
 
     // Debug logging for submission status
-    debugPrint('📊 Phase $_selectedPhase submission status:');
-    debugPrint(
-      '   Executor submitted: $executorSubmitted (info: $executorSubmissionInfo)',
-    );
-    debugPrint(
-      '   Reviewer submitted: $reviewerSubmitted (info: $reviewerSubmissionInfo)',
-    );
-    debugPrint('   Approval status: $approvalStatus');
-    debugPrint('   Is reverted: $isReverted');
-    debugPrint('   Phase editable: $phaseEditable');
 
     // Can edit only if phase is editable AND checklist has not been submitted
     // Special case: when reverted to executor, only executor can edit (reviewer stays submitted)
@@ -1188,13 +1124,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         executorSubmitted && // Reviewer can only edit after executor submits
         approvalStatus !=
             'reverted_to_executor'; // Reviewer cannot edit when reverted to executor
-
-    debugPrint(
-      '   Can edit executor: $canEditExecutorPhase (canEditExecutor: $canEditExecutor, phaseEditable: $phaseEditable, !executorSubmitted: ${!executorSubmitted})',
-    );
-    debugPrint(
-      '   Can edit reviewer: $canEditReviewerPhase (canEditReviewer: $canEditReviewer, phaseEditable: $phaseEditable, !reviewerSubmitted: ${!reviewerSubmitted}, executorSubmitted: $executorSubmitted)',
-    );
 
     return Scaffold(
       appBar: AppBar(
@@ -1907,12 +1836,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                               severity = _selectedDefectSeverity[checkpointId];
                             }
 
-                            debugPrint('💾 Saving reviewer answer:');
-                            debugPrint('   Question: $subQ');
-                            debugPrint('   CheckpointId: $checkpointId');
-                            debugPrint('   CategoryId: $categoryId');
-                            debugPrint('   Severity: $severity');
-
                             // Update the maps with the current values
                             if (checkpointId != null &&
                                 checkpointId.isNotEmpty) {
@@ -1960,11 +1883,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                                   categoryId: categoryId,
                                   severity: severity,
                                 );
-                              } catch (e) {
-                                debugPrint(
-                                  '⚠️ Checkpoint update error (non-critical): $e',
-                                );
-                              }
+                              } catch (e) {}
                             }
 
                             _recomputeDefects();
@@ -1991,7 +1910,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: const Text(
-                                    '✅ Review submitted! Phase approved automatically. Next phase is now active.',
+                                    'âœ… Review submitted! Phase approved automatically. Next phase is now active.',
                                   ),
                                   backgroundColor: Colors.green,
                                   duration: const Duration(seconds: 4),

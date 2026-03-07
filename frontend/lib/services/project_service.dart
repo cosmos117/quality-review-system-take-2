@@ -1,12 +1,9 @@
-import 'dart:async';
 import '../config/api_config.dart';
 import '../models/project.dart';
 import 'http_client.dart';
 
 class ProjectService {
   final SimpleHttp http;
-  Timer? _pollTimer;
-  final _projectsController = StreamController<List<Project>>.broadcast();
 
   ProjectService(this.http);
 
@@ -170,41 +167,5 @@ class ProjectService {
   Future<void> delete(String id) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/projects/$id');
     await http.delete(uri);
-  }
-
-  Stream<List<Project>> getProjectsStream({
-    Duration interval = const Duration(seconds: 3),
-  }) {
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(interval, (_) async {
-      try {
-        final projects = await getAll();
-        if (!_projectsController.isClosed) {
-          _projectsController.add(projects);
-        }
-      } catch (e) {
-        if (!_projectsController.isClosed) {
-          _projectsController.addError(e);
-        }
-      }
-    });
-    // Immediately fetch initial data
-    getAll()
-        .then((projects) {
-          if (!_projectsController.isClosed) {
-            _projectsController.add(projects);
-          }
-        })
-        .catchError((e) {
-          if (!_projectsController.isClosed) {
-            _projectsController.addError(e);
-          }
-        });
-    return _projectsController.stream;
-  }
-
-  void dispose() {
-    _pollTimer?.cancel();
-    _projectsController.close();
   }
 }

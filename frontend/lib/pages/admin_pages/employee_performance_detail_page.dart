@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/projects_controller.dart';
 import '../../models/team_member.dart';
@@ -88,9 +88,6 @@ class _EmployeePerformanceDetailPageState
             leaderProjects.add(project);
           }
         } catch (e) {
-          print(
-            '[EmployeePerformanceDetail] Error fetching roles for project ${project.id}: $e',
-          );
           rolesMap[project.id] = [];
         }
       }
@@ -105,7 +102,6 @@ class _EmployeePerformanceDetailPageState
         });
       }
     } catch (e) {
-      print('[EmployeePerformanceDetail] Error loading projects: $e');
       if (mounted) {
         setState(() {
           _current = [];

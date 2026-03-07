@@ -33,35 +33,18 @@ class ExcelExportService {
     List<String> reviewers = const [],
   }) async {
     try {
-      print('🚀 Starting Excel export for project: $projectId');
-      print('📥 Received executors: $executors');
-      print('📥 Received reviewers: $reviewers');
-
       // Fetch project data
       final project = await projectService.getById(projectId);
-      print('✓ Fetched project: ${project.title}');
 
       // Fetch team members
       final memberships = await membershipService.getProjectMembers(projectId);
-      print('✓ Fetched ${memberships.length} team members');
-
-      // Debug: Print all membership data
-      for (final m in memberships) {
-        print(
-          '   Membership: userId=${m.userId}, userName=${m.userName}, userEmail=${m.userEmail}, roleName=${m.roleName}',
-        );
-      }
 
       // Use the passed executors/reviewers lists (already extracted from frontend)
       var finalExecutors = List<String>.from(executors);
       var finalReviewers = List<String>.from(reviewers);
 
-      print('✅ Using executors: $finalExecutors');
-      print('✅ Using reviewers: $finalReviewers');
-
       // Fetch stages
       final stages = await stageService.listStages(projectId);
-      print('✓ Fetched ${stages.length} stages');
 
       // Create Excel workbook
       final excel = Excel.createExcel();
@@ -85,22 +68,14 @@ class ExcelExportService {
       try {
         if (excel.sheets.containsKey('Sheet1')) {
           excel.delete('Sheet1');
-          print(
-            '✓ Deleted Sheet1 (final sheets: ${excel.sheets.keys.toList()})',
-          );
         }
-      } catch (e) {
-        print('⚠️ Could not delete Sheet1: $e');
-      }
+      } catch (e) {}
 
       // Convert to bytes
       final bytes = excel.encode();
-      print('✓ Excel file generated successfully');
 
       return bytes ?? [];
-    } catch (e, stackTrace) {
-      print('❌ Error exporting project: $e');
-      print('Stack trace: $stackTrace');
+    } catch (_) {
       rethrow;
     }
   }
@@ -113,8 +88,6 @@ class ExcelExportService {
     List<String> executors = const [],
     List<String> reviewers = const [],
   }) async {
-    print('📝 Creating Project Details sheet...');
-
     final sheet = excel['Project Details'];
 
     // Define styles
@@ -175,8 +148,6 @@ class ExcelExportService {
     }
 
     // Use the executors and reviewers extracted in the main export function
-    print('✅ Using executors: $executors');
-    print('✅ Using reviewers: $reviewers');
 
     final projectLeader = memberships
         .firstWhereOrNull(
@@ -217,8 +188,6 @@ class ExcelExportService {
     // Set column widths for better readability
     sheet.setColumnWidth(0, 25);
     sheet.setColumnWidth(1, 50);
-
-    print('✓ Project Details sheet created with styling');
   }
 
   /// Create Checkpoint Reviews sheets (one per phase - supports any number of phases)
@@ -228,8 +197,6 @@ class ExcelExportService {
     List<Map<String, dynamic>> stages,
     List<ProjectMembership> memberships,
   ) async {
-    print('📝 Creating Checkpoint Reviews sheets...');
-
     // Include all stages that contain 'phase' in their name (supports unlimited phases)
     final phaseStages = stages.where((s) {
       final stageName = (s['stage_name'] ?? s['name'] ?? '')
@@ -246,8 +213,6 @@ class ExcelExportService {
       final sheetName = 'Phase ${phaseIndex + 1} Reviews';
 
       try {
-        print('  📝 Creating sheet: $sheetName');
-
         // Create sheet for this phase
         final sheet = excel[sheetName];
 
@@ -255,7 +220,6 @@ class ExcelExportService {
 
         // Extract conflict_count from stage data
         final conflictCount = stageData['conflict_count'] ?? 0;
-        print('  ℹ️ Phase ${phaseIndex + 1}: conflict_count=$conflictCount');
 
         // Get checklists for this phase
         final checklists = await checklistService.listForStage(
@@ -371,9 +335,7 @@ class ExcelExportService {
                     if (category != null && category is Map<String, dynamic>) {
                       defectCategory = (category['name'] ?? '').toString();
                     }
-                  } catch (e) {
-                    print('⚠️ Failed to fetch defect category name: $e');
-                  }
+                  } catch (e) {}
                 }
 
                 if (defectDetected == 'Y') {
@@ -399,9 +361,7 @@ class ExcelExportService {
                   'defectSeverity': defectSeverity,
                   'conflictCount': conflictCount,
                 });
-              } catch (e) {
-                print('    ⚠️ Error processing checkpoint: $e');
-              }
+              } catch (e) {}
             }
 
             // Store checklist with its checkpoints
@@ -411,9 +371,7 @@ class ExcelExportService {
                 'checkpoints': checkpointRows,
               });
             }
-          } catch (e) {
-            print('  ⚠️ Error fetching checkpoints: $e');
-          }
+          } catch (e) {}
         }
 
         // Calculate defect rate
@@ -632,13 +590,7 @@ class ExcelExportService {
         sheet.setColumnWidth(8, 20); // Defect Category
         sheet.setColumnWidth(9, 18); // Defect Severity
         sheet.setColumnWidth(10, 15); // Conflict Count
-
-        print(
-          '✓ $sheetName created with $totalCheckpoints checkpoints, $totalDefects defects',
-        );
-      } catch (e) {
-        print('⚠️ Error processing phase: $e');
-      }
+      } catch (e) {}
     }
   }
 

@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -72,7 +72,6 @@ class _MyprojectState extends State<Myproject> {
       // Update notifications in the background (don't block UI)
       _updateNotificationsInBackground(myProjects);
     } catch (e) {
-      print('[MyProjects] Error loading projects: $e');
       if (mounted) {
         setState(() {
           _cachedProjects = [];

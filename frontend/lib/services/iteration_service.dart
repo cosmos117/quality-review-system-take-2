@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:get/get.dart';
@@ -15,7 +15,6 @@ class IterationService {
   ) async {
     try {
       if (kDebugMode) {
-        print('📚 Fetching iterations for project $projectId, stage $stageId');
       }
 
       // Get auth token from AuthController
@@ -38,7 +37,6 @@ class IterationService {
       );
 
       if (kDebugMode) {
-        print('📚 Iterations API response status: ${response.statusCode}');
       }
 
       if (response.statusCode == 200) {
@@ -46,19 +44,16 @@ class IterationService {
         if (data['success'] == true && data['data'] != null) {
           final result = data['data'];
           if (kDebugMode) {
-            print('✅ Fetched ${result['totalIterations'] ?? 0} iterations');
           }
           return result;
         }
       }
 
       if (kDebugMode) {
-        print('⚠️ Failed to fetch iterations: ${response.body}');
       }
       return {'iterations': [], 'currentIteration': 1, 'totalIterations': 0};
     } catch (e) {
       if (kDebugMode) {
-        print('❌ Error fetching iterations: $e');
       }
       return {'iterations': [], 'currentIteration': 1, 'totalIterations': 0};
     }
@@ -100,7 +95,6 @@ class IterationService {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('❌ Error finding question in iteration: $e');
       }
     }
     return null;
