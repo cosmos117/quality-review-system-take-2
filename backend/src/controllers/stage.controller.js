@@ -8,6 +8,7 @@ import Template from "../models/template.models.js";
 import Checklist from "../models/checklist.models.js";
 import Checkpoint from "../models/checkpoint.models.js";
 import ProjectChecklist from "../models/projectChecklist.models.js";
+import { parsePagination, paginatedResponse } from "../utils/paginate.js";
 
 const deriveStageKey = (stageName = "") => {
   const lower = stageName.toLowerCase();
@@ -218,7 +219,7 @@ const listStagesForProject = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, stages, "Stages fetched successfully"));
+    .json(paginatedResponse(stages, stages.length, { page: 1, limit: null }));
 });
 
 const getStageById = asyncHandler(async (req, res) => {

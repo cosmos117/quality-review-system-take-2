@@ -9,6 +9,7 @@ import ChecklistAnswer from "../models/checklistAnswer.models.js";
 import ChecklistApproval from "../models/checklistApproval.models.js";
 import ChecklistTransaction from "../models/checklistTransaction.models.js";
 import { deleteImagesByFileIds } from "../gridfs.js";
+import { parsePagination, paginatedResponse } from "../utils/paginate.js";
 
 // Helper function to sync existing checkpoints with template categories
 async function syncCheckpointsWithTemplate(projectId) {
@@ -60,14 +61,20 @@ async function syncCheckpointsWithTemplate(projectId) {
 // Get all projects
 export const getAllProjects = async (req, res) => {
   try {
-    const projects = await Project.find({})
-      .populate("created_by", "name email")
-      .sort({ createdAt: -1 });
+    const { page, limit, skip } = parsePagination(req.query);
+    const filter = {};
+    const total = await Project.countDocuments(filter);
 
-    res.status(200).json({
-      success: true,
-      data: projects,
-    });
+    let query = Project.find(filter)
+      .populate("created_by", "name email")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (limit) query = query.skip(skip).limit(limit);
+
+    const projects = await query;
+
+    res.status(200).json(paginatedResponse(projects, total, { page, limit }));
   } catch (error) {
     res.status(500).json({
       success: false,

@@ -4,6 +4,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import Checklist from "../models/checklist.models.js";
 import ChecklistHistory from "../models/checklistTransaction.models.js";
+import { parsePagination, paginatedResponse } from "../utils/paginate.js";
 const createChecklistForStage = asyncHandler(async (req, res) => {
   const { stageId } = req.params;
   const {
@@ -52,13 +53,18 @@ const listChecklistsForStage = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid stageId");
   }
 
-  const checklists = await Checklist.find({ stage_id: stageId }).sort({
-    createdAt: 1,
-  });
+  const { page, limit, skip } = parsePagination(req.query);
+  const filter = { stage_id: stageId };
+  const total = await Checklist.countDocuments(filter);
+
+  let query = Checklist.find(filter).sort({ createdAt: 1 }).lean();
+  if (limit) query = query.skip(skip).limit(limit);
+
+  const checklists = await query;
 
   return res
     .status(200)
-    .json(new ApiResponse(200, checklists, "Checklists fetched successfully"));
+    .json(paginatedResponse(checklists, total, { page, limit }));
 });
 const getChecklistById = asyncHandler(async (req, res) => {
   const { id } = req.params;
