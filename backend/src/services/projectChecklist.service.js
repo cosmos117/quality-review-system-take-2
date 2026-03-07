@@ -3,6 +3,7 @@ import ProjectChecklist from "../models/projectChecklist.models.js";
 import Template from "../models/template.models.js";
 import Stage from "../models/stage.models.js";
 import Project from "../models/project.models.js";
+import logger from "../utils/logger.js";
 import { deleteImagesByFileIds } from "../gridfs.js";
 import { ApiError } from "../utils/ApiError.js";
 
@@ -502,7 +503,7 @@ export const getOverallDefectRate = async (projectId) => {
 
       const iterationRates = calculateIterationDefectRates(checklist);
 
-      console.log(
+      logger.info(
         `Phase ${stage.stage_key}: currentIteration=${checklist.currentIteration || 1}, Past iterations count: ${checklist.iterations.length}, Past iteration rates: ${JSON.stringify(iterationRates)}, Current defect rate: ${cappedPhaseDefectRate}%`,
       );
 
@@ -511,7 +512,7 @@ export const getOverallDefectRate = async (projectId) => {
         totalIterationsAcrossAllPhases += 1;
       });
 
-      console.log(
+      logger.info(
         `After phase ${stage.stage_key}: Sum = ${sumOfAllIterationDefectRates}, Total iterations = ${totalIterationsAcrossAllPhases}`,
       );
     }

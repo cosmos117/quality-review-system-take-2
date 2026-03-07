@@ -3,6 +3,7 @@ import ChecklistApproval from "../models/checklistApproval.models.js";
 import Stage from "../models/stage.models.js";
 import Project from "../models/project.models.js";
 import { accumulateDefectsForChecklist } from "./checklistAnswer.service.js";
+import logger from "../utils/logger.js";
 import { ApiError } from "../utils/ApiError.js";
 
 function answersMatch(execAns, revAns) {
@@ -147,8 +148,8 @@ export const revertToExecutor = async (projectId, phaseNum, notes, userId) => {
   if (checklist) {
     totalNewDefects = accumulateDefectsForChecklist(checklist);
 
-    console.log(
-      `✅ Reviewer revert: Added ${totalNewDefects} new defects to phase ${phaseNum}`,
+    logger.info(
+      `Reviewer revert: Added ${totalNewDefects} new defects to phase ${phaseNum}`,
     );
 
     const approvalRecord = await ChecklistApproval.findOne({

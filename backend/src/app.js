@@ -3,6 +3,8 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import helmet from "helmet";
 import authMiddleware from "./middleware/auth.Middleware.js";
+import requestLogger from "./middleware/requestLogger.js";
+import logger from "./utils/logger.js";
 
 const app = express();
 
@@ -27,6 +29,14 @@ app.use(
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(cookieParser(process.env.COOKIE_SECRET));
+
+// ── Request logging ──
+app.use(requestLogger);
+
+// ── Health check ──
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", uptime: process.uptime() });
+});
 
 // ── Route imports ──
 import userRouter from "./routes/user.routes.js";
@@ -69,6 +79,10 @@ app.use("/api/v1", authMiddleware, imagesRouter);
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500;
   const message = err.message || "Internal Server Error";
+
+  if (statusCode >= 500) {
+    logger.error(`${req.method} ${req.originalUrl} - ${message}`, { stack: err.stack });
+  }
 
   res.status(statusCode).json({
     statusCode: statusCode,

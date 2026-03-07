@@ -1,5 +1,6 @@
 import { GridFSBucket, ObjectId } from "mongodb";
 import mongoose from "mongoose";
+import logger from "./utils/logger.js";
 
 let db;
 let bucket;
@@ -25,9 +26,7 @@ async function init() {
 
   db = conn.db; // same database Mongoose uses
   bucket = new GridFSBucket(db, { bucketName: "uploads" });
-  console.log(
-    `✅ GridFS initialized on database "${db.databaseName}" (shared with Mongoose)`,
-  );
+  logger.info(`GridFS initialized on database "${db.databaseName}"`);
   return bucket;
 }
 

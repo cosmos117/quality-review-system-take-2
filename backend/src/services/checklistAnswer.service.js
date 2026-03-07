@@ -3,6 +3,7 @@ import ChecklistApproval from "../models/checklistApproval.models.js";
 import Stage from "../models/stage.models.js";
 import { ensureProjectChecklist } from "./projectChecklist.service.js";
 import { ApiError } from "../utils/ApiError.js";
+import logger from "../utils/logger.js";
 
 const calculateCurrentMismatches = (group) => {
   let mismatchCount = 0;
@@ -296,8 +297,8 @@ export const submitChecklistAnswers = async (projectId, phaseNum, normalizedRole
         checklist.markModified("groups");
         await checklist.save();
 
-        console.log(
-          `✅ ${normalizedRole.charAt(0).toUpperCase() + normalizedRole.slice(1)} submission: Added ${totalNewDefects} new defects to phase ${phaseNum}`,
+        logger.info(
+          `${normalizedRole.charAt(0).toUpperCase() + normalizedRole.slice(1)} submission: Added ${totalNewDefects} new defects to phase ${phaseNum}`,
         );
       }
     }
