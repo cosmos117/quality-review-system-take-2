@@ -10,6 +10,7 @@ import 'package:get/get.dart';
 import '../../controllers/auth_controller.dart';
 import '../../models/project_checklist.dart';
 import '../../services/project_checklist_service.dart';
+import '../../components/shimmer_loading.dart';
 
 class ProjectChecklistExecutionWidget extends StatefulWidget {
   final String projectId;
@@ -117,8 +118,28 @@ class _ProjectChecklistExecutionWidgetState
     String? answer,
     String? remark,
   ) async {
+    // Optimistic UI update: update local state immediately
+    final previousChecklist = _checklist;
+    if (_checklist != null) {
+      final groupIdx = _checklist!.groups.indexWhere((g) => g.id == groupId);
+      if (groupIdx != -1) {
+        final group = _checklist!.groups[groupIdx];
+        final question = group.findQuestion(questionId);
+        if (question != null) {
+          final updated = question.copyWith(
+            executorAnswer: answer,
+            executorRemark: remark,
+          );
+          final updatedGroup = group.updateQuestion(questionId, updated);
+          setState(() {
+            _checklist = _checklist!.updateGroup(updatedGroup);
+          });
+        }
+      }
+    }
+
     try {
-      // Update group state from API response
+      // Fire API call in background
       final updatedGroupJson = await _checklistService.updateExecutor(
         widget.projectId,
         widget.stageId,
@@ -130,21 +151,23 @@ class _ProjectChecklistExecutionWidgetState
 
       final updatedGroup = ProjectChecklistGroup.fromJson(updatedGroupJson);
 
+      // Reconcile with server response
       if (mounted && _checklist != null) {
         setState(() {
           _checklist = _checklist!.updateGroup(updatedGroup);
         });
       }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Executor answer updated')),
-        );
-      }
     } catch (e) {
+      // Revert to previous state on failure
       if (mounted) {
+        setState(() {
+          _checklist = previousChecklist;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Failed to save: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -156,8 +179,28 @@ class _ProjectChecklistExecutionWidgetState
     String? status,
     String? remark,
   ) async {
+    // Optimistic UI update: update local state immediately
+    final previousChecklist = _checklist;
+    if (_checklist != null) {
+      final groupIdx = _checklist!.groups.indexWhere((g) => g.id == groupId);
+      if (groupIdx != -1) {
+        final group = _checklist!.groups[groupIdx];
+        final question = group.findQuestion(questionId);
+        if (question != null) {
+          final updated = question.copyWith(
+            reviewerAnswer: status,
+            reviewerRemark: remark,
+          );
+          final updatedGroup = group.updateQuestion(questionId, updated);
+          setState(() {
+            _checklist = _checklist!.updateGroup(updatedGroup);
+          });
+        }
+      }
+    }
+
     try {
-      // Update group state from API response
+      // Fire API call in background
       final updatedGroupJson = await _checklistService.updateReviewer(
         widget.projectId,
         widget.stageId,
@@ -169,21 +212,23 @@ class _ProjectChecklistExecutionWidgetState
 
       final updatedGroup = ProjectChecklistGroup.fromJson(updatedGroupJson);
 
+      // Reconcile with server response
       if (mounted && _checklist != null) {
         setState(() {
           _checklist = _checklist!.updateGroup(updatedGroup);
         });
       }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Reviewer status updated')),
-        );
-      }
     } catch (e) {
+      // Revert to previous state on failure
       if (mounted) {
+        setState(() {
+          _checklist = previousChecklist;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Failed to save: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -192,7 +237,7 @@ class _ProjectChecklistExecutionWidgetState
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const SkeletonChecklistGroups(groupCount: 4);
     }
 
     if (_errorMessage != null) {
@@ -242,11 +287,9 @@ class _ProjectChecklistExecutionWidgetState
                 .trim()
                 .toLowerCase();
 
-
             if (executorNormalized != reviewerNormalized) {
               currentGroupDefects++;
-            } else {
-            }
+            } else {}
           }
         }
 
@@ -269,15 +312,12 @@ class _ProjectChecklistExecutionWidgetState
                   .trim()
                   .toLowerCase();
 
-
               if (executorNormalized != reviewerNormalized) {
                 currentGroupDefects++;
-              } else {
-              }
+              } else {}
             }
           }
         }
-
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

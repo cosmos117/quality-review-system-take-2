@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../models/project.dart';
 import '../services/stage_service.dart';
 import '../services/approval_service.dart';
+import '../components/shimmer_loading.dart';
 
 class PhaseOverviewWidget extends StatefulWidget {
   final Project project;
@@ -115,7 +116,10 @@ class _PhaseOverviewWidgetState extends State<PhaseOverviewWidget> {
         if (_loading)
           Padding(
             padding: EdgeInsets.all(widget.compact ? 4.0 : 8.0),
-            child: const LinearProgressIndicator(minHeight: 2),
+            child: SkeletonPhaseOverview(
+              phaseCount: 4,
+              compact: widget.compact,
+            ),
           ),
         if (!_loading && _stages.isEmpty)
           Card(

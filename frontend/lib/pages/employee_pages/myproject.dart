@@ -7,6 +7,7 @@ import '../../controllers/projects_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/notification_controller.dart';
 import '../../components/sortable_header_cell.dart';
+import '../../components/shimmer_loading.dart';
 import 'my_project_detail_page.dart';
 
 class Myproject extends StatefulWidget {
@@ -310,11 +311,9 @@ class _MyprojectState extends State<Myproject> {
                   ),
                   const SizedBox(height: 16),
                   _isInitialLoad
-                      ? const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(32.0),
-                            child: CircularProgressIndicator(),
-                          ),
+                      ? const Padding(
+                          padding: EdgeInsets.all(32.0),
+                          child: SkeletonTable(rowCount: 5, columns: 7),
                         )
                       : Builder(
                           builder: (context) {

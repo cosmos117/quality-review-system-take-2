@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/projects_controller.dart';
+import 'shimmer_loading.dart';
 
 class ProjectStatisticsCard extends StatelessWidget {
   const ProjectStatisticsCard({super.key});
@@ -11,6 +12,11 @@ class ProjectStatisticsCard extends StatelessWidget {
 
     return Obx(() {
       final allProjects = projCtrl.projects;
+
+      // Show skeleton while loading and no data yet
+      if (projCtrl.isLoading.value && allProjects.isEmpty) {
+        return const SkeletonStatisticsCard();
+      }
 
       final notStartedCount = allProjects
           .where((p) => p.status == 'Not Started')

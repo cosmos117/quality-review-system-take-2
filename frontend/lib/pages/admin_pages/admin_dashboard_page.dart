@@ -13,6 +13,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../services/excel_import_service.dart';
 import '../../components/project_statistics_card.dart';
 import '../../components/sortable_header_cell.dart';
+import '../../components/shimmer_loading.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -356,8 +357,107 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 ],
               ),
               SizedBox(height: responsivePadding(16)),
-              // Project Statistics
-              const ProjectStatisticsCard(),
+              // Project Statistics + Top 6 Team Leaders side by side
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Project Statistics (left)
+                  const Expanded(flex: 3, child: ProjectStatisticsCard()),
+                  SizedBox(width: responsivePadding(12)),
+                  // Top 6 Team Leaders (right)
+                  Expanded(
+                    flex: 5,
+                    child: Obx(() {
+                      final leaderRates = <String, List<double>>{};
+                      for (final project in projCtrl.projects) {
+                        final cache = projCtrl.membershipCache[project.id];
+                        if (cache == null) continue;
+                        final rate = project.overallDefectRate;
+                        if (rate == null) continue;
+                        for (final name in cache.teamLeaders) {
+                          leaderRates.putIfAbsent(name, () => []).add(rate);
+                        }
+                      }
+                      final leaderAvg = leaderRates.entries.map((e) {
+                        final avg =
+                            e.value.reduce((a, b) => a + b) / e.value.length;
+                        return MapEntry(e.key, avg);
+                      }).toList()..sort((a, b) => a.value.compareTo(b.value));
+                      final top6 = leaderAvg.take(6).toList();
+                      if (top6.isEmpty) return const SizedBox.shrink();
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Team Leaders',
+                            style: TextStyle(
+                              fontSize: responsiveFontSize(7),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: responsivePadding(8)),
+                          Wrap(
+                            spacing: responsivePadding(8),
+                            runSpacing: responsivePadding(8),
+                            children: top6.map((entry) {
+                              return SizedBox(
+                                width:
+                                    (screenWidth * 5 / 8 -
+                                        responsivePadding(12) -
+                                        responsivePadding(48) -
+                                        responsivePadding(16)) /
+                                    3,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(
+                                      responsivePadding(6),
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black12,
+                                        blurRadius: responsivePadding(3),
+                                        offset: Offset(0, responsivePadding(1)),
+                                      ),
+                                    ],
+                                  ),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: responsivePadding(8),
+                                    vertical: responsivePadding(6),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        entry.key,
+                                        style: TextStyle(
+                                          fontSize: responsiveFontSize(6),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      SizedBox(height: responsivePadding(2)),
+                                      Text(
+                                        'Defect Rate: ${entry.value.toStringAsFixed(1)}%',
+                                        style: TextStyle(
+                                          fontSize: responsiveFontSize(3),
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      );
+                    }),
+                  ),
+                ],
+              ),
               SizedBox(height: responsivePadding(16)),
               // Search bar
               Container(
@@ -425,12 +525,12 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               SizedBox(height: responsivePadding(16)),
               // Loading / Error states (reactive)
               Obx(() {
-                if (projCtrl.isLoading.value) {
+                if (projCtrl.isLoading.value && projCtrl.projects.isEmpty) {
                   return Padding(
                     padding: EdgeInsets.symmetric(
                       vertical: responsivePadding(24.0),
                     ),
-                    child: Center(child: CircularProgressIndicator()),
+                    child: const SkeletonTable(rowCount: 6, columns: 8),
                   );
                 }
                 final err = projCtrl.errorMessage.value;
@@ -463,6 +563,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 final sortKey = ui.sortKey.value;
                 final asc = ui.ascending.value;
                 final statusFilter = ui.selectedStatuses.toSet();
+                final refreshing = projCtrl.isRefreshing.value;
                 final allProjects = _visibleProjects(
                   rxProjects,
                   search,
@@ -493,167 +594,171 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   endIndex,
                 );
 
-                return Column(
-                  children: [
-                    // Pagination controls at top left
-                    _buildPaginationControls(
-                      totalProjects,
-                      startIndex,
-                      endIndex,
-                      totalPages,
-                      context,
-                    ),
-                    SizedBox(height: responsivePadding(12)),
-                    // Single horizontal scrollbar wrapping the entire table
-                    Scrollbar(
-                      controller: _horizontalScrollController,
-                      thumbVisibility: false,
-                      thickness: responsivePadding(10.0),
-                      child: SingleChildScrollView(
+                return RefreshingOverlay(
+                  isRefreshing: refreshing,
+                  child: Column(
+                    children: [
+                      // Pagination controls at top left
+                      _buildPaginationControls(
+                        totalProjects,
+                        startIndex,
+                        endIndex,
+                        totalPages,
+                        context,
+                      ),
+                      SizedBox(height: responsivePadding(12)),
+                      // Single horizontal scrollbar wrapping the entire table
+                      Scrollbar(
                         controller: _horizontalScrollController,
-                        scrollDirection: Axis.horizontal,
-                        child: Column(
-                          children: [
-                            // Header row
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                vertical: responsivePadding(12),
-                                horizontal: responsivePadding(16),
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(
-                                  responsivePadding(6),
+                        thumbVisibility: false,
+                        thickness: responsivePadding(10.0),
+                        child: SingleChildScrollView(
+                          controller: _horizontalScrollController,
+                          scrollDirection: Axis.horizontal,
+                          child: Column(
+                            children: [
+                              // Header row
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                  vertical: responsivePadding(12),
+                                  horizontal: responsivePadding(16),
                                 ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black12,
-                                    blurRadius: responsivePadding(4),
-                                    offset: Offset(0, responsivePadding(2)),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(
+                                    responsivePadding(6),
                                   ),
-                                ],
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black12,
+                                      blurRadius: responsivePadding(4),
+                                      offset: Offset(0, responsivePadding(2)),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: responsiveWidth(200),
+                                      child: Text(
+                                        'Project No.',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blueGrey,
+                                          fontSize: responsiveFontSize(5),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: responsiveWidth(300),
+                                      child: Text(
+                                        'Project Title',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blueGrey,
+                                          fontSize: responsiveFontSize(5),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: responsiveWidth(150),
+                                      child: Text(
+                                        'Team Leader',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blueGrey,
+                                          fontSize: responsiveFontSize(5),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: responsiveWidth(180),
+                                      child: Text(
+                                        'Executors',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blueGrey,
+                                          fontSize: responsiveFontSize(5),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: responsiveWidth(180),
+                                      child: Text(
+                                        'Reviewers',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blueGrey,
+                                          fontSize: responsiveFontSize(5),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: responsiveWidth(120),
+                                      child: SortableHeaderCell(
+                                        label: 'Defect Rate',
+                                        active: sortKey == 'defectRate',
+                                        ascending: asc,
+                                        onTap: () =>
+                                            ui.toggleSort('defectRate'),
+                                        fontSize: responsiveFontSize(5),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: responsiveWidth(120),
+                                      child: SortableHeaderCell(
+                                        label: 'Started',
+                                        active: sortKey == 'started',
+                                        ascending: asc,
+                                        onTap: () => ui.toggleSort('started'),
+                                        fontSize: responsiveFontSize(5),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: responsiveWidth(120),
+                                      child: SortableHeaderCell(
+                                        label: 'Priority',
+                                        active: sortKey == 'priority',
+                                        ascending: asc,
+                                        onTap: () => ui.toggleSort('priority'),
+                                        fontSize: responsiveFontSize(5),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: responsiveWidth(120),
+                                      child: SortableHeaderCell(
+                                        label: 'Status',
+                                        active: sortKey == 'status',
+                                        ascending: asc,
+                                        onTap: () => ui.toggleSort('status'),
+                                        fontSize: responsiveFontSize(5),
+                                      ),
+                                    ),
+                                    // Executor column removed per requirement
+                                    // Actions column removed (moved to details page)
+                                  ],
+                                ),
                               ),
-                              child: Row(
-                                children: [
-                                  SizedBox(
-                                    width: responsiveWidth(200),
-                                    child: Text(
-                                      'Project No.',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.blueGrey,
-                                        fontSize: responsiveFontSize(5),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(300),
-                                    child: Text(
-                                      'Project Title',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.blueGrey,
-                                        fontSize: responsiveFontSize(5),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(150),
-                                    child: Text(
-                                      'Team Leader',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.blueGrey,
-                                        fontSize: responsiveFontSize(5),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(180),
-                                    child: Text(
-                                      'Executors',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.blueGrey,
-                                        fontSize: responsiveFontSize(5),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(180),
-                                    child: Text(
-                                      'Reviewers',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.blueGrey,
-                                        fontSize: responsiveFontSize(5),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(120),
-                                    child: SortableHeaderCell(
-                                      label: 'Defect Rate',
-                                      active: sortKey == 'defectRate',
-                                      ascending: asc,
-                                      onTap: () => ui.toggleSort('defectRate'),
-                                      fontSize: responsiveFontSize(5),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(120),
-                                    child: SortableHeaderCell(
-                                      label: 'Started',
-                                      active: sortKey == 'started',
-                                      ascending: asc,
-                                      onTap: () => ui.toggleSort('started'),
-                                      fontSize: responsiveFontSize(5),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(120),
-                                    child: SortableHeaderCell(
-                                      label: 'Priority',
-                                      active: sortKey == 'priority',
-                                      ascending: asc,
-                                      onTap: () => ui.toggleSort('priority'),
-                                      fontSize: responsiveFontSize(5),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(120),
-                                    child: SortableHeaderCell(
-                                      label: 'Status',
-                                      active: sortKey == 'status',
-                                      ascending: asc,
-                                      onTap: () => ui.toggleSort('status'),
-                                      fontSize: responsiveFontSize(5),
-                                    ),
-                                  ),
-                                  // Executor column removed per requirement
-                                  // Actions column removed (moved to details page)
-                                ],
+                              SizedBox(height: responsivePadding(8)),
+                              // Project rows
+                              ...projects.map(
+                                (proj) => _AdminProjectCard(
+                                  key: ValueKey(proj.id),
+                                  project: proj,
+                                  parentContext: context,
+                                ),
                               ),
-                            ),
-                            SizedBox(height: responsivePadding(8)),
-                            // Project rows
-                            ...projects.map(
-                              (proj) => _AdminProjectCard(
-                                key: ValueKey(proj.id),
-                                project: proj,
-                                parentContext: context,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 );
               }),
             ],

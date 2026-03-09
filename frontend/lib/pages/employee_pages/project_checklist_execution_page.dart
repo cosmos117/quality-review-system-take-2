@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../services/stage_service.dart';
 import '../../widgets/project_checklist_execution_widget.dart';
+import '../../components/shimmer_loading.dart';
 
 class ProjectChecklistExecutionPage extends StatefulWidget {
   final String projectId;
@@ -57,14 +58,14 @@ class _ProjectChecklistExecutionPageState
       // Otherwise, fetch stages and find matching phase
       final stageService = Get.find<StageService>();
       final stages = await stageService.listStages(widget.projectId);
-      
+
       // Extract phase number from stageName (e.g., "Phase 1" -> 1)
       final phaseMatch = RegExp(r'Phase (\d+)').firstMatch(widget.stageName);
       if (phaseMatch == null) {
         throw Exception('Could not parse phase from: ${widget.stageName}');
       }
       final phaseNum = int.parse(phaseMatch.group(1)!);
-      
+
       // Find stage for this phase
       final stage = stages.firstWhereOrNull((s) {
         final stageName = (s['stage_name'] ?? '').toString().toLowerCase();
@@ -102,41 +103,44 @@ class _ProjectChecklistExecutionPageState
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Padding(
+              padding: EdgeInsets.all(16),
+              child: SkeletonChecklistGroups(groupCount: 4),
+            )
           : _errorMessage != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.error_outline,
-                        size: 48,
-                        color: Colors.red.shade600,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _errorMessage!,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton(
-                        onPressed: () => Get.back(),
-                        child: const Text('Go Back'),
-                      ),
-                    ],
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 48,
+                    color: Colors.red.shade600,
                   ),
-                )
-              : _resolvedStageId != null
-                  ? ProjectChecklistExecutionWidget(
-                      projectId: widget.projectId,
-                      stageId: _resolvedStageId!,
-                      stageName: widget.stageName,
-                      executors: widget.executors,
-                      reviewers: widget.reviewers,
-                      leaders: widget.leaders,
-                    )
-                  : const Center(child: Text('Could not resolve stage')),
+                  const SizedBox(height: 16),
+                  Text(
+                    _errorMessage!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () => Get.back(),
+                    child: const Text('Go Back'),
+                  ),
+                ],
+              ),
+            )
+          : _resolvedStageId != null
+          ? ProjectChecklistExecutionWidget(
+              projectId: widget.projectId,
+              stageId: _resolvedStageId!,
+              stageName: widget.stageName,
+              executors: widget.executors,
+              reviewers: widget.reviewers,
+              leaders: widget.leaders,
+            )
+          : const Center(child: Text('Could not resolve stage')),
     );
   }
 }

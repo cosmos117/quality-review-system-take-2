@@ -430,7 +430,9 @@ class RoleColumn extends StatelessWidget {
                           children: [
                             if (role == 'executor')
                               _DefectChip(
-                                defectCount: q.defectCount,
+                                defectCount:
+                                    defectsByChecklist?[q.checklistId] ??
+                                    q.defectCount,
                                 checkpointCount: q.subQuestions.length,
                               ),
                             if (role == 'executor') const SizedBox(width: 12),
@@ -1190,10 +1192,7 @@ class _SubmitBar extends StatelessWidget {
               children: [
                 const Icon(Icons.check_circle, color: Colors.green, size: 18),
                 const SizedBox(width: 6),
-                Text(
-                  'Submitted${when != null ? ' â€¢ $when' : ''}',
-                  style: const TextStyle(color: Colors.green),
-                ),
+                const Text('Submitted', style: TextStyle(color: Colors.green)),
               ],
             )
           else
@@ -1525,10 +1524,12 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       final result = await FilePicker.platform.pickFiles(
         allowMultiple: true,
         type: FileType.image,
+        withData: true,
       );
       if (result != null && result.files.isNotEmpty) {
         // Upload each selected image to backend GridFS, associated by questionId and role
         final uploaded = <Map<String, dynamic>>[];
+        int failedCount = 0;
         for (final f in result.files) {
           if (f.bytes == null) continue;
           try {
@@ -1550,14 +1551,35 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                 'fileId': data['fileId'],
                 'filename': data['filename'],
               });
+            } else {
+              failedCount++;
             }
-          } catch (_) {}
+          } catch (_) {
+            failedCount++;
+          }
         }
-        setState(() => _images = [..._images, ...uploaded]);
-        await _updateAnswer();
+        if (uploaded.isNotEmpty) {
+          setState(() => _images = [..._images, ...uploaded]);
+          await _updateAnswer();
+        }
+        if (failedCount > 0 && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$failedCount image(s) failed to upload'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
-      // Silently handle image picker errors
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to pick images'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

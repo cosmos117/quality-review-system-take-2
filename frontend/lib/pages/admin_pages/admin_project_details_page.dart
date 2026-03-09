@@ -12,6 +12,7 @@ import 'package:quality_review/services/project_service.dart';
 import 'package:quality_review/services/role_service.dart';
 import '../../models/project.dart';
 import '../../widgets/phase_overview_widget.dart';
+import '../../components/shimmer_loading.dart';
 
 class AdminProjectDetailsPage extends StatefulWidget {
   final Project project;
@@ -143,7 +144,19 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ShimmerLoading(child: SkeletonBox(width: 180, height: 22)),
+                  SizedBox(height: 16),
+                  SkeletonMemberCards(),
+                  SizedBox(height: 24),
+                  SkeletonPhaseOverview(),
+                ],
+              ),
+            )
           : Obx(
               () => SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
@@ -230,11 +243,9 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
                     ),
                     const SizedBox(height: 12),
                     _loadingAssignments
-                        ? const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(24.0),
-                              child: CircularProgressIndicator(),
-                            ),
+                        ? const Padding(
+                            padding: EdgeInsets.all(24.0),
+                            child: SkeletonMemberCards(),
                           )
                         : _AssignedTeamGrid(
                             leaders: _teamLeaders,

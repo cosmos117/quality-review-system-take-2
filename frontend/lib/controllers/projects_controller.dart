@@ -27,6 +27,9 @@ class ProjectsController extends GetxController {
   final RxBool isLoading = false.obs;
   final RxString errorMessage = ''.obs;
 
+  /// True when a background refresh is running but stale data is already visible.
+  final RxBool isRefreshing = false.obs;
+
   /// Reactive cache: projectId → membership names (team leaders, executors, reviewers).
   /// Dashboard cards observe this so they update instantly when memberships change.
   final membershipCache = <String, ProjectMembershipCache>{}.obs;
@@ -195,7 +198,16 @@ class ProjectsController extends GetxController {
 
   Future<void> refreshProjects({bool forceRefresh = false}) async {
     try {
-      isLoading.value = true;
+      // Only show full loading spinner on initial load (empty list).
+      // For subsequent refreshes, show a lightweight indicator so stale
+      // data remains visible while fresh data loads in the background.
+      final isFirstLoad = projects.isEmpty;
+      if (isFirstLoad) {
+        isLoading.value = true;
+      } else {
+        isRefreshing.value = true;
+      }
+
       final projectsList = await _service.getAll(forceRefresh: forceRefresh);
       projects.assignAll(projectsList.map(_normalize));
       // Hydrate assignment membership data after loading projects
@@ -204,6 +216,7 @@ class ProjectsController extends GetxController {
       errorMessage.value = e.toString();
     } finally {
       isLoading.value = false;
+      isRefreshing.value = false;
     }
   }
 
@@ -212,15 +225,23 @@ class ProjectsController extends GetxController {
   /// The global polling stream continues to run so the Dashboard always shows all projects.
   Future<void> loadUserProjects(String userId) async {
     try {
-      isLoading.value = true;
+      // Only block UI on first load; use lightweight refresh for subsequent loads
+      final isFirstLoad = userProjects.isEmpty;
+      if (isFirstLoad) {
+        isLoading.value = true;
+      } else {
+        isRefreshing.value = true;
+      }
       errorMessage.value = '';
       final projectsList = await _service.getForUser(userId);
       userProjects.assignAll(projectsList.map(_normalize));
       isLoading.value = false;
+      isRefreshing.value = false;
       // No hydration needed - data already included from backend
     } catch (e) {
       errorMessage.value = e.toString();
       isLoading.value = false;
+      isRefreshing.value = false;
       rethrow;
     }
   }

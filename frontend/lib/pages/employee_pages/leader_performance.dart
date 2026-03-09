@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import '../../models/project.dart';
 import '../../controllers/projects_controller.dart';
 import '../../controllers/auth_controller.dart';
+import '../../components/shimmer_loading.dart';
 import 'my_project_detail_page.dart';
 
 class LeaderPerformance extends StatefulWidget {
@@ -361,11 +362,9 @@ class _LeaderPerformanceState extends State<LeaderPerformance> {
 
               // Projects Table
               _isInitialLoad
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(32.0),
-                        child: CircularProgressIndicator(),
-                      ),
+                  ? const Padding(
+                      padding: EdgeInsets.all(32.0),
+                      child: SkeletonTable(rowCount: 5, columns: 6),
                     )
                   : Builder(
                       builder: (context) {

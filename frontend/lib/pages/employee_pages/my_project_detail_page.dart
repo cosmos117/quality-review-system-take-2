@@ -9,6 +9,7 @@ import '../../controllers/my_project_detail_controller.dart';
 import '../../services/template_service.dart';
 import '../../services/project_service.dart';
 import '../../widgets/phase_overview_widget.dart';
+import '../../components/shimmer_loading.dart';
 
 class MyProjectDetailPage extends GetView<MyProjectDetailController> {
   final Project project;
@@ -27,8 +28,7 @@ class MyProjectDetailPage extends GetView<MyProjectDetailController> {
         final latestProject = await projectService.getById(project.id);
         controller.project.value = latestProject;
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   @override
@@ -153,11 +153,9 @@ class MyProjectDetailPage extends GetView<MyProjectDetailController> {
             // Loading state vs assigned members section
             Obx(
               () => c.isLoadingAssignments.value
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(32.0),
-                        child: CircularProgressIndicator(),
-                      ),
+                  ? const Padding(
+                      padding: EdgeInsets.all(32.0),
+                      child: SkeletonMemberCards(),
                     )
                   : _AssignedEmployeesSection(),
             ),

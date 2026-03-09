@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../components/shimmer_loading.dart';
 import '../../controllers/projects_controller.dart';
 import '../../models/team_member.dart';
 import '../../models/project.dart';
@@ -130,7 +131,10 @@ class _EmployeeProjectsPageState extends State<EmployeeProjectsPage> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Padding(
+              padding: EdgeInsets.all(24.0),
+              child: SkeletonTable(rowCount: 5, columns: 5),
+            )
           : LayoutBuilder(
               builder: (context, constraints) {
                 final isWide = constraints.maxWidth >= 900;

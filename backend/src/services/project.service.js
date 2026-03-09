@@ -11,7 +11,13 @@ import ChecklistTransaction from "../models/checklistTransaction.models.js";
 import { deleteImagesByFileIds } from "../gridfs.js";
 import { parsePagination, paginatedResponse } from "../utils/paginate.js";
 import { ApiError } from "../utils/ApiError.js";
-import { getOrSet, keys, TTL, invalidateProjects, invalidateStages } from "../utils/cache.js";
+import {
+  getOrSet,
+  keys,
+  TTL,
+  invalidateProjects,
+  invalidateStages,
+} from "../utils/cache.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -20,10 +26,15 @@ async function syncCheckpointsWithTemplate(projectId) {
     const template = await Template.findOne().lean();
     if (!template) return;
 
-    const stages = await Stage.find({ project_id: projectId }, "_id stage_name").lean();
+    const stages = await Stage.find(
+      { project_id: projectId },
+      "_id stage_name",
+    ).lean();
 
     const deriveStageKeyFromName = (stageName) => {
-      const match = stageName.toLowerCase().match(/(?:phase|stage)\s*(\d{1,2})/);
+      const match = stageName
+        .toLowerCase()
+        .match(/(?:phase|stage)\s*(\d{1,2})/);
       return match ? `stage${parseInt(match[1])}` : null;
     };
 
@@ -34,7 +45,10 @@ async function syncCheckpointsWithTemplate(projectId) {
       if (!templateStageKey) continue;
 
       const templateChecklists = template[templateStageKey] || [];
-      const checklists = await Checklist.find({ stage_id: stage._id }, "_id checklist_name checkpoints").lean();
+      const checklists = await Checklist.find(
+        { stage_id: stage._id },
+        "_id checklist_name checkpoints",
+      ).lean();
 
       for (const checklist of checklists) {
         const templateChecklist = templateChecklists.find(
@@ -73,7 +87,10 @@ async function createStagesAndChecklistsFromTemplate(projectId) {
 
     const stageKeys = Object.keys(template)
       .filter((key) => /^stage\d{1,2}$/.test(key))
-      .sort((a, b) => parseInt(a.replace("stage", "")) - parseInt(b.replace("stage", "")));
+      .sort(
+        (a, b) =>
+          parseInt(a.replace("stage", "")) - parseInt(b.replace("stage", "")),
+      );
 
     const stageNames = template.stageNames || {};
 
@@ -127,27 +144,32 @@ async function createStagesAndChecklistsFromTemplate(projectId) {
 export async function getAllProjects(query) {
   const { page, limit, skip } = parsePagination(query);
   const queryStr = `p${page}_l${limit}`;
-  return getOrSet(keys.allProjects(queryStr), async () => {
-    const filter = {};
-    const total = await Project.countDocuments(filter);
+  return getOrSet(
+    keys.allProjects(queryStr),
+    async () => {
+      const filter = {};
+      const total = await Project.countDocuments(filter);
 
-    let q = Project.find(filter)
-      .populate("created_by", "name email")
-      .sort({ createdAt: -1 })
-      .lean();
+      let q = Project.find(filter)
+        .populate("created_by", "name email")
+        .sort({ createdAt: -1 })
+        .lean();
 
-    if (limit) q = q.skip(skip).limit(limit);
+      if (limit) q = q.skip(skip).limit(limit);
 
-    const projects = await q;
-    return paginatedResponse(projects, total, { page, limit });
-  }, TTL.PROJECTS);
+      const projects = await q;
+      return paginatedResponse(projects, total, { page, limit });
+    },
+    TTL.PROJECTS,
+  );
 }
 
 export async function getProjectsForUser(userId) {
   const memberships = await ProjectMembership.find({ user_id: userId })
     .populate({
       path: "project_id",
-      select: "project_name project_no status priority start_date end_date created_by isReviewApplicable reviewApplicableRemark createdAt",
+      select:
+        "project_name project_no status priority start_date end_date created_by isReviewApplicable reviewApplicableRemark overallDefectRate createdAt",
       populate: { path: "created_by", select: "name email" },
     })
     .populate("role", "role_name")
@@ -184,17 +206,25 @@ export async function getProjectsForUser(userId) {
 }
 
 export async function getProjectById(id) {
-  return getOrSet(keys.projectById(id), async () => {
-    const project = await Project.findById(id).populate("created_by", "name email").lean();
-    if (!project) throw new ApiError(404, "Project not found");
-    return project;
-  }, TTL.PROJECT_BY_ID);
+  return getOrSet(
+    keys.projectById(id),
+    async () => {
+      const project = await Project.findById(id)
+        .populate("created_by", "name email")
+        .lean();
+      if (!project) throw new ApiError(404, "Project not found");
+      return project;
+    },
+    TTL.PROJECT_BY_ID,
+  );
 }
 
 export async function createProject(data) {
   const project = await Project.create(data);
   invalidateProjects();
-  return Project.findById(project._id).populate("created_by", "name email").lean();
+  return Project.findById(project._id)
+    .populate("created_by", "name email")
+    .lean();
 }
 
 export async function updateProject(projectId, data, requestingUserId) {
@@ -203,9 +233,16 @@ export async function updateProject(projectId, data, requestingUserId) {
 
   const prevStatus = existing.status;
   const {
-    project_no, internal_order_no, project_name, description,
-    status, priority, start_date, end_date,
-    isReviewApplicable, reviewApplicableRemark,
+    project_no,
+    internal_order_no,
+    project_name,
+    description,
+    status,
+    priority,
+    start_date,
+    end_date,
+    isReviewApplicable,
+    reviewApplicableRemark,
   } = data;
 
   const requestedStatus = typeof status === "string" ? status : existing.status;
@@ -213,8 +250,11 @@ export async function updateProject(projectId, data, requestingUserId) {
     const assigned = await ProjectMembership.findOne({
       project_id: existing._id,
       user_id: requestingUserId,
-    }).select("_id").lean();
-    if (!assigned) throw new ApiError(403, "Only assigned users can start this project");
+    })
+      .select("_id")
+      .lean();
+    if (!assigned)
+      throw new ApiError(403, "Only assigned users can start this project");
   }
 
   existing.project_no = project_no ?? existing.project_no;
@@ -227,16 +267,23 @@ export async function updateProject(projectId, data, requestingUserId) {
   if (end_date) existing.end_date = end_date;
   if (typeof isReviewApplicable === "string" || isReviewApplicable === null)
     existing.isReviewApplicable = isReviewApplicable;
-  if (typeof reviewApplicableRemark === "string" || reviewApplicableRemark === null)
+  if (
+    typeof reviewApplicableRemark === "string" ||
+    reviewApplicableRemark === null
+  )
     existing.reviewApplicableRemark = reviewApplicableRemark;
 
   await existing.save();
   invalidateProjects();
 
-  const project = await Project.findById(existing._id).populate("created_by", "name email").lean();
+  const project = await Project.findById(existing._id)
+    .populate("created_by", "name email")
+    .lean();
 
   if (prevStatus === "pending" && existing.status === "in_progress") {
-    const existingStagesCount = await Stage.countDocuments({ project_id: existing._id });
+    const existingStagesCount = await Stage.countDocuments({
+      project_id: existing._id,
+    });
     if (existingStagesCount === 0) {
       await createStagesAndChecklistsFromTemplate(existing._id);
     }
@@ -250,17 +297,23 @@ export async function syncProjectCheckpointCategories(projectId) {
 }
 
 export async function getProjectStages(projectId) {
-  return getOrSet(keys.projectStages(projectId), async () => {
-    const stages = await Stage.find({ project_id: projectId }).sort({ createdAt: 1 }).lean();
-    return stages.map((stage) => ({
-      _id: stage._id,
-      stage_name: stage.stage_name,
-      stage_key: stage.stage_key,
-      status: stage.status,
-      loopback_count: stage.loopback_count || 0,
-      conflict_count: stage.conflict_count || 0,
-    }));
-  }, TTL.PROJECT_STAGES);
+  return getOrSet(
+    keys.projectStages(projectId),
+    async () => {
+      const stages = await Stage.find({ project_id: projectId })
+        .sort({ createdAt: 1 })
+        .lean();
+      return stages.map((stage) => ({
+        _id: stage._id,
+        stage_name: stage.stage_name,
+        stage_key: stage.stage_key,
+        status: stage.status,
+        loopback_count: stage.loopback_count || 0,
+        conflict_count: stage.conflict_count || 0,
+      }));
+    },
+    TTL.PROJECT_STAGES,
+  );
 }
 
 export async function deleteProject(projectId) {
@@ -270,13 +323,20 @@ export async function deleteProject(projectId) {
   const deletionStats = {};
 
   // Parallelize independent delete operations
-  const [deletedMemberships, deletedAnswers, deletedApprovals, projectChecklists] =
-    await Promise.all([
-      ProjectMembership.deleteMany({ project_id: projectId }),
-      ChecklistAnswer.deleteMany({ project_id: projectId }),
-      ChecklistApproval.deleteMany({ project_id: projectId }),
-      ProjectChecklist.find({ projectId }, "groups.questions.executorImages groups.questions.reviewerImages groups.sections.questions.executorImages groups.sections.questions.reviewerImages iterations.groups.questions.executorImages iterations.groups.questions.reviewerImages iterations.groups.sections.questions.executorImages iterations.groups.sections.questions.reviewerImages").lean(),
-    ]);
+  const [
+    deletedMemberships,
+    deletedAnswers,
+    deletedApprovals,
+    projectChecklists,
+  ] = await Promise.all([
+    ProjectMembership.deleteMany({ project_id: projectId }),
+    ChecklistAnswer.deleteMany({ project_id: projectId }),
+    ChecklistApproval.deleteMany({ project_id: projectId }),
+    ProjectChecklist.find(
+      { projectId },
+      "groups.questions.executorImages groups.questions.reviewerImages groups.sections.questions.executorImages groups.sections.questions.reviewerImages iterations.groups.questions.executorImages iterations.groups.questions.reviewerImages iterations.groups.sections.questions.executorImages iterations.groups.sections.questions.reviewerImages",
+    ).lean(),
+  ]);
 
   deletionStats.memberships = deletedMemberships.deletedCount;
   deletionStats.checklistAnswers = deletedAnswers.deletedCount;
@@ -288,26 +348,42 @@ export async function deleteProject(projectId) {
     for (const checklist of projectChecklists) {
       for (const group of checklist.groups || []) {
         for (const question of group.questions || []) {
-          allFileIds.push(...(question.executorImages?.map((img) => img.fileId) || []));
-          allFileIds.push(...(question.reviewerImages?.map((img) => img.fileId) || []));
+          allFileIds.push(
+            ...(question.executorImages?.map((img) => img.fileId) || []),
+          );
+          allFileIds.push(
+            ...(question.reviewerImages?.map((img) => img.fileId) || []),
+          );
         }
         for (const section of group.sections || []) {
           for (const question of section.questions || []) {
-            allFileIds.push(...(question.executorImages?.map((img) => img.fileId) || []));
-            allFileIds.push(...(question.reviewerImages?.map((img) => img.fileId) || []));
+            allFileIds.push(
+              ...(question.executorImages?.map((img) => img.fileId) || []),
+            );
+            allFileIds.push(
+              ...(question.reviewerImages?.map((img) => img.fileId) || []),
+            );
           }
         }
       }
       for (const iteration of checklist.iterations || []) {
         for (const group of iteration.groups || []) {
           for (const question of group.questions || []) {
-            allFileIds.push(...(question.executorImages?.map((img) => img.fileId) || []));
-            allFileIds.push(...(question.reviewerImages?.map((img) => img.fileId) || []));
+            allFileIds.push(
+              ...(question.executorImages?.map((img) => img.fileId) || []),
+            );
+            allFileIds.push(
+              ...(question.reviewerImages?.map((img) => img.fileId) || []),
+            );
           }
           for (const section of group.sections || []) {
             for (const question of section.questions || []) {
-              allFileIds.push(...(question.executorImages?.map((img) => img.fileId) || []));
-              allFileIds.push(...(question.reviewerImages?.map((img) => img.fileId) || []));
+              allFileIds.push(
+                ...(question.executorImages?.map((img) => img.fileId) || []),
+              );
+              allFileIds.push(
+                ...(question.reviewerImages?.map((img) => img.fileId) || []),
+              );
             }
           }
         }
@@ -323,24 +399,33 @@ export async function deleteProject(projectId) {
     deletionStats.imagesDeleteError = imageError.message;
   }
 
-  const deletedProjectChecklists = await ProjectChecklist.deleteMany({ projectId });
+  const deletedProjectChecklists = await ProjectChecklist.deleteMany({
+    projectId,
+  });
   deletionStats.projectChecklists = deletedProjectChecklists.deletedCount;
 
   const stages = await Stage.find({ project_id: projectId }, "_id").lean();
   const stageIds = stages.map((s) => s._id);
   deletionStats.stages = stages.length;
 
-  const checklists = await Checklist.find({ stage_id: { $in: stageIds } }, "_id").lean();
+  const checklists = await Checklist.find(
+    { stage_id: { $in: stageIds } },
+    "_id",
+  ).lean();
   const checklistIds = checklists.map((c) => c._id);
 
   // Parallelize independent delete operations
-  const [deletedCheckpoints, deletedTransactions, deletedChecklists, deletedStages] =
-    await Promise.all([
-      Checkpoint.deleteMany({ checklistId: { $in: checklistIds } }),
-      ChecklistTransaction.deleteMany({ checklist_id: { $in: checklistIds } }),
-      Checklist.deleteMany({ stage_id: { $in: stageIds } }),
-      Stage.deleteMany({ project_id: projectId }),
-    ]);
+  const [
+    deletedCheckpoints,
+    deletedTransactions,
+    deletedChecklists,
+    deletedStages,
+  ] = await Promise.all([
+    Checkpoint.deleteMany({ checklistId: { $in: checklistIds } }),
+    ChecklistTransaction.deleteMany({ checklist_id: { $in: checklistIds } }),
+    Checklist.deleteMany({ stage_id: { $in: stageIds } }),
+    Stage.deleteMany({ project_id: projectId }),
+  ]);
 
   deletionStats.checkpoints = deletedCheckpoints.deletedCount;
   deletionStats.checklistTransactions = deletedTransactions.deletedCount;

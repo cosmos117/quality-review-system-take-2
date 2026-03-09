@@ -2,6 +2,7 @@
 import 'package:get/get.dart';
 import '../../models/template_models.dart';
 import '../../controllers/admin_checklist_template_controller.dart';
+import '../../components/shimmer_loading.dart';
 
 class AdminChecklistTemplatePage
     extends GetView<AdminChecklistTemplateController> {
@@ -17,13 +18,16 @@ class AdminChecklistTemplatePage
       body: SafeArea(
         child: Obx(() {
           if (c.isLoading.value) {
-            return const Center(
+            return Padding(
+              padding: const EdgeInsets.all(24),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Loading template...'),
+                  const ShimmerLoading(
+                    child: SkeletonBox(width: 200, height: 24),
+                  ),
+                  const SizedBox(height: 16),
+                  const SkeletonChecklistGroups(groupCount: 5),
                 ],
               ),
             );

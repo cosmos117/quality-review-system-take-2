@@ -4,6 +4,7 @@ import '../../controllers/projects_controller.dart';
 import '../../models/team_member.dart';
 import '../../models/project.dart';
 import '../../services/project_membership_service.dart';
+import '../../components/shimmer_loading.dart';
 
 class EmployeePerformanceDetailPage extends StatefulWidget {
   final TeamMember member;
@@ -174,7 +175,10 @@ class _EmployeePerformanceDetailPageState
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Padding(
+              padding: EdgeInsets.all(24),
+              child: SkeletonTable(rowCount: 5, columns: 5),
+            )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(

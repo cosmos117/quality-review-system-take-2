@@ -8,6 +8,7 @@ import '../../controllers/export_controller.dart';
 import '../../components/project_statistics_card.dart';
 import '../../components/employee_performance_card.dart';
 import '../../components/sortable_header_cell.dart';
+import '../../components/shimmer_loading.dart';
 
 class EmployeeDashboard extends StatefulWidget {
   const EmployeeDashboard({super.key});
@@ -326,7 +327,21 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
               ),
               SizedBox(height: responsivePadding(16)),
               // Tabular layout using ListView + Rows
+              // Skeleton loading for initial load
               Obx(() {
+                if (_ctrl.isLoading.value && _ctrl.projects.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: SkeletonTable(rowCount: 6, columns: 8),
+                  );
+                }
+                return const SizedBox.shrink();
+              }),
+              Obx(() {
+                if (_ctrl.isLoading.value && _ctrl.projects.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                final refreshing = _ctrl.isRefreshing.value;
                 final allProjects = _visibleProjects;
                 final totalProjects = allProjects.length;
                 final totalPages = (totalProjects / _itemsPerPage).ceil();
@@ -350,166 +365,169 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                   endIndex,
                 );
 
-                return Column(
-                  children: [
-                    // Pagination controls at top left
-                    _buildPaginationControls(
-                      totalProjects,
-                      startIndex,
-                      endIndex,
-                      totalPages,
-                      context,
-                    ),
-                    SizedBox(height: responsivePadding(12)),
-                    // Single horizontal scrollbar wrapping the entire table
-                    Scrollbar(
-                      controller: _horizontalScrollController,
-                      thumbVisibility: false,
-                      thickness: responsivePadding(10.0),
-                      child: SingleChildScrollView(
+                return RefreshingOverlay(
+                  isRefreshing: refreshing,
+                  child: Column(
+                    children: [
+                      // Pagination controls at top left
+                      _buildPaginationControls(
+                        totalProjects,
+                        startIndex,
+                        endIndex,
+                        totalPages,
+                        context,
+                      ),
+                      SizedBox(height: responsivePadding(12)),
+                      // Single horizontal scrollbar wrapping the entire table
+                      Scrollbar(
                         controller: _horizontalScrollController,
-                        scrollDirection: Axis.horizontal,
-                        child: Column(
-                          children: [
-                            // Header row
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                vertical: responsivePadding(12),
-                                horizontal: responsivePadding(16),
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(
-                                  responsivePadding(6),
+                        thumbVisibility: false,
+                        thickness: responsivePadding(10.0),
+                        child: SingleChildScrollView(
+                          controller: _horizontalScrollController,
+                          scrollDirection: Axis.horizontal,
+                          child: Column(
+                            children: [
+                              // Header row
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                  vertical: responsivePadding(12),
+                                  horizontal: responsivePadding(16),
                                 ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black12,
-                                    blurRadius: responsivePadding(4),
-                                    offset: Offset(0, responsivePadding(2)),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(
+                                    responsivePadding(6),
                                   ),
-                                ],
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black12,
+                                      blurRadius: responsivePadding(4),
+                                      offset: Offset(0, responsivePadding(2)),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: responsiveWidth(200),
+                                      child: Text(
+                                        'Project No.',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blueGrey,
+                                          fontSize: responsiveFontSize(5),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: responsiveWidth(300),
+                                      child: Text(
+                                        'Project Title',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blueGrey,
+                                          fontSize: responsiveFontSize(5),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: responsiveWidth(150),
+                                      child: Text(
+                                        'Team Leader',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blueGrey,
+                                          fontSize: responsiveFontSize(5),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: responsiveWidth(180),
+                                      child: Text(
+                                        'Executors',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blueGrey,
+                                          fontSize: responsiveFontSize(5),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: responsiveWidth(180),
+                                      child: Text(
+                                        'Reviewers',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blueGrey,
+                                          fontSize: responsiveFontSize(5),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: responsiveWidth(120),
+                                      child: SortableHeaderCell(
+                                        label: 'Defect Rate',
+                                        active: _sortKey == 'defectRate',
+                                        ascending: _ascending,
+                                        onTap: () => _toggleSort('defectRate'),
+                                        fontSize: responsiveFontSize(5),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: responsiveWidth(120),
+                                      child: SortableHeaderCell(
+                                        label: 'Started',
+                                        active: _sortKey == 'started',
+                                        ascending: _ascending,
+                                        onTap: () => _toggleSort('started'),
+                                        fontSize: responsiveFontSize(5),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: responsiveWidth(120),
+                                      child: SortableHeaderCell(
+                                        label: 'Priority',
+                                        active: _sortKey == 'priority',
+                                        ascending: _ascending,
+                                        onTap: () => _toggleSort('priority'),
+                                        fontSize: responsiveFontSize(5),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: responsiveWidth(120),
+                                      child: SortableHeaderCell(
+                                        label: 'Status',
+                                        active: _sortKey == 'status',
+                                        ascending: _ascending,
+                                        onTap: () => _toggleSort('status'),
+                                        fontSize: responsiveFontSize(5),
+                                      ),
+                                    ),
+                                    // Actions column removed (moved to details page)
+                                  ],
+                                ),
                               ),
-                              child: Row(
-                                children: [
-                                  SizedBox(
-                                    width: responsiveWidth(200),
-                                    child: Text(
-                                      'Project No.',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.blueGrey,
-                                        fontSize: responsiveFontSize(5),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(300),
-                                    child: Text(
-                                      'Project Title',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.blueGrey,
-                                        fontSize: responsiveFontSize(5),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(150),
-                                    child: Text(
-                                      'Team Leader',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.blueGrey,
-                                        fontSize: responsiveFontSize(5),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(180),
-                                    child: Text(
-                                      'Executors',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.blueGrey,
-                                        fontSize: responsiveFontSize(5),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(180),
-                                    child: Text(
-                                      'Reviewers',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.blueGrey,
-                                        fontSize: responsiveFontSize(5),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(120),
-                                    child: SortableHeaderCell(
-                                      label: 'Defect Rate',
-                                      active: _sortKey == 'defectRate',
-                                      ascending: _ascending,
-                                      onTap: () => _toggleSort('defectRate'),
-                                      fontSize: responsiveFontSize(5),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(120),
-                                    child: SortableHeaderCell(
-                                      label: 'Started',
-                                      active: _sortKey == 'started',
-                                      ascending: _ascending,
-                                      onTap: () => _toggleSort('started'),
-                                      fontSize: responsiveFontSize(5),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(120),
-                                    child: SortableHeaderCell(
-                                      label: 'Priority',
-                                      active: _sortKey == 'priority',
-                                      ascending: _ascending,
-                                      onTap: () => _toggleSort('priority'),
-                                      fontSize: responsiveFontSize(5),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: responsiveWidth(120),
-                                    child: SortableHeaderCell(
-                                      label: 'Status',
-                                      active: _sortKey == 'status',
-                                      ascending: _ascending,
-                                      onTap: () => _toggleSort('status'),
-                                      fontSize: responsiveFontSize(5),
-                                    ),
-                                  ),
-                                  // Actions column removed (moved to details page)
-                                ],
+                              SizedBox(height: responsivePadding(8)),
+                              // Project rows
+                              ...projects.map(
+                                (proj) => _EmployeeProjectCard(
+                                  key: ValueKey(proj.id),
+                                  project: proj,
+                                  context: context,
+                                ),
                               ),
-                            ),
-                            SizedBox(height: responsivePadding(8)),
-                            // Project rows
-                            ...projects.map(
-                              (proj) => _EmployeeProjectCard(
-                                key: ValueKey(proj.id),
-                                project: proj,
-                                context: context,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 );
               }),
             ],

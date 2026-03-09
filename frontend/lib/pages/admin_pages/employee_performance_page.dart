@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../components/shimmer_loading.dart';
 import '../../controllers/team_controller.dart';
 import '../../controllers/projects_controller.dart';
 import '../../models/team_member.dart';
@@ -39,7 +40,6 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
       // Load all projects
       await projectsCtrl.refreshProjects();
 
-
       // Calculate and store employee stats using project memberships
       final stats = <String, Map<String, int>>{};
 
@@ -78,8 +78,7 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
             'inProgress': inProgress,
           };
 
-          if (allProjects.isNotEmpty) {
-          }
+          if (allProjects.isNotEmpty) {}
         } catch (employeeError) {
           // Set empty stats for this employee
           stats[employee.id] = {'total': 0, 'completed': 0, 'inProgress': 0};
@@ -91,7 +90,6 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
           _employeeStats = stats;
         });
       }
-
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -114,10 +112,16 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
 
     return Scaffold(
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Padding(
+              padding: EdgeInsets.all(24.0),
+              child: SkeletonTable(rowCount: 5, columns: 5),
+            )
           : Obx(() {
               if (teamCtrl.isLoading.value) {
-                return const Center(child: CircularProgressIndicator());
+                return const Padding(
+                  padding: EdgeInsets.all(24.0),
+                  child: SkeletonTable(rowCount: 5, columns: 5),
+                );
               }
 
               final employees = teamCtrl.members

@@ -1,4 +1,6 @@
-﻿import 'package:get/get.dart';
+﻿import 'dart:async';
+
+import 'package:get/get.dart';
 import '../../services/http_client.dart';
 import '../../services/checklist_answer_service.dart';
 import '../../services/approval_service.dart';
@@ -16,8 +18,8 @@ class ChecklistController extends GetxService {
   // Loading state
   final _isLoading = <String, bool>{}.obs;
 
-  // Pending saves (debouncing)
-  final Map<String, Future<void>> _pendingSaves = {};
+  // Pending saves (debouncing) — use Timer so they are properly cancellable
+  final Map<String, Timer> _pendingSaves = {};
 
   // Removed stage/checklist caches - using direct checklist answers endpoints
 
@@ -101,12 +103,11 @@ class ChecklistController extends GetxService {
 
     // Debounce save to backend (wait for user to finish typing)
     final saveKey = '$projectId-$phase-$role';
-    _pendingSaves[saveKey]?.ignore(); // Cancel pending save if exists
-
-    _pendingSaves[saveKey] = Future.delayed(
-      const Duration(milliseconds: 500),
-      () => _saveToBackend(projectId, phase, role),
-    );
+    _pendingSaves[saveKey]?.cancel();
+    _pendingSaves[saveKey] = Timer(const Duration(milliseconds: 500), () {
+      _pendingSaves.remove(saveKey);
+      _saveToBackend(projectId, phase, role);
+    });
   }
 
   /// Save all answers for a role to backend
@@ -120,15 +121,19 @@ class ChecklistController extends GetxService {
         answers,
       );
       if (ok) {
-        // Editing clears submission status; update cache so UI enables resubmit
-        final proj = _submissionCache.putIfAbsent(projectId, () => {});
-        final phaseMap = proj.putIfAbsent(phase, () => {});
-        phaseMap[role] = {
-          'is_submitted': false,
-          'submitted_at': null,
-          'answer_count': answers.length,
-        };
-        _submissionCache.refresh();
+        // Only reset submission status if not currently submitted.
+        // This prevents a stale debounced save from overwriting a fresh submission.
+        final currentStatus = _submissionCache[projectId]?[phase]?[role];
+        if (currentStatus?['is_submitted'] != true) {
+          final proj = _submissionCache.putIfAbsent(projectId, () => {});
+          final phaseMap = proj.putIfAbsent(phase, () => {});
+          phaseMap[role] = {
+            'is_submitted': false,
+            'submitted_at': null,
+            'answer_count': answers.length,
+          };
+          _submissionCache.refresh();
+        }
       }
       return true;
     } catch (e) {
@@ -139,6 +144,11 @@ class ChecklistController extends GetxService {
   /// Submit checklist (mark as submitted on backend)
   Future<bool> submitChecklist(String projectId, int phase, String role) async {
     try {
+      // Cancel any pending debounced save so it cannot overwrite submission status
+      final saveKey = '$projectId-$phase-$role';
+      _pendingSaves[saveKey]?.cancel();
+      _pendingSaves.remove(saveKey);
+
       // First ensure all answers are saved
       await _saveToBackend(projectId, phase, role);
 
@@ -197,8 +207,7 @@ class ChecklistController extends GetxService {
 
       // Clear cache to reflect new active phase
       clearProjectCache(projectId);
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   /// Get submission info from cache
@@ -223,8 +232,7 @@ class ChecklistController extends GetxService {
       final phaseMap = proj.putIfAbsent(phase, () => {});
       phaseMap[role] = status;
       _submissionCache.refresh();
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   /// Derive submission status from existing checklist data
