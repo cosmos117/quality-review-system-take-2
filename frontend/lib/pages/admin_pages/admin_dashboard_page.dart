@@ -405,8 +405,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                     (screenWidth * 5 / 8 -
                                         responsivePadding(12) -
                                         responsivePadding(48) -
-                                        responsivePadding(16)) /
-                                    3,
+                                        responsivePadding(24)) /
+                                    4,
                                 child: Container(
                                   decoration: BoxDecoration(
                                     color: Colors.white,
@@ -425,25 +425,26 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                     horizontal: responsivePadding(8),
                                     vertical: responsivePadding(6),
                                   ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
+                                  child: Row(
                                     children: [
+                                      Expanded(
+                                        child: Text(
+                                          entry.key,
+                                          style: TextStyle(
+                                            fontSize: responsiveFontSize(6),
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.grey[800],
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      SizedBox(width: responsivePadding(4)),
                                       Text(
-                                        entry.key,
+                                        '${entry.value.toStringAsFixed(1)}%',
                                         style: TextStyle(
                                           fontSize: responsiveFontSize(6),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      SizedBox(height: responsivePadding(2)),
-                                      Text(
-                                        'Defect Rate: ${entry.value.toStringAsFixed(1)}%',
-                                        style: TextStyle(
-                                          fontSize: responsiveFontSize(3),
-                                          color: Colors.grey[600],
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black87,
                                         ),
                                       ),
                                     ],
