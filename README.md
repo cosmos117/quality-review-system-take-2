@@ -4,7 +4,7 @@ A quality review and checklist management system with a Flutter frontend and Exp
 
 ---
 
-## Project Structure
+## Project Structuru
 
 ```
 /
