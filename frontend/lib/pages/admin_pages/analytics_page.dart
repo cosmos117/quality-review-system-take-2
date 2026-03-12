@@ -811,7 +811,7 @@ class _DefectDetailsTableState extends State<_DefectDetailsTable> {
                 },
                 onSubmitted: widget.ctrl.applySearch,
                 decoration: InputDecoration(
-                  hintText: 'Search projects, categories, remarks…',
+                  hintText: 'Search by Project No., Project Name, Team Leader…',
                   hintStyle: const TextStyle(fontSize: 13),
                   prefixIcon: const Icon(Icons.search, size: 18),
                   suffixIcon: _searchCtrl.text.isNotEmpty

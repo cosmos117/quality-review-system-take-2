@@ -312,10 +312,7 @@ export function computeAnalytics(summaryRows, detailRows, filters = {}) {
       (r) =>
         r.projectNumber.toLowerCase().includes(s) ||
         r.projectName.toLowerCase().includes(s) ||
-        r.teamLeader.toLowerCase().includes(s) ||
-        r.defectCategory.toLowerCase().includes(s) ||
-        r.defectSeverity.toLowerCase().includes(s) ||
-        r.reviewerRemark.toLowerCase().includes(s),
+        r.teamLeader.toLowerCase().includes(s),
     );
   }
 
