@@ -287,9 +287,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         _conflictCounters.clear();
         _conflictCounters.addAll(conflictCountersMap);
 
-        // Loopback counter is the same as conflict counter (tracks reviewer reverts)
-        _loopbackCounters.clear();
-        _loopbackCounters.addAll(conflictCountersMap);
+        // Loopback counters will be loaded separately from dedicated getRevertCount API
       });
 
       if (stages.isEmpty) {
@@ -558,6 +556,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
     // Step 5: Load answers and approval status in parallel
     try {
+      // Collect all futures including the actual revert count
+      final revertCountFuture = _approvalService
+          .getRevertCount(widget.projectId, phase, forceRefresh: true)
+          .catchError((_) => 0);
+
       await Future.wait([
         checklistCtrl.loadAnswers(widget.projectId, phase, 'executor'),
         checklistCtrl.loadAnswers(widget.projectId, phase, 'reviewer'),
@@ -568,15 +571,21 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
               if (mounted) _compareStatus = status;
             })
             .catchError((_) {}),
+        // Force refresh approval status to ensure we get latest state after executor resubmits
         _approvalService
-            .getStatus(widget.projectId, phase)
+            .getStatus(widget.projectId, phase, forceRefresh: true)
             .then((appr) {
               if (mounted) _approvalStatus = appr;
             })
             .catchError((_) {}),
-        _approvalService
-            .getRevertCount(widget.projectId, phase)
-            .catchError((_) => 0),
+        // Fetch revert count and update loopback counter
+        revertCountFuture.then((count) {
+          if (mounted) {
+            setState(() {
+              _loopbackCounters[phase] = count;
+            });
+          }
+        }),
       ]);
 
       final executorSheet = checklistCtrl.getRoleSheet(
@@ -994,10 +1003,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     bool allPhasesCompleted = false;
     try {
       // Fetch all phase statuses in parallel instead of sequential loop
+      // Force refresh to always get latest approval status
       final statusFutures = List.generate(
         _maxActualPhase,
         (i) => _approvalService
-            .getStatus(widget.projectId, i + 1)
+            .getStatus(widget.projectId, i + 1, forceRefresh: true)
             .catchError((_) => null),
       );
       final statuses = await Future.wait(statusFutures);
@@ -1031,7 +1041,15 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       }
       if (_selectedPhase < 1) _selectedPhase = 1;
     });
-    // Refresh approval/compare for the currently selected phase in parallel
+    // Refresh approval/compare for the currently selected phase in parallel with forced refresh
+    // Also load revert counts for all phases to keep loopback counters updated
+    final revertCountFutures = List.generate(
+      _maxActualPhase,
+      (i) => _approvalService
+          .getRevertCount(widget.projectId, i + 1, forceRefresh: true)
+          .catchError((_) => 0),
+    );
+
     await Future.wait([
       _approvalService
           .compare(widget.projectId, _selectedPhase)
@@ -1040,11 +1058,21 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           })
           .catchError((_) {}),
       _approvalService
-          .getStatus(widget.projectId, _selectedPhase)
+          .getStatus(widget.projectId, _selectedPhase, forceRefresh: true)
           .then((appr) {
             if (mounted) setState(() => _approvalStatus = appr);
           })
           .catchError((_) {}),
+      // Load all revert counts and update loopback counters
+      Future.wait(revertCountFutures).then((counts) {
+        if (mounted) {
+          setState(() {
+            for (int i = 0; i < counts.length; i++) {
+              _loopbackCounters[i + 1] = counts[i];
+            }
+          });
+        }
+      }),
     ]);
   }
 
