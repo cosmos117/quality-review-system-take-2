@@ -27,7 +27,7 @@ class AnalyticsController extends GetxController {
   // ── Pagination ────────────────────────────────────────────────────────────
   final currentPage = 1.obs;
   final totalRecords = 0.obs;
-  static const pageSize = 20;
+  static const pageSize = 10;
   final searchQuery = ''.obs;
 
   // ── Loading flags ─────────────────────────────────────────────────────────
@@ -67,6 +67,20 @@ class AnalyticsController extends GetxController {
       teamLeaders.value = results[0] as List<String>;
       defectCategories.value = results[1] as List<String>;
       projects.value = results[2] as List<AnalyticsProjectItem>;
+
+      // Reset selected values if they no longer exist
+      if (selectedTeamLeader.value != null &&
+          !teamLeaders.contains(selectedTeamLeader.value)) {
+        selectedTeamLeader.value = null;
+      }
+      if (selectedProject.value != null &&
+          !projects.any((p) => p.name == selectedProject.value)) {
+        selectedProject.value = null;
+      }
+      if (selectedDefectCategory.value != null &&
+          !defectCategories.contains(selectedDefectCategory.value)) {
+        selectedDefectCategory.value = null;
+      }
     } catch (_) {
       // Non-critical – keep empty lists
     } finally {
@@ -77,7 +91,12 @@ class AnalyticsController extends GetxController {
   // ── Data loading ──────────────────────────────────────────────────────────
 
   Future<void> loadAll() async {
-    await Future.wait([loadSummary(), loadCharts(), loadTable()]);
+    await Future.wait([
+      loadSummary(),
+      loadCharts(),
+      loadTable(),
+      _loadFilterOptions(),
+    ]);
   }
 
   Future<void> loadSummary() async {
@@ -102,9 +121,15 @@ class AnalyticsController extends GetxController {
     try {
       final results = await Future.wait([
         _service.getTopDefectCategories(
-            teamLeader: _tl, project: _proj, defectCategory: _cat),
+          teamLeader: _tl,
+          project: _proj,
+          defectCategory: _cat,
+        ),
         _service.getDefectSeverityDistribution(
-            teamLeader: _tl, project: _proj, defectCategory: _cat),
+          teamLeader: _tl,
+          project: _proj,
+          defectCategory: _cat,
+        ),
         _service.getDrByProject(teamLeader: _tl),
         _service.getDrByTeamLeader(),
       ]);

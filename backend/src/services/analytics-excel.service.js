@@ -19,6 +19,11 @@ import NodeCache from "node-cache";
 const _rawCache = new NodeCache({ stdTTL: 30, checkperiod: 10 });
 const RAW_CACHE_KEY = "analytics:raw";
 
+/** Clear the analytics cache so the next request fetches fresh data. */
+export function clearAnalyticsCache() {
+  _rawCache.del(RAW_CACHE_KEY);
+}
+
 // ─── Raw data types (JSDoc only, no TypeScript) ───────────────────────────────
 // summaryRow: { projectNumber, projectName, teamLeaders:string[], overallDR:number|null, status }
 // detailRow:  { projectNumber, projectName, teamLeader:string, phase:number,
@@ -112,7 +117,7 @@ export async function getRawAnalyticsData() {
       const pushQuestion = (question) => {
         const rawCatId = question.categoryId?.toString() ?? "";
         const defectCategory = rawCatId
-          ? categoryMap.get(rawCatId) ?? ""
+          ? (categoryMap.get(rawCatId) ?? "")
           : "";
 
         if (!defectCategory.trim()) return; // skip rows with no category (not defects)
@@ -150,7 +155,11 @@ function normStr(s) {
   return (s ?? "").toLowerCase().trim();
 }
 
-function filterRows(detailRows, summaryRows, { teamLeader, project, defectCategory }) {
+function filterRows(
+  detailRows,
+  summaryRows,
+  { teamLeader, project, defectCategory },
+) {
   let dr = detailRows;
   let sr = summaryRows;
 
@@ -217,7 +226,9 @@ export function computeAnalytics(summaryRows, detailRows, filters = {}) {
   );
 
   // ── KPI summary ─────────────────────────────────────────────────────────
-  const projectNames = new Set(filteredSummary.map((r) => r.projectName || r.projectNumber));
+  const projectNames = new Set(
+    filteredSummary.map((r) => r.projectName || r.projectNumber),
+  );
   const totalProjects = projectNames.size;
   const rates = filteredSummary
     .map((r) => r.overallDR)

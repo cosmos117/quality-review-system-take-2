@@ -18,6 +18,7 @@ import {
   invalidateProjects,
   invalidateStages,
 } from "../utils/cache.js";
+import { clearAnalyticsCache } from "./analytics-excel.service.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -435,6 +436,7 @@ export async function deleteProject(projectId) {
   await Project.findByIdAndDelete(projectId);
   invalidateProjects();
   invalidateStages(projectId);
+  clearAnalyticsCache();
 
   return deletionStats;
 }

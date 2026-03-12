@@ -242,10 +242,13 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         // Silently handle defect category loading errors
       }
 
-      // Step 1: Fetch stages
+      // Step 1: Fetch stages with force refresh to ensure latest data
       final stageService = Get.find<StageService>();
 
-      final stages = await stageService.listStages(widget.projectId);
+      final stages = await stageService.listStages(
+        widget.projectId,
+        forceRefresh: true,
+      );
 
       // Build stage map and discover maximum actual phase number
       // Also load conflict counters for all phases
@@ -1112,11 +1115,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       appBar: AppBar(
         title: Text(
           widget.projectTitle,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(color: Colors.white, fontSize: 18),
           overflow: TextOverflow.ellipsis,
         ),
         backgroundColor: Colors.blue,
@@ -1242,10 +1241,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
             tooltip: 'Reload checklist data',
             onPressed: _isLoadingData
                 ? null
-                : () {
+                : () async {
                     // Clear cache and reload
                     checklistCtrl.clearProjectCache(widget.projectId);
-                    _loadChecklistData();
+                    await _loadChecklistData();
                   },
           ),
         ],

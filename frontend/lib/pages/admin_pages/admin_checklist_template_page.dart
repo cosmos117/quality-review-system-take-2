@@ -61,14 +61,10 @@ class AdminChecklistTemplatePage
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
                 child: Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         'Checklist Template Management',
-                        style: TextStyle(
-                          fontSize: 34,
-                          fontWeight: FontWeight.w400,
-                          color: Color(0xFF9E9E9E),
-                        ),
+                        style: Theme.of(context).textTheme.headlineMedium,
                       ),
                     ),
                     ElevatedButton.icon(

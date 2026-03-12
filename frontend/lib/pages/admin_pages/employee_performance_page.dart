@@ -138,8 +138,7 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
                       children: [
                         Text(
                           'Employee Performance',
-                          style: Theme.of(context).textTheme.headlineMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
+                          style: Theme.of(context).textTheme.headlineMedium,
                         ),
                         const Spacer(),
                         IconButton(

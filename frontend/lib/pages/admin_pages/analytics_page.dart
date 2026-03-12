@@ -52,9 +52,19 @@ class AnalyticsPage extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
             color: Colors.white,
-            child: const Text(
-              'Analytics Dashboard',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            child: Row(
+              children: [
+                Text(
+                  'Analytics Dashboard',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'Refresh',
+                  onPressed: () => ctrl.loadAll(),
+                ),
+              ],
             ),
           ),
           const Divider(height: 1),
@@ -73,22 +83,32 @@ class AnalyticsPage extends StatelessWidget {
                   const SizedBox(height: 20),
 
                   // Row 2: Top defect categories + Severity distribution
-                  _ChartRow(
-                    left: _CardWrapper(
-                      title: 'Top Defect Categories',
-                      child: _TopDefectCategoriesChart(ctrl),
-                    ),
-                    right: _CardWrapper(
-                      title: 'Defect Severity Distribution',
-                      child: _SeverityPieChart(ctrl),
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: _CardWrapper(
+                          title: 'Top Defect Categories',
+                          child: _TopDefectCategoriesChart(ctrl),
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        flex: 2,
+                        child: _CardWrapper(
+                          title: 'Defect Severity Distribution',
+                          child: _SeverityPieChart(ctrl),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
 
                   // Row 3: DR by project + DR by team leader
                   _ChartRow(
                     left: _CardWrapper(
-                      title: 'Average Defect Rate by Project',
+                      title: 'Overall Defect Rate by Project',
                       child: _DrByProjectChart(ctrl),
                     ),
                     right: _CardWrapper(
@@ -202,23 +222,28 @@ class _FilterDropdown<T extends String> extends StatelessWidget {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
           value: value,
-          hint: Text(label,
-              style: const TextStyle(fontSize: 13, color: Colors.grey)),
+          hint: Text(
+            label,
+            style: const TextStyle(fontSize: 13, color: Colors.grey),
+          ),
           isDense: true,
           iconSize: 18,
           style: const TextStyle(fontSize: 13, color: Colors.black87),
           items: [
             DropdownMenuItem<T>(
               value: null,
-              child: Text('All $label',
-                  style: const TextStyle(fontSize: 13)),
+              child: Text('All $label', style: const TextStyle(fontSize: 13)),
             ),
-            ...items.map((v) => DropdownMenuItem<T>(
-                  value: v,
-                  child: Text(v,
-                      style: const TextStyle(fontSize: 13),
-                      overflow: TextOverflow.ellipsis),
-                )),
+            ...items.map(
+              (v) => DropdownMenuItem<T>(
+                value: v,
+                child: Text(
+                  v,
+                  style: const TextStyle(fontSize: 13),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
           ],
           onChanged: onChanged,
         ),
@@ -246,28 +271,31 @@ class _KpiRow extends StatelessWidget {
       return Row(
         children: [
           Expanded(
-              child: _KpiCard(
-            label: 'Total Projects',
-            value: s.totalProjects.toString(),
-            icon: Icons.folder_open,
-            color: _kBlue,
-          )),
+            child: _KpiCard(
+              label: 'Total Projects',
+              value: s.totalProjects.toString(),
+              icon: Icons.folder_open,
+              color: _kBlue,
+            ),
+          ),
           const SizedBox(width: 16),
           Expanded(
-              child: _KpiCard(
-            label: 'Average DR',
-            value: '${s.averageDefectRate.toStringAsFixed(2)}%',
-            icon: Icons.bar_chart,
-            color: _kOrange,
-          )),
+            child: _KpiCard(
+              label: 'Average DR',
+              value: '${s.averageDefectRate.toStringAsFixed(2)}%',
+              icon: Icons.bar_chart,
+              color: _kOrange,
+            ),
+          ),
           const SizedBox(width: 16),
           Expanded(
-              child: _KpiCard(
-            label: 'Max DR',
-            value: '${s.maxDefectRate.toStringAsFixed(2)}%',
-            icon: Icons.trending_up,
-            color: _kRed,
-          )),
+            child: _KpiCard(
+              label: 'Max DR',
+              value: '${s.maxDefectRate.toStringAsFixed(2)}%',
+              icon: Icons.trending_up,
+              color: _kRed,
+            ),
+          ),
         ],
       );
     });
@@ -297,9 +325,10 @@ class _KpiCard extends StatelessWidget {
         border: Border(left: BorderSide(color: color, width: 4)),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2))
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Row(
@@ -320,15 +349,14 @@ class _KpiCard extends StatelessWidget {
               Text(
                 value,
                 style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: color),
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
               ),
               Text(
                 label,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600]),
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
             ],
           ),
@@ -376,17 +404,19 @@ class _CardWrapper extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2))
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w600)),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 16),
           child,
         ],
@@ -410,7 +440,9 @@ class _TopDefectCategoriesChart extends StatelessWidget {
       final data = ctrl.topDefectCategories;
       if (data.isEmpty) return const _EmptyWidget();
       return _HorizontalBarList(
-        items: data.map((d) => (label: d.category, value: d.count.toDouble())).toList(),
+        items: data
+            .map((d) => (label: d.category, value: d.count.toDouble()))
+            .toList(),
         valueLabel: (v) => v.toInt().toString(),
       );
     });
@@ -431,9 +463,9 @@ class _SeverityPieChart extends StatelessWidget {
       if (data.isEmpty) return const _EmptyWidget();
 
       final total = data.fold(0, (s, d) => s + d.count);
-      final colors = data
-          .asMap()
-          .map((i, d) => MapEntry(i, _severityColor(d.severity)));
+      final colors = data.asMap().map(
+        (i, d) => MapEntry(i, _severityColor(d.severity)),
+      );
 
       return Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -482,7 +514,9 @@ class _SeverityPieChart extends StatelessWidget {
                       Text(
                         '${e.value.count} ($pct%)',
                         style: const TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w500),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ],
                   ),
@@ -509,7 +543,9 @@ class _DrByProjectChart extends StatelessWidget {
       final data = ctrl.drByProject;
       if (data.isEmpty) return const _EmptyWidget();
       return _HorizontalBarList(
-        items: data.map((d) => (label: d.project, value: d.defectRate)).toList(),
+        items: data
+            .map((d) => (label: d.project, value: d.defectRate))
+            .toList(),
         valueLabel: (v) => '${v.toStringAsFixed(1)}%',
       );
     });
@@ -529,9 +565,7 @@ class _DrByTeamLeaderChart extends StatelessWidget {
       final data = ctrl.drByTeamLeader;
       if (data.isEmpty) return const _EmptyWidget();
       return _VerticalBarChart(
-        items: data
-            .map((d) => (label: d.teamLeader, value: d.avgDR))
-            .toList(),
+        items: data.map((d) => (label: d.teamLeader, value: d.avgDR)).toList(),
         valueLabel: (v) => '${v.toStringAsFixed(1)}%',
       );
     });
@@ -555,7 +589,9 @@ class _HorizontalBarList extends StatelessWidget {
       children: items.asMap().entries.map((entry) {
         final idx = entry.key;
         final item = entry.value;
-        final fraction = maxVal > 0 ? (item.value / maxVal).clamp(0.03, 1.0) : 0.0;
+        final fraction = maxVal > 0
+            ? (item.value / maxVal).clamp(0.03, 1.0)
+            : 0.0;
         final color = _kChartColors[idx % _kChartColors.length];
 
         return Padding(
@@ -563,7 +599,7 @@ class _HorizontalBarList extends StatelessWidget {
           child: Row(
             children: [
               SizedBox(
-                width: 130,
+                width: 160,
                 child: Tooltip(
                   message: item.label,
                   child: Text(
@@ -605,7 +641,9 @@ class _HorizontalBarList extends StatelessWidget {
                 child: Text(
                   valueLabel(item.value),
                   style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w600),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                   textAlign: TextAlign.end,
                 ),
               ),
@@ -638,8 +676,9 @@ class _VerticalBarChart extends StatelessWidget {
         children: items.asMap().entries.map((entry) {
           final idx = entry.key;
           final item = entry.value;
-          final barH =
-              maxVal > 0 ? (item.value / maxVal * chartHeight).clamp(4.0, chartHeight) : 4.0;
+          final barH = maxVal > 0
+              ? (item.value / maxVal * chartHeight).clamp(4.0, chartHeight)
+              : 4.0;
           final color = _kChartColors[idx % _kChartColors.length];
 
           return Expanded(
@@ -651,17 +690,19 @@ class _VerticalBarChart extends StatelessWidget {
                   Text(
                     valueLabel(item.value),
                     style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: color),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: color,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Container(
                     height: barH,
                     decoration: BoxDecoration(
                       color: color,
-                      borderRadius:
-                          const BorderRadius.vertical(top: Radius.circular(4)),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(4),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -746,10 +787,12 @@ class _DefectDetailsTable extends StatefulWidget {
 
 class _DefectDetailsTableState extends State<_DefectDetailsTable> {
   final _searchCtrl = TextEditingController();
+  final _horizontalScrollController = ScrollController();
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _horizontalScrollController.dispose();
     super.dispose();
   }
 
@@ -789,7 +832,9 @@ class _DefectDetailsTableState extends State<_DefectDetailsTable> {
                     borderSide: BorderSide(color: Colors.grey.shade300),
                   ),
                   contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   isDense: true,
                 ),
               ),
@@ -802,8 +847,10 @@ class _DefectDetailsTableState extends State<_DefectDetailsTable> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: _kBlue,
                 foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
               ),
             ),
           ],
@@ -824,42 +871,60 @@ class _DefectDetailsTableState extends State<_DefectDetailsTable> {
 
           return Column(
             children: [
-              // Header row
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Row(
-                  children: [
-                    _TableHeaderCell('Project No.', flex: 2),
-                    _TableHeaderCell('Project Name', flex: 3),
-                    _TableHeaderCell('Team Leader', flex: 2),
-                    _TableHeaderCell('Defect Category', flex: 3),
-                    _TableHeaderCell('Severity', flex: 2),
-                    _TableHeaderCell('Reviewer Remark', flex: 4),
-                  ],
+              Scrollbar(
+                controller: _horizontalScrollController,
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  controller: _horizontalScrollController,
+                  scrollDirection: Axis.horizontal,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header row
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          children: const [
+                            _FixedHeaderCell('Project No.', width: 160),
+                            _FixedHeaderCell('Project Name', width: 320),
+                            _FixedHeaderCell('Team Leader', width: 150),
+                            _FixedHeaderCell('Defect Category', width: 260),
+                            _FixedHeaderCell('Severity', width: 130),
+                            _FixedHeaderCell('Reviewer Remark', width: 320),
+                          ],
+                        ),
+                      ),
+                      // Data rows
+                      ...rows.asMap().entries.map(
+                        (e) => Container(
+                          color: e.key.isEven
+                              ? Colors.white
+                              : Colors.grey.shade50,
+                          child: Row(
+                            children: [
+                              _FixedDataCell(e.value.projectNumber, width: 160),
+                              _TooltipDataCell(e.value.projectName, width: 320),
+                              _FixedDataCell(e.value.teamLeader, width: 150),
+                              _TooltipDataCell(
+                                e.value.defectCategory,
+                                width: 260,
+                              ),
+                              _FixedSeverityCell(
+                                e.value.defectSeverity,
+                                width: 130,
+                              ),
+                              _RemarkCell(e.value.reviewerRemark, width: 320),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              // Data rows
-              ...rows.asMap().entries.map(
-                    (e) => Container(
-                      color: e.key.isEven
-                          ? Colors.white
-                          : Colors.grey.shade50,
-                      child: Row(
-                        children: [
-                          _TableDataCell(e.value.projectNumber, flex: 2),
-                          _TableDataCell(e.value.projectName, flex: 3),
-                          _TableDataCell(e.value.teamLeader, flex: 2),
-                          _TableDataCell(e.value.defectCategory, flex: 3),
-                          _SeverityCell(e.value.defectSeverity),
-                          _TableDataCell(e.value.reviewerRemark,
-                              flex: 4, maxLines: 2),
-                        ],
-                      ),
-                    ),
-                  ),
               const Divider(),
               // Pagination
               _Pagination(widget.ctrl),
@@ -885,9 +950,10 @@ class _TableHeaderCell extends StatelessWidget {
         child: Text(
           label,
           style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: Colors.black87),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: Colors.black87,
+          ),
         ),
       ),
     );
@@ -909,8 +975,9 @@ class _TableDataCell extends StatelessWidget {
         child: Text(
           text.isEmpty ? '—' : text,
           style: TextStyle(
-              fontSize: 12,
-              color: text.isEmpty ? Colors.grey : Colors.black87),
+            fontSize: 12,
+            color: text.isEmpty ? Colors.grey : Colors.black87,
+          ),
           overflow: TextOverflow.ellipsis,
           maxLines: maxLines,
         ),
@@ -927,11 +994,12 @@ class _SeverityCell extends StatelessWidget {
   Widget build(BuildContext context) {
     if (severity.isEmpty) {
       return const Expanded(
-          flex: 2,
-          child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-              child: Text('—',
-                  style: TextStyle(fontSize: 12, color: Colors.grey))));
+        flex: 2,
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          child: Text('—', style: TextStyle(fontSize: 12, color: Colors.grey)),
+        ),
+      );
     }
     return Expanded(
       flex: 2,
@@ -946,9 +1014,167 @@ class _SeverityCell extends StatelessWidget {
           child: Text(
             severity,
             style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: _severityColor(severity)),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: _severityColor(severity),
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Fixed-width cell widgets for horizontal scroll table ─────────────────────
+
+class _FixedHeaderCell extends StatelessWidget {
+  final String label;
+  final double width;
+  const _FixedHeaderCell(this.label, {required this.width});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: Colors.black87,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FixedDataCell extends StatelessWidget {
+  final String text;
+  final double width;
+  const _FixedDataCell(this.text, {required this.width});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        child: Text(
+          text.isEmpty ? '—' : text,
+          style: TextStyle(
+            fontSize: 14,
+            color: text.isEmpty ? Colors.grey : Colors.black87,
+          ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        ),
+      ),
+    );
+  }
+}
+
+class _TooltipDataCell extends StatelessWidget {
+  final String text;
+  final double width;
+  const _TooltipDataCell(this.text, {required this.width});
+
+  @override
+  Widget build(BuildContext context) {
+    final display = text.isEmpty ? '—' : text;
+    return SizedBox(
+      width: width,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        child: Tooltip(
+          message: display,
+          waitDuration: const Duration(milliseconds: 300),
+          child: Text(
+            display,
+            style: TextStyle(
+              fontSize: 14,
+              color: text.isEmpty ? Colors.grey : Colors.black87,
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FixedSeverityCell extends StatelessWidget {
+  final String severity;
+  final double width;
+  const _FixedSeverityCell(this.severity, {required this.width});
+
+  @override
+  Widget build(BuildContext context) {
+    if (severity.isEmpty) {
+      return SizedBox(
+        width: width,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          child: Text('—', style: TextStyle(fontSize: 14, color: Colors.grey)),
+        ),
+      );
+    }
+    return SizedBox(
+      width: width,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: _severityColor(severity).withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            severity,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: _severityColor(severity),
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RemarkCell extends StatelessWidget {
+  final String text;
+  final double width;
+  const _RemarkCell(this.text, {required this.width});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Text(
+            text.isEmpty ? '—' : text,
+            style: TextStyle(
+              fontSize: 14,
+              color: text.isEmpty ? Colors.grey : Colors.black87,
+              height: 1.4,
+            ),
+            maxLines: 3,
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -976,7 +1202,7 @@ class _Pagination extends StatelessWidget {
           children: [
             Text(
               'Total: $count records',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
             ),
             const Spacer(),
             IconButton(
@@ -993,7 +1219,7 @@ class _Pagination extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(
                 'Page $cur of $total',
-                style: const TextStyle(fontSize: 13),
+                style: const TextStyle(fontSize: 15),
               ),
             ),
             IconButton(

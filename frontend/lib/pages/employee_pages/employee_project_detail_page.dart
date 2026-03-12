@@ -907,7 +907,13 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
                             }
                             setState(() => toggle(m.id, v == true));
                           },
-                          title: Text(m.name),
+                          title: Text(
+                            m.name,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                           dense: true,
                           controlAffinity: ListTileControlAffinity.leading,
                         );
@@ -927,7 +933,9 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
                   (e) => e.id == id,
                 );
                 final label = member?.name ?? id;
-                return Chip(label: Text(label));
+                return Chip(
+                  label: Text(label, style: const TextStyle(fontSize: 14)),
+                );
               }).toList(),
             ),
           ],

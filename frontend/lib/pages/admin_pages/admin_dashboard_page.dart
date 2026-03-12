@@ -219,9 +219,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 children: [
                   Text(
                     'Welcome Back!',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontSize: responsiveFontSize(16),
-                    ),
+                    style: Theme.of(context).textTheme.headlineMedium,
                   ),
                   Spacer(),
                   ElevatedButton.icon(
@@ -389,7 +387,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Team Leaders',
+                            'Team Leaders Performance',
                             style: TextStyle(
                               fontSize: responsiveFontSize(7),
                               fontWeight: FontWeight.bold,
@@ -406,7 +404,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                         responsivePadding(12) -
                                         responsivePadding(48) -
                                         responsivePadding(24)) /
-                                    4,
+                                    3,
                                 child: Container(
                                   decoration: BoxDecoration(
                                     color: Colors.white,
@@ -422,8 +420,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                     ],
                                   ),
                                   padding: EdgeInsets.symmetric(
-                                    horizontal: responsivePadding(8),
-                                    vertical: responsivePadding(6),
+                                    horizontal: responsivePadding(12),
+                                    vertical: responsivePadding(10),
                                   ),
                                   child: Row(
                                     children: [
@@ -462,6 +460,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               SizedBox(height: responsivePadding(16)),
               // Search bar
               Container(
+                height: responsivePadding(50),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(responsivePadding(8)),
@@ -479,9 +478,10 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                     hintStyle: TextStyle(fontSize: responsiveFontSize(6)),
                     prefixIcon: Icon(Icons.search, size: responsiveFontSize(9)),
                     border: InputBorder.none,
+                    isDense: true,
                     contentPadding: EdgeInsets.symmetric(
                       horizontal: responsivePadding(12),
-                      vertical: responsivePadding(14),
+                      vertical: responsivePadding(16),
                     ),
                   ),
                   style: TextStyle(fontSize: responsiveFontSize(6)),

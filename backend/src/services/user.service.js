@@ -2,6 +2,7 @@ import { User } from "../models/user.models.js";
 import ProjectMembership from "../models/projectMembership.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { parsePagination, paginatedResponse } from "../utils/paginate.js";
+import { clearAnalyticsCache } from "./analytics-excel.service.js";
 
 export async function registerUser({ name, email, password, role }) {
   const existingUser = await User.findOne({ email }).select("_id").lean();
@@ -83,6 +84,9 @@ export async function deleteUser(userId) {
   const user = await User.findByIdAndDelete(userId);
   if (!user) throw new ApiError(404, "User not found");
 
-  const deletedMemberships = await ProjectMembership.deleteMany({ user_id: userId });
+  const deletedMemberships = await ProjectMembership.deleteMany({
+    user_id: userId,
+  });
+  clearAnalyticsCache();
   return { deletedMemberships: deletedMemberships.deletedCount };
 }

@@ -166,9 +166,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                 children: [
                   Text(
                     'Welcome Back!',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontSize: responsiveFontSize(16),
-                    ),
+                    style: Theme.of(context).textTheme.headlineMedium,
                   ),
                 ],
               ),
