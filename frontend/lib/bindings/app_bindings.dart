@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import '../controllers/analytics_controller.dart';
 import '../controllers/projects_controller.dart';
 import '../controllers/team_controller.dart';
 import '../controllers/admin_dashboard_ui_controller.dart';
@@ -21,6 +22,7 @@ import '../controllers/admin_checklist_template_controller.dart';
 import '../services/checklist_answer_service.dart';
 import '../services/approval_service.dart';
 import '../services/excel_export_service.dart';
+import '../services/analytics_service.dart';
 import '../services/master_excel_export_service.dart';
 import '../controllers/export_controller.dart';
 
@@ -118,6 +120,14 @@ class AppBindings extends Bindings {
     Get.lazyPut<LoginController>(() => LoginController(), fenix: true);
     Get.lazyPut<AdminChecklistTemplateController>(
       () => AdminChecklistTemplateController(),
+      fenix: true,
+    );
+    Get.put<AnalyticsService>(
+      AnalyticsService(Get.find<SimpleHttp>()),
+      permanent: true,
+    );
+    Get.lazyPut<AnalyticsController>(
+      () => AnalyticsController(Get.find<AnalyticsService>()),
       fenix: true,
     );
   }

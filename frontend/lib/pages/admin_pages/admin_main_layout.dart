@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:quality_review/components/admin_sidebar.dart';
 import 'package:quality_review/pages/admin_pages/admin_checklist_template_page.dart';
 import 'package:quality_review/pages/admin_pages/admin_dashboard_page.dart';
+import 'package:quality_review/pages/admin_pages/analytics_page.dart';
 import 'package:quality_review/pages/admin_pages/employee_page.dart';
 import 'package:quality_review/pages/admin_pages/employee_performance_page.dart';
 import '../../controllers/auth_controller.dart';
@@ -16,6 +17,7 @@ class AdminMainLayout extends StatelessWidget {
     AdminDashboardPage(),
     EmployeePage(),
     EmployeePerformancePage(),
+    AnalyticsPage(),
     AdminChecklistTemplatePage(),
   ];
 
