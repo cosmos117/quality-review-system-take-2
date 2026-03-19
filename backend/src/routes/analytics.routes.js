@@ -11,6 +11,7 @@ import {
   getDefectDetails,
   getDashboardTeamLeaders,
   getDashboardDefectCategories,
+  getDashboardExecutors,
   getDrByProject,
   getDrByTeamLeader,
   getDashboardProjects,
@@ -37,6 +38,7 @@ router.get('/analytics/defect-severity-distribution', getDefectSeverityDistribut
 router.get('/analytics/defect-details', getDefectDetails);
 router.get('/analytics/team-leaders', getDashboardTeamLeaders);
 router.get('/analytics/defect-categories', getDashboardDefectCategories);
+router.get('/analytics/executors', getDashboardExecutors);
 router.get('/analytics/dr-by-project', getDrByProject);
 router.get('/analytics/dr-by-team-leader', getDrByTeamLeader);
 router.get('/analytics/projects', getDashboardProjects);

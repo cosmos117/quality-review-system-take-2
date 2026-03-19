@@ -19,6 +19,7 @@ import {
   updateCheckpointInSection,
   deleteCheckpointFromSection,
   addStageToTemplate,
+  renameStageInTemplate,
   deleteStageFromTemplate,
   getAllStages,
   resetTemplate,
@@ -156,10 +157,18 @@ router.patch(
 // ========== STAGE OPERATIONS ==========
 
 // Get all available stages
-router.get("/stages", getTemplate);
+router.get("/stages", getAllStages);
 
 // Add a new stage to the template
 router.post("/stages", authMiddleware, requireAdmin, addStageToTemplate);
+
+// Rename an existing stage in the template
+router.patch(
+  "/stages/:stage/name",
+  authMiddleware,
+  requireAdmin,
+  renameStageInTemplate,
+);
 
 // Delete a stage from the template
 router.delete(

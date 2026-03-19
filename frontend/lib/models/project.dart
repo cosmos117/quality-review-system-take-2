@@ -17,6 +17,7 @@ class Project {
   double? overallDefectRate; // Overall defect rate for the project (0-100)
   String?
   userRole; // Role of the current user in this project (from membership)
+  String? templateName; // Assigned checklist template name for this project
 
   // New attributes from Excel import
   String? groupOrCostCentre;
@@ -49,6 +50,7 @@ class Project {
     this.reviewApplicableRemark,
     this.overallDefectRate,
     this.userRole,
+    this.templateName,
     this.groupOrCostCentre,
     this.actionRequired,
     this.sponsor,
@@ -80,6 +82,7 @@ class Project {
     String? reviewApplicableRemark,
     double? overallDefectRate,
     String? userRole,
+    String? templateName,
     String? groupOrCostCentre,
     String? actionRequired,
     String? sponsor,
@@ -111,6 +114,7 @@ class Project {
           reviewApplicableRemark ?? this.reviewApplicableRemark,
       overallDefectRate: overallDefectRate ?? this.overallDefectRate,
       userRole: userRole ?? this.userRole,
+      templateName: templateName ?? this.templateName,
       groupOrCostCentre: groupOrCostCentre ?? this.groupOrCostCentre,
       actionRequired: actionRequired ?? this.actionRequired,
       sponsor: sponsor ?? this.sponsor,
@@ -167,6 +171,7 @@ class Project {
       reviewApplicableRemark: map['reviewApplicableRemark'],
       overallDefectRate: parseNum(map['overallDefectRate']),
       userRole: map['userRole'],
+      templateName: map['templateName'],
       groupOrCostCentre: map['groupOrCostCentre'],
       actionRequired: map['actionRequired'],
       sponsor: map['sponsor'],
@@ -199,6 +204,7 @@ class Project {
     'reviewApplicableRemark': reviewApplicableRemark,
     'overallDefectRate': overallDefectRate,
     'userRole': userRole,
+    'templateName': templateName,
     'groupOrCostCentre': groupOrCostCentre,
     'actionRequired': actionRequired,
     'sponsor': sponsor,

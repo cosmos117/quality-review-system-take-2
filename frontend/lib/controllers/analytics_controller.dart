@@ -10,11 +10,13 @@ class AnalyticsController extends GetxController {
   final selectedTeamLeader = RxnString();
   final selectedProject = RxnString(); // project name (display key)
   final selectedDefectCategory = RxnString();
+  final selectedExecutor = RxnString();
 
   // ── Dropdown options ──────────────────────────────────────────────────────
   final teamLeaders = RxList<String>();
   final projects = RxList<AnalyticsProjectItem>();
   final defectCategories = RxList<String>();
+  final executors = RxList<String>();
 
   // ── Analytics data ────────────────────────────────────────────────────────
   final summary = Rx<AnalyticsSummary>(AnalyticsSummary.empty);
@@ -53,6 +55,7 @@ class AnalyticsController extends GetxController {
   String? get _tl => selectedTeamLeader.value;
   String? get _proj => selectedProject.value;
   String? get _cat => selectedDefectCategory.value;
+  String? get _exc => selectedExecutor.value;
 
   // ── Filter options loading ────────────────────────────────────────────────
 
@@ -63,10 +66,12 @@ class AnalyticsController extends GetxController {
         _service.getTeamLeaders(),
         _service.getDefectCategories(),
         _service.getProjects(),
+        _service.getExecutors(),
       ]);
       teamLeaders.value = results[0] as List<String>;
       defectCategories.value = results[1] as List<String>;
       projects.value = results[2] as List<AnalyticsProjectItem>;
+      executors.value = results[3] as List<String>;
 
       // Reset selected values if they no longer exist
       if (selectedTeamLeader.value != null &&
@@ -80,6 +85,10 @@ class AnalyticsController extends GetxController {
       if (selectedDefectCategory.value != null &&
           !defectCategories.contains(selectedDefectCategory.value)) {
         selectedDefectCategory.value = null;
+      }
+      if (selectedExecutor.value != null &&
+          !executors.contains(selectedExecutor.value)) {
+        selectedExecutor.value = null;
       }
     } catch (_) {
       // Non-critical – keep empty lists
@@ -107,6 +116,7 @@ class AnalyticsController extends GetxController {
         teamLeader: _tl,
         project: _proj,
         defectCategory: _cat,
+        executor: _exc,
       );
     } catch (e) {
       summaryError.value = e.toString();
@@ -124,14 +134,16 @@ class AnalyticsController extends GetxController {
           teamLeader: _tl,
           project: _proj,
           defectCategory: _cat,
+          executor: _exc,
         ),
         _service.getDefectSeverityDistribution(
           teamLeader: _tl,
           project: _proj,
           defectCategory: _cat,
+          executor: _exc,
         ),
-        _service.getDrByProject(teamLeader: _tl),
-        _service.getDrByTeamLeader(),
+        _service.getDrByProject(teamLeader: _tl, executor: _exc),
+        _service.getDrByTeamLeader(executor: _exc),
       ]);
       topDefectCategories.value = results[0] as List<CategoryCount>;
       defectSeverityDist.value = results[1] as List<SeverityCount>;
@@ -153,6 +165,7 @@ class AnalyticsController extends GetxController {
         teamLeader: _tl,
         project: _proj,
         defectCategory: _cat,
+        executor: _exc,
         page: currentPage.value,
         limit: pageSize,
         search: searchQuery.value.isNotEmpty ? searchQuery.value : null,
@@ -180,6 +193,11 @@ class AnalyticsController extends GetxController {
 
   void applyDefectCategory(String? value) {
     selectedDefectCategory.value = value;
+    loadAll();
+  }
+
+  void applyExecutor(String? value) {
+    selectedExecutor.value = value;
     loadAll();
   }
 

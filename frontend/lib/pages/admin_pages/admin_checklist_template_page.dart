@@ -59,48 +59,173 @@ class AdminChecklistTemplatePage
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        'Checklist Template Management',
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2196F3),
-                        foregroundColor: Colors.white,
-                      ),
-                      onPressed: () async {
-                        final name = await _promptStageName();
-                        if (name != null) c.addPhase(name);
-                      },
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add Phase'),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(Icons.refresh),
-                      tooltip: 'Reload Template',
-                      onPressed: c.loadTemplate,
-                    ),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4CAF50),
-                        foregroundColor: Colors.white,
-                      ),
-                      onPressed: () async {
-                        await Get.dialog(
-                          _DefectCategoryManager(
-                            categories: c.defectCategories.toList(),
-                            onSave: (updated) =>
-                                c.updateDefectCategories(updated),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Checklist Template Management',
+                            style: Theme.of(context).textTheme.headlineMedium,
                           ),
-                        );
-                      },
-                      icon: const Icon(Icons.category),
-                      label: const Text('Manage Categories'),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.refresh),
+                          tooltip: 'Reload Template',
+                          onPressed: () => c.loadTemplate(
+                            templateName: c.selectedTemplateName.value,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4CAF50),
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: () async {
+                            await Get.dialog(
+                              _DefectCategoryManager(
+                                categories: c.defectCategories.toList(),
+                                onSave: (updated) =>
+                                    c.updateDefectCategories(updated),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.category),
+                          label: const Text('Manage Categories'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Text(
+                          'Template: ',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Flexible(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 560),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.black12),
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: Colors.white,
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    isExpanded: true,
+                                    value:
+                                        c.selectedTemplateName.value ??
+                                        '__legacy__',
+                                    items: [
+                                      const DropdownMenuItem<String>(
+                                        value: '__legacy__',
+                                        child: Text(
+                                          'Default (legacy template)',
+                                        ),
+                                      ),
+                                      ...c.templateOptions.map((t) {
+                                        final templateName =
+                                            (t['templateName'] ?? '')
+                                                .toString();
+                                        final displayName =
+                                            (t['name'] ?? templateName)
+                                                .toString();
+                                        if (templateName.isEmpty) {
+                                          return null;
+                                        }
+                                        return DropdownMenuItem<String>(
+                                          value: templateName,
+                                          child: Text(displayName),
+                                        );
+                                      }).whereType<DropdownMenuItem<String>>(),
+                                    ],
+                                    onChanged: (value) {
+                                      if (value != null) {
+                                        c.selectTemplate(
+                                          value == '__legacy__' ? null : value,
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 220,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1565C0),
+                                  foregroundColor: Colors.white,
+                                ),
+                                onPressed: () async {
+                                  final name = await _promptTemplateName(
+                                    context,
+                                  );
+                                  if (name != null) {
+                                    await c.saveCurrentTemplateAs(name);
+                                  }
+                                },
+                                icon: const Icon(Icons.save_as, size: 18),
+                                label: const Text(
+                                  'Save As New Template',
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  overflow: TextOverflow.fade,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: 180,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0D47A1),
+                                  foregroundColor: Colors.white,
+                                ),
+                                onPressed: () => c.saveSelectedTemplate(),
+                                icon: const Icon(Icons.save, size: 18),
+                                label: const Text('Save Template'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 14),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFD32F2F),
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: c.selectedTemplateName.value == null
+                              ? null
+                              : () async {
+                                  final confirm = await _confirmDelete(
+                                    context: context,
+                                    title: 'Delete Template?',
+                                    message:
+                                        'This will permanently delete the selected checklist template from the database.',
+                                  );
+                                  if (confirm == true) {
+                                    await c.deleteSelectedTemplate();
+                                  }
+                                },
+                          icon: const Icon(Icons.delete_forever),
+                          label: const Text('Delete Template'),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -141,7 +266,7 @@ class _PhaseTabView extends StatefulWidget {
 }
 
 class _PhaseTabViewState extends State<_PhaseTabView>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late TabController _tabController;
 
   @override
@@ -166,6 +291,7 @@ class _PhaseTabViewState extends State<_PhaseTabView>
         0,
         widget.visible.length - 1,
       );
+      _tabController.removeListener(_handleTabChange);
       _tabController.dispose();
       _tabController = TabController(
         length: widget.visible.length,
@@ -203,60 +329,95 @@ class _PhaseTabViewState extends State<_PhaseTabView>
       ),
       child: Column(
         children: [
-          TabBar(
-            controller: _tabController,
-            labelColor: const Color(0xFF2196F3),
-            unselectedLabelColor: Colors.black87,
-            indicatorColor: const Color(0xFF2196F3),
-            isScrollable: true,
-            labelStyle: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-            unselectedLabelStyle: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-            tabs: visible.map((i) {
-              final phase = c.phases[i];
-              return Tab(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(phase.name),
-                    const SizedBox(width: 8),
-                    PopupMenuButton<String>(
-                      icon: const Icon(Icons.more_vert, size: 16),
-                      onSelected: (action) async {
-                        if (action == 'delete') {
-                          final confirm = await _confirmDelete(
-                            title: 'Delete Phase?',
-                            message:
-                                'This will permanently delete "${phase.name}" and all its data. This action cannot be undone.',
-                          );
-                          if (confirm == true) c.deletePhase(phase);
-                        }
-                      },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete, size: 18, color: Colors.red),
-                              SizedBox(width: 8),
-                              Text(
-                                'Delete',
-                                style: TextStyle(color: Colors.red),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TabBar(
+                    controller: _tabController,
+                    labelColor: const Color(0xFF2196F3),
+                    unselectedLabelColor: Colors.black87,
+                    indicatorColor: const Color(0xFF2196F3),
+                    isScrollable: true,
+                    labelStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
                     ),
-                  ],
+                    unselectedLabelStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    tabs: visible.map((i) {
+                      final phase = c.phases[i];
+                      return Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(phase.name),
+                            const SizedBox(width: 8),
+                            PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert, size: 16),
+                              onSelected: (action) async {
+                                if (action == 'delete') {
+                                  final confirm = await _confirmDelete(
+                                    context: context,
+                                    title: 'Delete Phase?',
+                                    message:
+                                        'This will permanently delete "${phase.name}" and all its data. This action cannot be undone.',
+                                  );
+                                  if (confirm == true) c.deletePhase(phase);
+                                }
+                              },
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.delete,
+                                        size: 18,
+                                        color: Colors.red,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Delete',
+                                        style: TextStyle(color: Colors.red),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
-              );
-            }).toList(),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2196F3),
+                    foregroundColor: Colors.white,
+                    textStyle: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                  onPressed: () async {
+                    final name = await _promptStageName(context);
+                    if (name != null) c.addPhase(name);
+                  },
+                  icon: const Icon(Icons.add, size: 22),
+                  label: const Text('Add Phase'),
+                ),
+              ],
+            ),
           ),
           Expanded(
             child: TabBarView(
@@ -301,14 +462,17 @@ class PhaseEditor extends StatelessWidget {
                   ),
                 ),
                 onPressed: () async {
-                  final name = await _promptGroupName();
+                  final name = await _promptGroupName(context);
                   if (name == null) return;
                   try {
                     await c.templateService.addChecklist(
+                      templateName: c.selectedTemplateName.value,
                       stage: stage,
                       checklistName: name,
                     );
-                    await c.loadTemplate();
+                    await c.loadTemplate(
+                      templateName: c.selectedTemplateName.value,
+                    );
                   } catch (e) {
                     Get.snackbar(
                       'Error',
@@ -374,16 +538,22 @@ class PhaseEditor extends StatelessWidget {
                                   icon: const Icon(Icons.edit),
                                   onPressed: () async {
                                     final name = await _promptGroupName(
+                                      context,
                                       initial: group.name,
                                     );
                                     if (name == null) return;
                                     try {
                                       await c.templateService.updateChecklist(
+                                        templateName:
+                                            c.selectedTemplateName.value,
                                         checklistId: group.id,
                                         stage: stage,
                                         newName: name,
                                       );
-                                      await c.loadTemplate();
+                                      await c.loadTemplate(
+                                        templateName:
+                                            c.selectedTemplateName.value,
+                                      );
                                     } catch (e) {
                                       Get.snackbar(
                                         'Error',
@@ -402,6 +572,7 @@ class PhaseEditor extends StatelessWidget {
                                   ),
                                   onPressed: () async {
                                     final confirm = await _confirmDelete(
+                                      context: context,
                                       title: 'Remove Checklist Group?',
                                       message:
                                           'This will delete "${group.name}" plus all its sections and questions.',
@@ -409,10 +580,15 @@ class PhaseEditor extends StatelessWidget {
                                     if (confirm != true) return;
                                     try {
                                       await c.templateService.deleteChecklist(
+                                        templateName:
+                                            c.selectedTemplateName.value,
                                         checklistId: group.id,
                                         stage: stage,
                                       );
-                                      await c.loadTemplate();
+                                      await c.loadTemplate(
+                                        templateName:
+                                            c.selectedTemplateName.value,
+                                      );
                                       Get.snackbar(
                                         'Deleted',
                                         'Checklist group "${group.name}" has been deleted',
@@ -438,17 +614,23 @@ class PhaseEditor extends StatelessWidget {
                                   question: q,
                                   onEdit: () async {
                                     final updated = await _promptQuestion(
+                                      context,
                                       initial: q,
                                     );
                                     if (updated == null) return;
                                     try {
                                       await c.templateService.updateCheckpoint(
+                                        templateName:
+                                            c.selectedTemplateName.value,
                                         checkpointId: q.id,
                                         checklistId: group.id,
                                         stage: stage,
                                         newText: updated.text,
                                       );
-                                      await c.loadTemplate();
+                                      await c.loadTemplate(
+                                        templateName:
+                                            c.selectedTemplateName.value,
+                                      );
                                     } catch (e) {
                                       Get.snackbar(
                                         'Error',
@@ -460,6 +642,7 @@ class PhaseEditor extends StatelessWidget {
                                   },
                                   onDelete: () async {
                                     final confirm = await _confirmDelete(
+                                      context: context,
                                       title: 'Remove Question?',
                                       message:
                                           'This will delete the selected question.',
@@ -467,11 +650,16 @@ class PhaseEditor extends StatelessWidget {
                                     if (confirm != true) return;
                                     try {
                                       await c.templateService.deleteCheckpoint(
+                                        templateName:
+                                            c.selectedTemplateName.value,
                                         checkpointId: q.id,
                                         checklistId: group.id,
                                         stage: stage,
                                       );
-                                      await c.loadTemplate();
+                                      await c.loadTemplate(
+                                        templateName:
+                                            c.selectedTemplateName.value,
+                                      );
                                     } catch (e) {
                                       Get.snackbar(
                                         'Error',
@@ -530,18 +718,26 @@ class PhaseEditor extends StatelessWidget {
                                           onPressed: () async {
                                             final name =
                                                 await _promptSectionName(
+                                                  context,
                                                   initial: section.name,
                                                 );
                                             if (name == null) return;
                                             try {
                                               await c.templateService
                                                   .updateSection(
+                                                    templateName: c
+                                                        .selectedTemplateName
+                                                        .value,
                                                     checklistId: group.id,
                                                     sectionId: section.id,
                                                     stage: stage,
                                                     newName: name,
                                                   );
-                                              await c.loadTemplate();
+                                              await c.loadTemplate(
+                                                templateName: c
+                                                    .selectedTemplateName
+                                                    .value,
+                                              );
                                             } catch (e) {
                                               Get.snackbar(
                                                 'Error',
@@ -563,6 +759,7 @@ class PhaseEditor extends StatelessWidget {
                                           ),
                                           onPressed: () async {
                                             final confirm = await _confirmDelete(
+                                              context: context,
                                               title: 'Remove Section?',
                                               message:
                                                   'This will delete "${section.name}" and all its questions.',
@@ -571,11 +768,18 @@ class PhaseEditor extends StatelessWidget {
                                             try {
                                               await c.templateService
                                                   .deleteSection(
+                                                    templateName: c
+                                                        .selectedTemplateName
+                                                        .value,
                                                     checklistId: group.id,
                                                     sectionId: section.id,
                                                     stage: stage,
                                                   );
-                                              await c.loadTemplate();
+                                              await c.loadTemplate(
+                                                templateName: c
+                                                    .selectedTemplateName
+                                                    .value,
+                                              );
                                             } catch (e) {
                                               Get.snackbar(
                                                 'Error',
@@ -597,19 +801,27 @@ class PhaseEditor extends StatelessWidget {
                                           onEdit: () async {
                                             final updated =
                                                 await _promptQuestion(
+                                                  context,
                                                   initial: q,
                                                 );
                                             if (updated == null) return;
                                             try {
                                               await c.templateService
                                                   .updateCheckpoint(
+                                                    templateName: c
+                                                        .selectedTemplateName
+                                                        .value,
                                                     checkpointId: q.id,
                                                     checklistId: group.id,
                                                     stage: stage,
                                                     newText: updated.text,
                                                     sectionId: section.id,
                                                   );
-                                              await c.loadTemplate();
+                                              await c.loadTemplate(
+                                                templateName: c
+                                                    .selectedTemplateName
+                                                    .value,
+                                              );
                                             } catch (e) {
                                               Get.snackbar(
                                                 'Error',
@@ -621,6 +833,7 @@ class PhaseEditor extends StatelessWidget {
                                           },
                                           onDelete: () async {
                                             final confirm = await _confirmDelete(
+                                              context: context,
                                               title: 'Remove Question?',
                                               message:
                                                   'This will delete the selected question.',
@@ -629,12 +842,19 @@ class PhaseEditor extends StatelessWidget {
                                             try {
                                               await c.templateService
                                                   .deleteCheckpoint(
+                                                    templateName: c
+                                                        .selectedTemplateName
+                                                        .value,
                                                     checkpointId: q.id,
                                                     checklistId: group.id,
                                                     stage: stage,
                                                     sectionId: section.id,
                                                   );
-                                              await c.loadTemplate();
+                                              await c.loadTemplate(
+                                                templateName: c
+                                                    .selectedTemplateName
+                                                    .value,
+                                              );
                                             } catch (e) {
                                               Get.snackbar(
                                                 'Error',
@@ -651,17 +871,26 @@ class PhaseEditor extends StatelessWidget {
                                         alignment: Alignment.centerLeft,
                                         child: TextButton.icon(
                                           onPressed: () async {
-                                            final q = await _promptQuestion();
+                                            final q = await _promptQuestion(
+                                              context,
+                                            );
                                             if (q == null) return;
                                             try {
                                               await c.templateService
                                                   .addCheckpoint(
+                                                    templateName: c
+                                                        .selectedTemplateName
+                                                        .value,
                                                     checklistId: group.id,
                                                     stage: stage,
                                                     questionText: q.text,
                                                     sectionId: section.id,
                                                   );
-                                              await c.loadTemplate();
+                                              await c.loadTemplate(
+                                                templateName: c
+                                                    .selectedTemplateName
+                                                    .value,
+                                              );
                                             } catch (e) {
                                               Get.snackbar(
                                                 'Error',
@@ -689,15 +918,20 @@ class PhaseEditor extends StatelessWidget {
                                 children: [
                                   TextButton.icon(
                                     onPressed: () async {
-                                      final q = await _promptQuestion();
+                                      final q = await _promptQuestion(context);
                                       if (q == null) return;
                                       try {
                                         await c.templateService.addCheckpoint(
+                                          templateName:
+                                              c.selectedTemplateName.value,
                                           checklistId: group.id,
                                           stage: stage,
                                           questionText: q.text,
                                         );
-                                        await c.loadTemplate();
+                                        await c.loadTemplate(
+                                          templateName:
+                                              c.selectedTemplateName.value,
+                                        );
                                       } catch (e) {
                                         Get.snackbar(
                                           'Error',
@@ -716,15 +950,22 @@ class PhaseEditor extends StatelessWidget {
                                   const SizedBox(width: 8),
                                   TextButton.icon(
                                     onPressed: () async {
-                                      final name = await _promptSectionName();
+                                      final name = await _promptSectionName(
+                                        context,
+                                      );
                                       if (name == null) return;
                                       try {
                                         await c.templateService.addSection(
+                                          templateName:
+                                              c.selectedTemplateName.value,
                                           checklistId: group.id,
                                           stage: stage,
                                           sectionName: name,
                                         );
-                                        await c.loadTemplate();
+                                        await c.loadTemplate(
+                                          templateName:
+                                              c.selectedTemplateName.value,
+                                        );
                                       } catch (e) {
                                         Get.snackbar(
                                           'Error',
@@ -805,37 +1046,58 @@ class _QuestionRow extends StatelessWidget {
 }
 
 // Dialogs & helpers
-Future<String?> _promptGroupName({String? initial}) async {
+Future<String?> _promptGroupName(
+  BuildContext context, {
+  String? initial,
+}) async {
   return await _textPrompt(
+    context: context,
     title: initial == null ? 'Add Checklist Group' : 'Edit Checklist Group',
     label: 'Group Name',
     initial: initial,
   );
 }
 
-Future<TemplateQuestion?> _promptQuestion({TemplateQuestion? initial}) async {
+Future<TemplateQuestion?> _promptQuestion(
+  BuildContext context, {
+  TemplateQuestion? initial,
+}) async {
   return await showDialog<TemplateQuestion>(
-    context: Get.context!,
+    context: context,
     builder: (ctx) => _QuestionDialog(initial: initial),
   );
 }
 
-Future<String?> _promptSectionName({String? initial}) async {
+Future<String?> _promptSectionName(
+  BuildContext context, {
+  String? initial,
+}) async {
   return await _textPrompt(
+    context: context,
     title: initial == null ? 'Add Section' : 'Edit Section',
     label: 'Section Name',
     initial: initial,
   );
 }
 
-Future<String?> _promptStageName() async {
+Future<String?> _promptStageName(BuildContext context) async {
   return await _textPrompt(
+    context: context,
     title: 'Add New Stage',
     label: 'Stage Name (e.g., Planning, Design, Testing)',
   );
 }
 
+Future<String?> _promptTemplateName(BuildContext context) async {
+  return await _textPrompt(
+    context: context,
+    title: 'Save Template',
+    label: 'Template Name (e.g., FEA Checklist, CFM Checklist)',
+  );
+}
+
 Future<String?> _textPrompt({
+  required BuildContext context,
   required String title,
   required String label,
   String? initial,
@@ -843,7 +1105,7 @@ Future<String?> _textPrompt({
   final controller = TextEditingController(text: initial ?? '');
   const dialogWidth = 460.0;
   return showDialog<String>(
-    context: Get.context!,
+    context: context,
     builder: (ctx) {
       return AlertDialog(
         title: Text(title),
@@ -888,11 +1150,12 @@ Future<String?> _textPrompt({
 }
 
 Future<bool?> _confirmDelete({
+  required BuildContext context,
   required String title,
   required String message,
 }) async {
   return showDialog<bool>(
-    context: Get.context!,
+    context: context,
     builder: (ctx) => AlertDialog(
       title: Text(title),
       content: Text(message),

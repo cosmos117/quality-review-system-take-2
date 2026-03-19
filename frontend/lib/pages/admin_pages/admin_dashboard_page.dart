@@ -11,6 +11,7 @@ import 'admin_project_details_page.dart';
 import '../../controllers/team_controller.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../services/excel_import_service.dart';
+import '../../services/template_service.dart';
 import '../../components/project_statistics_card.dart';
 import '../../components/sortable_header_cell.dart';
 import '../../components/shimmer_loading.dart';
@@ -182,6 +183,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 priority: data.priority,
                 status: 'Not Started',
                 executor: null,
+                templateName: data.templateName,
               );
               await projCtrl.createProjectRemote(newProject);
               if (context.mounted) {
@@ -835,6 +837,7 @@ class ProjectFormData {
   String priority;
   String status;
   String? executor;
+  String? templateName;
   String description;
   ProjectFormData({
     this.projectNo,
@@ -844,6 +847,7 @@ class ProjectFormData {
     required this.priority,
     required this.status,
     required this.executor,
+    required this.templateName,
     required this.description,
   });
 }
@@ -871,6 +875,8 @@ class _ProjectFormDialog extends StatefulWidget {
 class _ProjectFormDialogState extends State<_ProjectFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late ProjectFormData data;
+  final List<Map<String, dynamic>> _templateOptions = [];
+  bool _templatesLoading = false;
 
   @override
   void initState() {
@@ -883,8 +889,30 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
       priority: 'Medium',
       status: 'Not Started',
       executor: '',
+      templateName: null,
       description: '',
     );
+    _loadTemplateOptions();
+  }
+
+  Future<void> _loadTemplateOptions() async {
+    if (!Get.isRegistered<TemplateService>()) return;
+    setState(() => _templatesLoading = true);
+    try {
+      final templateService = Get.find<TemplateService>();
+      final names = await templateService.fetchTemplateNames(
+        forceRefresh: true,
+      );
+      _templateOptions
+        ..clear()
+        ..addAll(names);
+    } catch (_) {
+      // Non-fatal: project can still be created with default template.
+    } finally {
+      if (mounted) {
+        setState(() => _templatesLoading = false);
+      }
+    }
   }
 
   String _dateString(DateTime d) =>
@@ -1006,6 +1034,39 @@ class _ProjectFormDialogState extends State<_ProjectFormDialog> {
                     ),
                   );
                 }
+
+                fields.add(
+                  DropdownButtonFormField<String>(
+                    initialValue: data.templateName,
+                    isExpanded: true,
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: null,
+                        child: Text('Default Checklist Template'),
+                      ),
+                      ..._templateOptions.map((t) {
+                        final templateName = (t['templateName'] ?? '')
+                            .toString()
+                            .trim();
+                        final displayName = (t['name'] ?? templateName)
+                            .toString();
+                        return DropdownMenuItem<String>(
+                          value: templateName,
+                          child: Text(displayName),
+                        );
+                      }),
+                    ],
+                    onChanged: _templatesLoading
+                        ? null
+                        : (v) => setState(() => data.templateName = v),
+                    decoration: InputDecoration(
+                      labelText: 'Checklist Template',
+                      helperText: _templatesLoading
+                          ? 'Loading templates...'
+                          : 'Choose template used by executor/reviewer',
+                    ),
+                  ),
+                );
 
                 return Column(
                   children: [

@@ -5,22 +5,60 @@ import '../../../controllers/analytics_controller.dart';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
 
-const _kBlue = Color(0xFF2196F3);
-const _kOrange = Color(0xFFFF9800);
-const _kGreen = Color(0xFF4CAF50);
-const _kRed = Color(0xFFF44336);
-const _kPurple = Color(0xFF9C27B0);
-const _kTeal = Color(0xFF009688);
+// Company dashboard palette (teal + green + neutral)
+const _kPrimary = Color(0xFF0F766E);
+const _kInfo = Color(0xFF0D9488);
+const _kAccent = Color(0xFF334155);
+const _kSuccess = Color(0xFF166534);
+const _kWarning = Color(0xFFF59E0B);
+const _kDanger = Color(0xFFB91C1C);
+const _kNeutral = Color(0xFF64748B);
+
+// Backward-compatible aliases used throughout this file.
+const _kBlue = _kPrimary;
+const _kOrange = _kWarning;
+const _kGreen = _kSuccess;
+const _kRed = _kDanger;
+const _kPurple = _kAccent;
+const _kTeal = _kInfo;
+
+// Green palette for Team Leader chart
+const _kGreenDarkest = Color(0xFF14532D);
+const _kGreenDark = Color(0xFF166534);
+const _kGreenMid = Color(0xFF15803D);
+const _kGreenMedium = Color(0xFF16A34A);
+const _kGreenLight = Color(0xFF4ADE80);
+
+// Compact categorical palette used across charts.
+const _kDeepTeal = Color(0xFF0F766E);
+const _kTealMid = Color(0xFF0D9488);
+const _kGreenSoft = Color(0xFF166534);
+const _kSlate = Color(0xFF64748B);
+const _kStone = Color(0xFF94A3B8);
 
 const List<Color> _kChartColors = [
-  _kBlue,
-  _kOrange,
-  _kGreen,
-  _kRed,
-  _kPurple,
-  _kTeal,
-  Color(0xFFFF5722),
-  Color(0xFF607D8B),
+  _kDeepTeal,
+  _kTealMid,
+  _kGreenSoft,
+  _kSlate,
+  _kStone,
+];
+
+const List<Color> _kGreenPalette = [
+  _kGreenDarkest,
+  _kGreenDark,
+  _kGreenMid,
+  _kGreenMedium,
+  _kGreenLight,
+];
+
+// Company-like category palette: emphasize teal + neutral support shades.
+const List<Color> _kDefectCategoryPalette = [
+  _kDeepTeal,
+  _kTealMid,
+  _kGreenSoft,
+  _kSlate,
+  _kStone,
 ];
 
 Color _severityColor(String s) {
@@ -34,6 +72,28 @@ Color _severityColor(String s) {
   }
 }
 
+// Color by defect rate risk level (for Project DR chart)
+Color _riskLevelColor(double defectRate) {
+  if (defectRate >= 15) {
+    return _kRed; // High
+  } else if (defectRate >= 8) {
+    return _kOrange; // Medium
+  } else {
+    return _kGreen; // Low
+  }
+}
+
+// Green shade by value intensity (for Team Leader chart)
+Color _greenShadeByValue(double value, double maxValue) {
+  if (maxValue == 0) return _kGreenLight;
+  final ratio = value / maxValue;
+  if (ratio >= 0.8) return _kGreenDarkest;
+  if (ratio >= 0.6) return _kGreenDark;
+  if (ratio >= 0.4) return _kGreenMid;
+  if (ratio >= 0.2) return _kGreenMedium;
+  return _kGreenLight;
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 class AnalyticsPage extends StatelessWidget {
@@ -43,7 +103,7 @@ class AnalyticsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final ctrl = Get.find<AnalyticsController>();
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: const Color(0xFFF5F7FA),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -75,12 +135,12 @@ class AnalyticsPage extends StatelessWidget {
           // Page content
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(24),
               child: Column(
                 children: [
                   // Row 1: KPI cards
                   _KpiRow(ctrl),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
                   // Row 2: Top defect categories + Severity distribution
                   Row(
@@ -93,7 +153,7 @@ class AnalyticsPage extends StatelessWidget {
                           child: _TopDefectCategoriesChart(ctrl),
                         ),
                       ),
-                      const SizedBox(width: 20),
+                      const SizedBox(width: 24),
                       Expanded(
                         flex: 2,
                         child: _CardWrapper(
@@ -103,20 +163,20 @@ class AnalyticsPage extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
-                  // Row 3: DR by project + DR by team leader
+                  // Row 3: DR by team leader + DR by project
                   _ChartRow(
                     left: _CardWrapper(
-                      title: 'Overall Defect Rate by Project',
-                      child: _DrByProjectChart(ctrl),
-                    ),
-                    right: _CardWrapper(
                       title: 'Average Defect Rate by Team Leader',
                       child: _DrByTeamLeaderChart(ctrl),
                     ),
+                    right: _CardWrapper(
+                      title: 'Overall Defect Rate by Project',
+                      child: _DrByProjectChart(ctrl),
+                    ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
                   // Row 4: Defect details table
                   _CardWrapper(
@@ -162,6 +222,13 @@ class _FilterBar extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             _FilterDropdown<String>(
+              label: 'Executor',
+              value: ctrl.selectedExecutor.value,
+              items: ctrl.executors,
+              onChanged: ctrl.applyExecutor,
+            ),
+            const SizedBox(width: 12),
+            _FilterDropdown<String>(
               label: 'Project',
               value: ctrl.selectedProject.value,
               items: ctrl.projects.map((p) => p.displayName).toList(),
@@ -177,17 +244,19 @@ class _FilterBar extends StatelessWidget {
             const SizedBox(width: 16),
             // Reset button
             if (ctrl.selectedTeamLeader.value != null ||
+                ctrl.selectedExecutor.value != null ||
                 ctrl.selectedProject.value != null ||
                 ctrl.selectedDefectCategory.value != null)
               TextButton.icon(
                 onPressed: () {
                   ctrl.applyTeamLeader(null);
+                  ctrl.applyExecutor(null);
                   ctrl.applyProject(null);
                   ctrl.applyDefectCategory(null);
                 },
                 icon: const Icon(Icons.clear, size: 16),
                 label: const Text('Clear'),
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                style: TextButton.styleFrom(foregroundColor: _kDanger),
               ),
           ],
         ),
@@ -263,40 +332,43 @@ class _KpiRow extends StatelessWidget {
     return Obx(() {
       if (ctrl.isSummaryLoading.value) {
         return const SizedBox(
-          height: 100,
+          height: 120,
           child: Center(child: CircularProgressIndicator()),
         );
       }
       final s = ctrl.summary.value;
-      return Row(
-        children: [
-          Expanded(
-            child: _KpiCard(
-              label: 'Total Projects',
-              value: s.totalProjects.toString(),
-              icon: Icons.folder_open,
-              color: _kBlue,
+      return SizedBox(
+        height: 140,
+        child: Row(
+          children: [
+            Expanded(
+              child: _KpiCard(
+                label: 'Total Projects',
+                value: s.totalProjects.toString(),
+                icon: Icons.folder_open,
+                color: _kBlue,
+              ),
             ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: _KpiCard(
-              label: 'Average DR',
-              value: '${s.averageDefectRate.toStringAsFixed(2)}%',
-              icon: Icons.bar_chart,
-              color: _kOrange,
+            const SizedBox(width: 20),
+            Expanded(
+              child: _KpiCard(
+                label: 'Average DR',
+                value: '${s.averageDefectRate.toStringAsFixed(2)}%',
+                icon: Icons.bar_chart,
+                color: _kOrange,
+              ),
             ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: _KpiCard(
-              label: 'Max DR',
-              value: '${s.maxDefectRate.toStringAsFixed(2)}%',
-              icon: Icons.trending_up,
-              color: _kRed,
+            const SizedBox(width: 20),
+            Expanded(
+              child: _KpiCard(
+                label: 'Max DR',
+                value: '${s.maxDefectRate.toStringAsFixed(2)}%',
+                icon: Icons.trending_up,
+                color: _kRed,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       );
     });
   }
@@ -322,43 +394,55 @@ class _KpiCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border(left: BorderSide(color: color, width: 4)),
+        border: Border(left: BorderSide(color: color, width: 5)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 52,
+            height: 52,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: color, size: 24),
+            child: Center(child: Icon(icon, color: color, size: 26)),
           ),
-          const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: color,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              Text(
-                label,
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -380,7 +464,7 @@ class _ChartRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(child: left),
-        const SizedBox(width: 20),
+        const SizedBox(width: 24),
         Expanded(child: right),
       ],
     );
@@ -404,9 +488,9 @@ class _CardWrapper extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -415,9 +499,13 @@ class _CardWrapper extends StatelessWidget {
         children: [
           Text(
             title,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Colors.black87,
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           child,
         ],
       ),
@@ -439,11 +527,75 @@ class _TopDefectCategoriesChart extends StatelessWidget {
       }
       final data = ctrl.topDefectCategories;
       if (data.isEmpty) return const _EmptyWidget();
-      return _HorizontalBarList(
-        items: data
-            .map((d) => (label: d.category, value: d.count.toDouble()))
-            .toList(),
-        valueLabel: (v) => v.toInt().toString(),
+
+      final total = data.fold(0, (s, d) => s + d.count);
+      final colors = List.generate(
+        data.length,
+        (i) => _kDefectCategoryPalette[i % _kDefectCategoryPalette.length],
+      );
+
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Pie
+          SizedBox(
+            width: 180,
+            height: 180,
+            child: CustomPaint(
+              painter: _PiePainter(
+                values: data.map((d) => d.count.toDouble()).toList(),
+                colors: colors,
+              ),
+            ),
+          ),
+          const SizedBox(width: 20),
+          // Legend on right side
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: data.asMap().entries.map((e) {
+                final pct = total > 0
+                    ? (e.value.count / total * 100).toStringAsFixed(1)
+                    : '0';
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: colors[e.key],
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Tooltip(
+                          message: e.value.category,
+                          child: Text(
+                            e.value.category,
+                            style: const TextStyle(fontSize: 12),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${e.value.count} ($pct%)',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
       );
     });
   }
@@ -542,7 +694,7 @@ class _DrByProjectChart extends StatelessWidget {
       if (ctrl.isChartsLoading.value) return const _LoadingWidget();
       final data = ctrl.drByProject;
       if (data.isEmpty) return const _EmptyWidget();
-      return _HorizontalBarList(
+      return _RiskColoredHorizontalBarList(
         items: data
             .map((d) => (label: d.project, value: d.defectRate))
             .toList(),
@@ -564,7 +716,7 @@ class _DrByTeamLeaderChart extends StatelessWidget {
       if (ctrl.isChartsLoading.value) return const _LoadingWidget();
       final data = ctrl.drByTeamLeader;
       if (data.isEmpty) return const _EmptyWidget();
-      return _VerticalBarChart(
+      return _GreenVerticalBarChart(
         items: data.map((d) => (label: d.teamLeader, value: d.avgDR)).toList(),
         valueLabel: (v) => '${v.toStringAsFixed(1)}%',
       );
@@ -595,7 +747,7 @@ class _HorizontalBarList extends StatelessWidget {
         final color = _kChartColors[idx % _kChartColors.length];
 
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
             children: [
               SizedBox(
@@ -610,39 +762,211 @@ class _HorizontalBarList extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Expanded(
                 child: Stack(
                   alignment: Alignment.centerLeft,
                   children: [
                     Container(
-                      height: 22,
+                      height: 24,
                       decoration: BoxDecoration(
                         color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                     ),
                     FractionallySizedBox(
                       widthFactor: fraction,
                       child: Container(
-                        height: 22,
+                        height: 24,
                         decoration: BoxDecoration(
                           color: color,
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(6),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               SizedBox(
-                width: 52,
+                width: 60,
                 child: Text(
                   valueLabel(item.value),
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.end,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ── Risk-colored horizontal bar list ──────────────────────────────────────────
+
+class _RiskColoredHorizontalBarList extends StatelessWidget {
+  final List<({String label, double value})> items;
+  final String Function(double) valueLabel;
+
+  const _RiskColoredHorizontalBarList({
+    required this.items,
+    required this.valueLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const _EmptyWidget();
+    final maxVal = items.map((e) => e.value).reduce((a, b) => a > b ? a : b);
+
+    return Column(
+      children: items.asMap().entries.map((entry) {
+        final item = entry.value;
+        final fraction = maxVal > 0
+            ? (item.value / maxVal).clamp(0.03, 1.0)
+            : 0.0;
+        final color = _riskLevelColor(item.value);
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 160,
+                child: Tooltip(
+                  message: item.label,
+                  child: Text(
+                    item.label,
+                    style: const TextStyle(fontSize: 12),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Stack(
+                  alignment: Alignment.centerLeft,
+                  children: [
+                    Container(
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    FractionallySizedBox(
+                      widthFactor: fraction,
+                      child: Container(
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 60,
+                child: Text(
+                  valueLabel(item.value),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                  textAlign: TextAlign.end,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ── Green-colored horizontal bar list ────────────────────────────────────────
+
+class _GreenColoredHorizontalBarList extends StatelessWidget {
+  final List<({String label, double value})> items;
+  final String Function(double) valueLabel;
+
+  const _GreenColoredHorizontalBarList({
+    required this.items,
+    required this.valueLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const _EmptyWidget();
+    final maxVal = items.map((e) => e.value).reduce((a, b) => a > b ? a : b);
+
+    return Column(
+      children: items.asMap().entries.map((entry) {
+        final item = entry.value;
+        final fraction = maxVal > 0
+            ? (item.value / maxVal).clamp(0.03, 1.0)
+            : 0.0;
+        final color = _greenShadeByValue(item.value, maxVal);
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 160,
+                child: Tooltip(
+                  message: item.label,
+                  child: Text(
+                    item.label,
+                    style: const TextStyle(fontSize: 12),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Stack(
+                  alignment: Alignment.centerLeft,
+                  children: [
+                    Container(
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    FractionallySizedBox(
+                      widthFactor: fraction,
+                      child: Container(
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 60,
+                child: Text(
+                  valueLabel(item.value),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: color,
                   ),
                   textAlign: TextAlign.end,
                 ),
@@ -670,7 +994,7 @@ class _VerticalBarChart extends StatelessWidget {
     const chartHeight = 180.0;
 
     return SizedBox(
-      height: chartHeight + 40,
+      height: chartHeight + 50,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: items.asMap().entries.map((entry) {
@@ -683,34 +1007,104 @@ class _VerticalBarChart extends StatelessWidget {
 
           return Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 6),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   Text(
                     valueLabel(item.value),
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
                       color: color,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Container(
                     height: barH,
                     decoration: BoxDecoration(
                       color: color,
                       borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(4),
+                        top: Radius.circular(6),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   Tooltip(
                     message: item.label,
                     child: Text(
                       item.label,
-                      style: TextStyle(fontSize: 10, color: Colors.grey[700]),
+                      style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+// ── Green-shaded vertical bar chart ──────────────────────────────────────────
+
+class _GreenVerticalBarChart extends StatelessWidget {
+  final List<({String label, double value})> items;
+  final String Function(double) valueLabel;
+
+  const _GreenVerticalBarChart({required this.items, required this.valueLabel});
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const _EmptyWidget();
+    final maxVal = items.map((e) => e.value).reduce((a, b) => a > b ? a : b);
+    const chartHeight = 180.0;
+
+    return SizedBox(
+      height: chartHeight + 50,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: items.asMap().entries.map((entry) {
+          final item = entry.value;
+          final barH = maxVal > 0
+              ? (item.value / maxVal * chartHeight).clamp(4.0, chartHeight)
+              : 4.0;
+          final color = _greenShadeByValue(item.value, maxVal);
+
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    valueLabel(item.value),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: color,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    height: barH,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(6),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Tooltip(
+                    message: item.label,
+                    child: Text(
+                      item.label,
+                      style: TextStyle(fontSize: 11, color: Colors.grey[700]),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 2,
                       textAlign: TextAlign.center,
@@ -891,6 +1285,7 @@ class _DefectDetailsTableState extends State<_DefectDetailsTable> {
                             _FixedHeaderCell('Project No.', width: 160),
                             _FixedHeaderCell('Project Name', width: 320),
                             _FixedHeaderCell('Team Leader', width: 150),
+                            _FixedHeaderCell('Executor', width: 150),
                             _FixedHeaderCell('Defect Category', width: 260),
                             _FixedHeaderCell('Severity', width: 130),
                             _FixedHeaderCell('Reviewer Remark', width: 320),
@@ -908,6 +1303,7 @@ class _DefectDetailsTableState extends State<_DefectDetailsTable> {
                               _FixedDataCell(e.value.projectNumber, width: 160),
                               _TooltipDataCell(e.value.projectName, width: 320),
                               _FixedDataCell(e.value.teamLeader, width: 150),
+                              _FixedDataCell(e.value.executor, width: 150),
                               _TooltipDataCell(
                                 e.value.defectCategory,
                                 width: 260,
@@ -1005,20 +1401,24 @@ class _SeverityCell extends StatelessWidget {
       flex: 2,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: _severityColor(severity).withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            severity,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: _severityColor(severity),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: _severityColor(severity).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(20),
             ),
-            overflow: TextOverflow.ellipsis,
+            child: Text(
+              severity,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: _severityColor(severity),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ),
       ),
@@ -1127,20 +1527,24 @@ class _FixedSeverityCell extends StatelessWidget {
       width: width,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: _severityColor(severity).withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            severity,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: _severityColor(severity),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: _severityColor(severity).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(20),
             ),
-            overflow: TextOverflow.ellipsis,
+            child: Text(
+              severity,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: _severityColor(severity),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ),
       ),

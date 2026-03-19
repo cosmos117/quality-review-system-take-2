@@ -10,6 +10,7 @@ import 'package:quality_review/models/project_membership.dart';
 import 'package:quality_review/services/project_membership_service.dart';
 import 'package:quality_review/services/project_service.dart';
 import 'package:quality_review/services/role_service.dart';
+import 'package:quality_review/services/template_service.dart';
 import '../../models/project.dart';
 import '../../widgets/phase_overview_widget.dart';
 import '../../components/shimmer_loading.dart';
@@ -330,7 +331,17 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
     String priority = current.priority;
     String status = current.status;
     String? executor = current.executor;
+    String? templateName = current.templateName;
     String description = current.description ?? '';
+    List<Map<String, dynamic>> templateOptions = [];
+
+    if (Get.isRegistered<TemplateService>()) {
+      try {
+        templateOptions = await Get.find<TemplateService>().fetchTemplateNames(
+          forceRefresh: true,
+        );
+      } catch (_) {}
+    }
 
     const allowedPriorities = ['High', 'Medium', 'Low'];
     const allowedStatuses = ['In Progress', 'Completed', 'Not Started'];
@@ -430,6 +441,29 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
               ),
             ),
             const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: templateName,
+              isExpanded: true,
+              items: [
+                const DropdownMenuItem<String>(
+                  value: null,
+                  child: Text('Default Checklist Template'),
+                ),
+                ...templateOptions.map((t) {
+                  final name = (t['templateName'] ?? '').toString();
+                  final display = (t['name'] ?? name).toString();
+                  return DropdownMenuItem<String>(
+                    value: name,
+                    child: Text(display),
+                  );
+                }),
+              ],
+              onChanged: (v) => templateName = v,
+              decoration: const InputDecoration(
+                labelText: 'Checklist Template',
+              ),
+            ),
+            const SizedBox(height: 12),
             const Align(
               alignment: Alignment.centerLeft,
               child: Padding(
@@ -477,6 +511,7 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
                         executor: (executor == null || executor!.isEmpty)
                             ? null
                             : executor,
+                        templateName: templateName,
                         description: description,
                       );
                       Navigator.of(context).pop();

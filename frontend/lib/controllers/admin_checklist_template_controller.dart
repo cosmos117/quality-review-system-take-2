@@ -8,6 +8,8 @@ class AdminChecklistTemplateController extends GetxController {
 
   final phases = <PhaseModel>[].obs;
   final defectCategories = <DefectCategory>[].obs;
+  final templateOptions = <Map<String, dynamic>>[].obs;
+  final selectedTemplateName = RxnString();
   final isLoading = true.obs;
   final errorMessage = RxnString();
   Map<String, dynamic> _templateData = {};
@@ -19,29 +21,181 @@ class AdminChecklistTemplateController extends GetxController {
   // Track current tab index to preserve it across reloads
   final RxInt currentTabIndex = 0.obs;
 
-  // Hide phase index 0
-  List<int> get visiblePhaseIndexes =>
-      List.generate(phases.length, (i) => i).where((i) => i != 0).toList();
+  // Show all phase tabs
+  List<int> get visiblePhaseIndexes => List.generate(phases.length, (i) => i);
 
   @override
   void onInit() {
     super.onInit();
-    loadTemplate();
+    initializeTemplateLibrary();
   }
 
-  Future<void> loadTemplate() async {
+  Future<void> initializeTemplateLibrary() async {
+    isLoading.value = true;
+    errorMessage.value = null;
+
+    try {
+      final names = await templateService.fetchTemplateNames(
+        forceRefresh: true,
+      );
+      templateOptions.value = names;
+
+      if (names.isNotEmpty) {
+        final initial = (names.first['templateName'] ?? '').toString();
+        selectedTemplateName.value = initial.isEmpty ? null : initial;
+      } else {
+        selectedTemplateName.value = null;
+      }
+
+      await loadTemplate(templateName: selectedTemplateName.value);
+    } catch (e) {
+      // Fall back to legacy singleton template if library lookup fails.
+      selectedTemplateName.value = null;
+      await loadTemplate();
+    }
+  }
+
+  Future<void> refreshTemplateNames({bool forceRefresh = true}) async {
+    final names = await templateService.fetchTemplateNames(
+      forceRefresh: forceRefresh,
+    );
+    templateOptions.value = names;
+  }
+
+  Future<void> selectTemplate(String? templateName) async {
+    selectedTemplateName.value =
+        (templateName != null && templateName.trim().isNotEmpty)
+        ? templateName.trim()
+        : null;
+    await loadTemplate(templateName: selectedTemplateName.value);
+  }
+
+  Future<void> saveCurrentTemplateAs(String rawTemplateName) async {
+    final templateName = rawTemplateName.trim();
+    if (templateName.isEmpty) return;
+
+    isLoading.value = true;
+    try {
+      await templateService.saveTemplateAs(
+        templateName: templateName,
+        displayName: templateName,
+        templateData: _templateData,
+      );
+
+      await refreshTemplateNames(forceRefresh: true);
+      selectedTemplateName.value = templateName;
+      await loadTemplate(templateName: templateName);
+
+      Get.snackbar(
+        'Success',
+        'New template "$templateName" created',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e) {
+      isLoading.value = false;
+      Get.snackbar(
+        'Error',
+        'Failed to save template: $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  Future<void> saveSelectedTemplate() async {
+    final templateName = selectedTemplateName.value;
+    if (templateName == null || templateName.trim().isEmpty) {
+      Get.snackbar(
+        'Info',
+        'Default template changes are already applied directly.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    isLoading.value = true;
+    try {
+      await templateService.saveTemplate(
+        templateName: templateName,
+        templateData: _templateData,
+        displayName: (_templateData['name'] ?? templateName).toString(),
+      );
+
+      await loadTemplate(templateName: templateName);
+      Get.snackbar(
+        'Success',
+        'Template "$templateName" updated',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e) {
+      isLoading.value = false;
+      Get.snackbar(
+        'Error',
+        'Failed to save template: $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  Future<void> deleteSelectedTemplate() async {
+    final templateName = selectedTemplateName.value;
+    if (templateName == null || templateName.trim().isEmpty) {
+      Get.snackbar(
+        'Info',
+        'Default template cannot be deleted from this action',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    isLoading.value = true;
+    try {
+      await templateService.deleteNamedTemplate(templateName);
+      await refreshTemplateNames(forceRefresh: true);
+
+      if (templateOptions.isNotEmpty) {
+        final next = (templateOptions.first['templateName'] ?? '').toString();
+        selectedTemplateName.value = next.isEmpty ? null : next;
+      } else {
+        selectedTemplateName.value = null;
+      }
+
+      await loadTemplate(templateName: selectedTemplateName.value);
+      Get.snackbar(
+        'Deleted',
+        'Template "$templateName" deleted',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e) {
+      isLoading.value = false;
+      Get.snackbar(
+        'Error',
+        'Failed to delete template: $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  Future<void> loadTemplate({String? templateName}) async {
     isLoading.value = true;
     errorMessage.value = null;
     try {
       // Save current expansion states before reloading
       _saveExpansionStates();
 
-      final templateData = await templateService.fetchTemplate();
+      final templateData = await templateService.fetchTemplate(
+        templateName: templateName,
+        forceRefresh: true,
+      );
       _templateData = templateData;
 
       final stageKeys =
           templateData.keys
-              .where((key) => key.toString().startsWith('stage'))
+              .where(
+                (key) => RegExp(r'^stage[1-9]\d*$').hasMatch(key.toString()),
+              )
               .map((e) => e.toString())
               .toList()
             ..sort((a, b) {
@@ -51,7 +205,9 @@ class AdminChecklistTemplateController extends GetxController {
             });
 
       final stageNames =
-          (templateData['stageNames'] as Map<String, dynamic>?) ?? {};
+          (templateData['stageNames'] as Map<String, dynamic>?) ??
+          (templateData['phaseNames'] as Map<String, dynamic>?) ??
+          {};
 
       final newPhases = <PhaseModel>[];
       for (var stage in stageKeys) {
@@ -78,15 +234,25 @@ class AdminChecklistTemplateController extends GetxController {
       if (defectCategories.isEmpty || defectCategories.length <= 4) {
         defectCategories.value = _getDefaultDefectCategories();
         // Persist defaults to backend
-        await templateService.updateDefectCategories(defectCategories.toList());
+        await templateService.updateDefectCategories(
+          defectCategories.toList(),
+          templateName: selectedTemplateName.value,
+        );
       }
 
       isLoading.value = false;
     } catch (e) {
       if (e.toString().contains('Template not found')) {
+        if (selectedTemplateName.value != null) {
+          errorMessage.value =
+              'Selected template was not found. Please choose another template.';
+          isLoading.value = false;
+          return;
+        }
+
         try {
           await templateService.createOrUpdateTemplate();
-          await loadTemplate();
+          await loadTemplate(templateName: selectedTemplateName.value);
         } catch (createError) {
           errorMessage.value = 'Failed to create template: $createError';
           isLoading.value = false;
@@ -100,7 +266,10 @@ class AdminChecklistTemplateController extends GetxController {
 
   Future<void> updateDefectCategories(List<DefectCategory> updated) async {
     try {
-      await templateService.updateDefectCategories(updated);
+      await templateService.updateDefectCategories(
+        updated,
+        templateName: selectedTemplateName.value,
+      );
       defectCategories.value = updated;
       Get.snackbar(
         'Saved',
@@ -123,7 +292,7 @@ class AdminChecklistTemplateController extends GetxController {
     try {
       int nextStageNum = 1;
       _templateData.forEach((key, value) {
-        if (key.toString().startsWith('stage')) {
+        if (RegExp(r'^stage[1-9]\d*$').hasMatch(key.toString())) {
           final numStr = key.toString().replaceAll('stage', '');
           final num = int.tryParse(numStr);
           if (num != null && num >= nextStageNum) {
@@ -132,8 +301,12 @@ class AdminChecklistTemplateController extends GetxController {
         }
       });
       final newStage = 'stage$nextStageNum';
-      await templateService.addStage(stage: newStage, stageName: stageName);
-      await loadTemplate();
+      await templateService.addStage(
+        stage: newStage,
+        stageName: stageName,
+        templateName: selectedTemplateName.value,
+      );
+      await loadTemplate(templateName: selectedTemplateName.value);
       Get.snackbar(
         'Success',
         '"$stageName" stage added successfully',
@@ -153,8 +326,11 @@ class AdminChecklistTemplateController extends GetxController {
   Future<void> deletePhase(PhaseModel phase) async {
     isLoading.value = true;
     try {
-      await templateService.deleteStage(stage: phase.stage);
-      await loadTemplate();
+      await templateService.deleteStage(
+        stage: phase.stage,
+        templateName: selectedTemplateName.value,
+      );
+      await loadTemplate(templateName: selectedTemplateName.value);
       Get.snackbar(
         'Success',
         'Phase "${phase.name}" deleted',

@@ -9,6 +9,7 @@ import {
   getTeamLeadersList,
   getDefectCategoriesList,
   getProjectsList,
+  getExecutorsList,
 } from "../services/analytics-excel.service.js";
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -63,18 +64,18 @@ export const getCategoryDistribution = asyncHandler(async (req, res) => {
 
 /** Shared helper: load raw data and return filter params from query string. */
 async function loadAndParse(req) {
-  const { teamLeader, project, defectCategory } = req.query;
+  const { teamLeader, project, defectCategory, executor } = req.query;
   const { summaryRows, detailRows } = await getRawAnalyticsData();
-  return { summaryRows, detailRows, teamLeader, project, defectCategory };
+  return { summaryRows, detailRows, teamLeader, project, defectCategory, executor };
 }
 
 // GET /analytics/summary
 export const getDashboardSummary = asyncHandler(async (req, res) => {
-  const { summaryRows, detailRows, teamLeader, project, defectCategory } =
+  const { summaryRows, detailRows, teamLeader, project, defectCategory, executor } =
     await loadAndParse(req);
 
   const { summary } = computeAnalytics(summaryRows, detailRows, {
-    teamLeader, project, defectCategory,
+    teamLeader, project, defectCategory, executor,
   });
 
   return res.json(new ApiResponse(200, summary, "Summary fetched"));
@@ -82,11 +83,11 @@ export const getDashboardSummary = asyncHandler(async (req, res) => {
 
 // GET /analytics/top-defect-categories
 export const getTopDefectCategories = asyncHandler(async (req, res) => {
-  const { summaryRows, detailRows, teamLeader, project, defectCategory } =
+  const { summaryRows, detailRows, teamLeader, project, defectCategory, executor } =
     await loadAndParse(req);
 
   const { topDefectCategories } = computeAnalytics(summaryRows, detailRows, {
-    teamLeader, project, defectCategory,
+    teamLeader, project, defectCategory, executor,
   });
 
   return res.json(
@@ -96,11 +97,11 @@ export const getTopDefectCategories = asyncHandler(async (req, res) => {
 
 // GET /analytics/defect-severity-distribution
 export const getDefectSeverityDistribution = asyncHandler(async (req, res) => {
-  const { summaryRows, detailRows, teamLeader, project, defectCategory } =
+  const { summaryRows, detailRows, teamLeader, project, defectCategory, executor } =
     await loadAndParse(req);
 
   const { severityDistribution } = computeAnalytics(summaryRows, detailRows, {
-    teamLeader, project, defectCategory,
+    teamLeader, project, defectCategory, executor,
   });
 
   return res.json(
@@ -114,6 +115,7 @@ export const getDefectDetails = asyncHandler(async (req, res) => {
     teamLeader,
     project,
     defectCategory,
+    executor,
     page = "1",
     limit = "20",
     search = "",
@@ -124,7 +126,7 @@ export const getDefectDetails = asyncHandler(async (req, res) => {
 
   const { summaryRows, detailRows } = await getRawAnalyticsData();
   const { defectDetails } = computeAnalytics(summaryRows, detailRows, {
-    teamLeader, project, defectCategory,
+    teamLeader, project, defectCategory, executor,
     page: pageNum, limitNum, search,
   });
 
@@ -147,13 +149,19 @@ export const getDashboardDefectCategories = asyncHandler(async (req, res) => {
   return res.json(new ApiResponse(200, categories, "Defect categories fetched"));
 });
 
+// GET /analytics/executors
+export const getDashboardExecutors = asyncHandler(async (req, res) => {
+  const { allExecutors } = await getRawAnalyticsData();
+  return res.json(new ApiResponse(200, allExecutors || [], "Executors fetched"));
+});
+
 // GET /analytics/dr-by-project
 export const getDrByProject = asyncHandler(async (req, res) => {
-  const { teamLeader, project, defectCategory } = req.query;
+  const { teamLeader, project, defectCategory, executor } = req.query;
   const { summaryRows, detailRows } = await getRawAnalyticsData();
 
   const { drByProject } = computeAnalytics(summaryRows, detailRows, {
-    teamLeader, project, defectCategory,
+    teamLeader, project, defectCategory, executor,
   });
 
   return res.json(new ApiResponse(200, drByProject, "DR by project fetched"));
@@ -161,11 +169,11 @@ export const getDrByProject = asyncHandler(async (req, res) => {
 
 // GET /analytics/dr-by-team-leader
 export const getDrByTeamLeader = asyncHandler(async (req, res) => {
-  const { teamLeader, project, defectCategory } = req.query;
+  const { teamLeader, project, defectCategory, executor } = req.query;
   const { summaryRows, detailRows } = await getRawAnalyticsData();
 
   const { drByTeamLeader } = computeAnalytics(summaryRows, detailRows, {
-    teamLeader, project, defectCategory,
+    teamLeader, project, defectCategory, executor,
   });
 
   return res.json(new ApiResponse(200, drByTeamLeader, "DR by team leader fetched"));

@@ -50,7 +50,12 @@ export async function getRawAnalyticsData() {
         .populate("role", "role_name")
         .lean(),
       mongoose.model("Template").find({}, "defectCategories").lean(),
-      mongoose.model("ProjectChecklist").find().lean(),
+      mongoose.model("ProjectChecklist").find()
+        .populate("groups.questions.answeredBy.executor", "name")
+        .populate("groups.sections.questions.answeredBy.executor", "name")
+        .populate("iterations.groups.questions.answeredBy.executor", "name")
+        .populate("iterations.groups.sections.questions.answeredBy.executor", "name")
+        .lean(),
     ]);
 
   // Build category ID → name lookup (same as export service)
@@ -65,25 +70,67 @@ export async function getRawAnalyticsData() {
 
   // Build project → team leader array map
   const tlMap = new Map(); // projectId → string[]
+  const execMap = new Map(); // projectId → string[] (collected executors)
+  
   for (const m of memberships) {
     const roleName = m.role?.role_name?.toLowerCase() ?? "";
-    if (!roleName.includes("teamleader")) continue;
     const pid = m.project_id?.toString();
     const name = m.user_id?.name ?? "";
     if (!pid || !name) continue;
-    if (!tlMap.has(pid)) tlMap.set(pid, []);
-    tlMap.get(pid).push(name);
+
+    // Team leaders map
+    if (roleName.includes("teamleader")) {
+      if (!tlMap.has(pid)) tlMap.set(pid, []);
+      tlMap.get(pid).push(name);
+    }
+
+    // Executors map - collect ALL executor names
+    if (roleName.includes("executor")) {
+      if (!execMap.has(pid)) execMap.set(pid, []);
+      execMap.get(pid).push(name);
+    }
+  }
+
+  // Collect ALL unique executor names from all projects (split, clean, deduplicate)
+  const allExecutorsSet = new Set();
+  const executorNamesToIgnore = new Set(["na", "-"]); // Only ignore these (case-insensitive for "NA")
+
+  for (const executorList of execMap.values()) {
+    for (const rawNames of executorList) {
+      // Split by comma, slash, semicolon, or newline
+      const names = rawNames
+        .split(/[,/;\n]/)
+        .map(n => n.trim())
+        .filter(n => n.length > 0); // Empty strings already filtered out
+
+      for (const name of names) {
+        // Skip only specified invalid values (case-insensitive comparison)
+        const lowerName = name.toLowerCase();
+        if (executorNamesToIgnore.has(lowerName)) {
+          continue;
+        }
+        // Add the original (non-lowercased) name to the set for display
+        // This preserves "executor" name and original casing for all names
+        allExecutorsSet.add(name);
+      }
+    }
   }
 
   // ── Summary rows (one per project) ────────────────────────────────────────
   const summaryRows = projects.map((p) => {
     const pid = p._id?.toString();
+    const teamLeaders = tlMap.get(pid) ?? [];
+    // Build executor string per project for use as fallback in detail rows
+    const projectExecutors = (execMap.get(pid) ?? []).join(", ");
+    
     return {
       projectNumber: p.project_no ?? "",
       projectName: p.project_name ?? "",
-      teamLeaders: tlMap.get(pid) ?? [],
+      teamLeaders,
       overallDR: p.overallDefectRate ?? null,
       status: p.status ?? "",
+      // Store executors at project level for fallback use
+      executors: projectExecutors,
     };
   });
 
@@ -95,6 +142,8 @@ export async function getRawAnalyticsData() {
 
     const pid = project._id?.toString();
     const teamLeader = (tlMap.get(pid) ?? []).join(", ");
+    // Get project-level executors as fallback for detail rows
+    const projectExecutors = (execMap.get(pid) ?? []).join(", ");
 
     const projectStages = stages.filter(
       (s) => s.project_id?.toString() === pid,
@@ -114,7 +163,16 @@ export async function getRawAnalyticsData() {
       );
       if (!checklistDoc) continue;
 
-      const pushQuestion = (question) => {
+      const processQuestion = (question) => {
+        // Extract executor name from question's answered by reference
+        const questionExecutor = question.answeredBy?.executor?.name ?? "";
+        
+        // Use question executor if available, otherwise fall back to project-level executors
+        const finalExecutor = questionExecutor.trim() ? questionExecutor : projectExecutors;
+        // If still empty, use dash as placeholder
+        const executor = finalExecutor.trim() || "-";
+
+        // Only add to detail rows if it has a defect category
         const rawCatId = question.categoryId?.toString() ?? "";
         const defectCategory = rawCatId
           ? (categoryMap.get(rawCatId) ?? "")
@@ -126,6 +184,7 @@ export async function getRawAnalyticsData() {
           projectNumber: project.project_no ?? "",
           projectName: project.project_name ?? "",
           teamLeader,
+          executor,
           phase: phaseNumber,
           defectCategory,
           defectSeverity: question.severity ?? "",
@@ -134,15 +193,25 @@ export async function getRawAnalyticsData() {
       };
 
       for (const group of checklistDoc.groups ?? []) {
-        (group.questions ?? []).forEach(pushQuestion);
+        (group.questions ?? []).forEach(processQuestion);
         for (const section of group.sections ?? []) {
-          (section.questions ?? []).forEach(pushQuestion);
+          (section.questions ?? []).forEach(processQuestion);
+        }
+      }
+
+      // Also process iterations which contain groups with questions
+      for (const iteration of checklistDoc.iterations ?? []) {
+        for (const group of iteration.groups ?? []) {
+          (group.questions ?? []).forEach(processQuestion);
+          for (const section of group.sections ?? []) {
+            (section.questions ?? []).forEach(processQuestion);
+          }
         }
       }
     }
   }
 
-  const result = { summaryRows, detailRows };
+  const result = { summaryRows, detailRows, allExecutors: Array.from(allExecutorsSet).sort() };
   _rawCache.set(RAW_CACHE_KEY, result);
   return result;
 }
@@ -158,7 +227,7 @@ function normStr(s) {
 function filterRows(
   detailRows,
   summaryRows,
-  { teamLeader, project, defectCategory },
+  { teamLeader, project, defectCategory, executor },
 ) {
   let dr = detailRows;
   let sr = summaryRows;
@@ -202,6 +271,12 @@ function filterRows(
     // defectCategory filter does not restrict summary rows (KPIs stay project-level)
   }
 
+  if (executor) {
+    const exc = normStr(executor);
+    dr = dr.filter((r) => normStr(r.executor) === exc);
+    // executor filter does not restrict summary rows (KPIs stay project-level)
+  }
+
   return { dr, sr };
 }
 
@@ -214,6 +289,7 @@ export function computeAnalytics(summaryRows, detailRows, filters = {}) {
     teamLeader = null,
     project = null,
     defectCategory = null,
+    executor = null,
     page = 1,
     limitNum = 20,
     search = "",
@@ -222,7 +298,7 @@ export function computeAnalytics(summaryRows, detailRows, filters = {}) {
   const { dr: filtered, sr: filteredSummary } = filterRows(
     detailRows,
     summaryRows,
-    { teamLeader, project, defectCategory },
+    { teamLeader, project, defectCategory, executor },
   );
 
   // ── KPI summary ─────────────────────────────────────────────────────────
@@ -325,6 +401,7 @@ export function computeAnalytics(summaryRows, detailRows, filters = {}) {
       project_number: r.projectNumber,
       project_name: r.projectName,
       team_leader: r.teamLeader,
+      executor: r.executor,
       defect_category: r.defectCategory,
       defect_severity: r.defectSeverity,
       reviewer_remark: r.reviewerRemark,
@@ -375,4 +452,14 @@ export function getProjectsList(summaryRows) {
       no: r.projectNumber,
       id: r.projectName || r.projectNumber, // use name as display key
     }));
+}
+
+export function getExecutorsList(detailRows) {
+  const set = new Set();
+  for (const r of detailRows) {
+    if (r.executor && r.executor.trim()) {
+      set.add(r.executor);
+    }
+  }
+  return [...set].sort();
 }

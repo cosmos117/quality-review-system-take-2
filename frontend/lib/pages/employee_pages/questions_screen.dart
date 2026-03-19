@@ -49,6 +49,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   int _selectedPhase = 1; // Currently selected phase (1 = first phase)
   int _activePhase = 1; // Active phase index (enabled for editing)
   int _maxActualPhase = 7; // Max phase number discovered from stages
+  List<int> _availablePhaseNumbers = [1]; // Real phases from stage keys
   bool _isProjectCompleted = false; // Track if all phases are completed
   Map<String, dynamic> _stageMap = {}; // Map stageKey to stage data
   Map<String, dynamic>? _approvalStatus;
@@ -221,7 +222,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
     // Get actual phase number from UI selection
     // UI phases are 1, 2, 3 and these directly map to stage1, stage2, stage3
-    final phase = _selectedPhase;
+    int phase = _selectedPhase;
 
     try {
       // Step 0: Load defect categories from template
@@ -253,6 +254,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       // Build stage map and discover maximum actual phase number
       // Also load conflict counters for all phases
       int discoveredMaxActual = 1;
+      final discoveredPhaseNumbers = <int>{};
       final stageMap = <String, dynamic>{};
       final conflictCountersMap = <int, int>{};
 
@@ -270,6 +272,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         if (match != null) {
           final p = int.tryParse(match.group(1) ?? '') ?? 0;
           if (p > discoveredMaxActual) discoveredMaxActual = p;
+          if (p > 0) discoveredPhaseNumbers.add(p);
 
           // Load conflict counter for this phase - handle both int and double
           final conflictValue = s['conflict_count'];
@@ -280,15 +283,28 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         }
       }
 
+      final availablePhases = discoveredPhaseNumbers.toList()..sort();
+
       setState(() {
         _stageMap = stageMap;
         _maxActualPhase = discoveredMaxActual;
+        _availablePhaseNumbers = availablePhases.isEmpty
+            ? [1]
+            : availablePhases;
         // Clear and update conflict counters for all phases
         _conflictCounters.clear();
         _conflictCounters.addAll(conflictCountersMap);
 
+        // Keep selected phase valid for projects that start at stageN (e.g., stage3)
+        if (!_availablePhaseNumbers.contains(_selectedPhase)) {
+          _selectedPhase = _availablePhaseNumbers.first;
+        }
+
         // Loopback counters will be loaded separately from dedicated getRevertCount API
       });
+
+      // Use normalized selected phase after available-stage reconciliation.
+      phase = _selectedPhase;
 
       if (stages.isEmpty) {
         if (!mounted) return;
@@ -999,56 +1015,80 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   }
 
   Future<void> _computeActivePhase() async {
-    int active = 1;
+    final availablePhases =
+        _availablePhaseNumbers.isEmpty
+              ? <int>[1]
+              : List<int>.from(_availablePhaseNumbers)
+          ..sort();
+    int active = availablePhases.first;
     bool allPhasesCompleted = false;
     try {
-      // Fetch all phase statuses in parallel instead of sequential loop
+      // Fetch statuses for the actual available phases only
       // Force refresh to always get latest approval status
-      final statusFutures = List.generate(
-        _maxActualPhase,
-        (i) => _approvalService
-            .getStatus(widget.projectId, i + 1, forceRefresh: true)
-            .catchError((_) => null),
-      );
+      final statusFutures = availablePhases
+          .map(
+            (phaseNum) => _approvalService
+                .getStatus(widget.projectId, phaseNum, forceRefresh: true)
+                .catchError((_) => null),
+          )
+          .toList();
       final statuses = await Future.wait(statusFutures);
 
+      bool allApproved = true;
       for (int i = 0; i < statuses.length; i++) {
         final status = statuses[i];
+        final phaseNum = availablePhases[i];
         if (status != null && status['status'] == 'approved') {
-          active = i + 2; // next phase becomes active
+          // Move active phase to the next available phase.
+          if (i + 1 < availablePhases.length) {
+            active = availablePhases[i + 1];
+          } else {
+            active = phaseNum;
+          }
         } else {
+          active = phaseNum;
+          allApproved = false;
           break;
         }
       }
 
-      // If active phase exceeds max phase, all phases are completed
-      if (active > _maxActualPhase) {
+      if (allApproved) {
         allPhasesCompleted = true;
-        active = _maxActualPhase; // Stay on last phase
+        active = availablePhases.last;
       }
     } catch (_) {}
     if (!mounted) return;
     setState(() {
       _isProjectCompleted = allPhasesCompleted;
       _activePhase = active;
+      if (!_availablePhaseNumbers.contains(_selectedPhase)) {
+        _selectedPhase = _activePhase;
+      }
       final currentUserName = Get.isRegistered<AuthController>()
           ? Get.find<AuthController>().currentUser.value?.name
           : null;
       final isTeamLeader =
           currentUserName != null && authRoleIsTeamLeader(currentUserName);
       if (!isTeamLeader) {
-        if (_selectedPhase > _activePhase) _selectedPhase = _activePhase;
+        final selectedIndex = _availablePhaseNumbers.indexOf(_selectedPhase);
+        final activeIndex = _availablePhaseNumbers.indexOf(_activePhase);
+        if (selectedIndex > activeIndex && activeIndex >= 0) {
+          _selectedPhase = _activePhase;
+        }
       }
-      if (_selectedPhase < 1) _selectedPhase = 1;
+      if (_selectedPhase < 1) {
+        _selectedPhase = _availablePhaseNumbers.first;
+      }
     });
     // Refresh approval/compare for the currently selected phase in parallel with forced refresh
     // Also load revert counts for all phases to keep loopback counters updated
-    final revertCountFutures = List.generate(
-      _maxActualPhase,
-      (i) => _approvalService
-          .getRevertCount(widget.projectId, i + 1, forceRefresh: true)
-          .catchError((_) => 0),
-    );
+    final revertCountFutures = _availablePhaseNumbers
+        .map(
+          (phaseNum) => _approvalService
+              .getRevertCount(widget.projectId, phaseNum, forceRefresh: true)
+              .catchError((_) => 0),
+        )
+        .toList();
 
     await Future.wait([
       _approvalService
@@ -1068,7 +1108,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         if (mounted) {
           setState(() {
             for (int i = 0; i < counts.length; i++) {
-              _loopbackCounters[i + 1] = counts[i];
+              if (i < _availablePhaseNumbers.length) {
+                _loopbackCounters[_availablePhaseNumbers[i]] = counts[i];
+              }
             }
           });
         }
@@ -1158,90 +1200,98 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
               alignment: Alignment.center,
               dropdownColor: Colors.white,
               icon: const Icon(Icons.expand_more, color: Colors.white),
-              // Build UI phase list dynamically from actual phases [1.._maxActualPhase]
-              items:
-                  List<int>.generate(
-                    _maxActualPhase.clamp(1, 10),
-                    (i) => i + 1, // UI phases: 1, 2, 3, ...
-                  ).map((p) {
-                    // Get stage name from stageMap
-                    final stageKey = 'stage$p';
-                    final stageData =
-                        _stageMap[stageKey] as Map<String, dynamic>?;
-                    final stageName = stageData?['name'] ?? 'Phase $p';
+              // Build UI phase list from actual stage keys present in project
+              items: _availablePhaseNumbers.map((p) {
+                // Get stage name from stageMap
+                final stageKey = 'stage$p';
+                final stageData = _stageMap[stageKey] as Map<String, dynamic>?;
+                final stageName = stageData?['name'] ?? 'Phase $p';
+                final pIndex = _availablePhaseNumbers.indexOf(p);
+                final activeIndex = _availablePhaseNumbers.indexOf(
+                  _activePhase,
+                );
 
-                    return DropdownMenuItem(
-                      value: p,
-                      enabled: isTeamLeader ? true : (p <= _activePhase),
-                      child: Row(
-                        children: [
-                          // Show actual stage name from template
-                          Text(stageName),
-                          const SizedBox(width: 8),
-                          if (p < _activePhase)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.black12,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Text(
-                                'View only',
-                                style: TextStyle(fontSize: 10),
-                              ),
-                            )
-                          else if (p == _activePhase && !_isProjectCompleted)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.green.shade200,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Text(
-                                'Active',
-                                style: TextStyle(fontSize: 10),
-                              ),
-                            )
-                          else if (_isProjectCompleted && p <= _maxActualPhase)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.shade200,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Text(
-                                'Completed',
-                                style: TextStyle(fontSize: 10),
-                              ),
-                            )
-                          else if (p > _activePhase && isTeamLeader)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade300,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Text(
-                                'Pending',
-                                style: TextStyle(fontSize: 10),
-                              ),
-                            ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
+                return DropdownMenuItem(
+                  value: p,
+                  enabled: isTeamLeader
+                      ? true
+                      : (pIndex >= 0 && activeIndex >= 0
+                            ? pIndex <= activeIndex
+                            : false),
+                  child: Row(
+                    children: [
+                      // Show actual stage name from template
+                      Text(stageName),
+                      const SizedBox(width: 8),
+                      if (pIndex >= 0 &&
+                          activeIndex >= 0 &&
+                          pIndex < activeIndex)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black12,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text(
+                            'View only',
+                            style: TextStyle(fontSize: 10),
+                          ),
+                        )
+                      else if (p == _activePhase && !_isProjectCompleted)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade200,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text(
+                            'Active',
+                            style: TextStyle(fontSize: 10),
+                          ),
+                        )
+                      else if (_isProjectCompleted)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade200,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text(
+                            'Completed',
+                            style: TextStyle(fontSize: 10),
+                          ),
+                        )
+                      else if (pIndex >= 0 &&
+                          activeIndex >= 0 &&
+                          pIndex > activeIndex &&
+                          isTeamLeader)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text(
+                            'Pending',
+                            style: TextStyle(fontSize: 10),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              }).toList(),
               onChanged: (val) async {
                 if (val == null) return;
                 // TeamLeader can navigate to any phase for review

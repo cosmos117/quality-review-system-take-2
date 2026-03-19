@@ -22,14 +22,57 @@ import { clearAnalyticsCache } from "./analytics-excel.service.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
+async function resolveTemplateForProject(projectOrTemplateName) {
+  const templateName =
+    typeof projectOrTemplateName === "string"
+      ? projectOrTemplateName
+      : projectOrTemplateName?.templateName;
+
+  if (templateName && templateName.trim()) {
+    const named = await Template.findOne({
+      templateName: templateName.trim(),
+      isActive: { $ne: false },
+    }).lean();
+    if (!named) {
+      throw new ApiError(404, `Template \"${templateName}\" not found`);
+    }
+    return named;
+  }
+
+  const legacy = await Template.findOne({
+    $or: [
+      { templateName: { $exists: false } },
+      { templateName: null },
+      { templateName: "" },
+    ],
+  })
+    .sort({ createdAt: 1 })
+    .lean();
+
+  if (legacy) return legacy;
+
+  const anyTemplate = await Template.findOne().sort({ createdAt: 1 }).lean();
+  if (!anyTemplate) {
+    throw new ApiError(
+      404,
+      "Template not found. Please create a template first.",
+    );
+  }
+  return anyTemplate;
+}
+
 async function syncCheckpointsWithTemplate(projectId) {
   try {
-    const template = await Template.findOne().lean();
-    if (!template) return;
+    const project = await Project.findById(projectId)
+      .select("templateName")
+      .lean();
+    if (!project) return;
+
+    const template = await resolveTemplateForProject(project);
 
     const stages = await Stage.find(
       { project_id: projectId },
-      "_id stage_name",
+      "_id stage_name stage_key",
     ).lean();
 
     const deriveStageKeyFromName = (stageName) => {
@@ -42,7 +85,8 @@ async function syncCheckpointsWithTemplate(projectId) {
     const bulkOps = [];
 
     for (const stage of stages) {
-      const templateStageKey = deriveStageKeyFromName(stage.stage_name);
+      const templateStageKey =
+        stage.stage_key || deriveStageKeyFromName(stage.stage_name);
       if (!templateStageKey) continue;
 
       const templateChecklists = template[templateStageKey] || [];
@@ -81,10 +125,9 @@ async function syncCheckpointsWithTemplate(projectId) {
   }
 }
 
-async function createStagesAndChecklistsFromTemplate(projectId) {
+async function createStagesAndChecklistsFromTemplate(projectId, templateName) {
   try {
-    const template = await Template.findOne().lean();
-    if (!template) return;
+    const template = await resolveTemplateForProject(templateName);
 
     const stageKeys = Object.keys(template)
       .filter((key) => /^stage\d{1,2}$/.test(key))
@@ -170,7 +213,7 @@ export async function getProjectsForUser(userId) {
     .populate({
       path: "project_id",
       select:
-        "project_name project_no status priority start_date end_date created_by isReviewApplicable reviewApplicableRemark overallDefectRate createdAt",
+        "project_name project_no status priority start_date end_date created_by isReviewApplicable reviewApplicableRemark overallDefectRate templateName createdAt",
       populate: { path: "created_by", select: "name email" },
     })
     .populate("role", "role_name")
@@ -221,6 +264,10 @@ export async function getProjectById(id) {
 }
 
 export async function createProject(data) {
+  if (data.templateName && data.templateName.trim()) {
+    await resolveTemplateForProject(data.templateName.trim());
+  }
+
   const project = await Project.create(data);
   invalidateProjects();
   return Project.findById(project._id)
@@ -244,6 +291,7 @@ export async function updateProject(projectId, data, requestingUserId) {
     end_date,
     isReviewApplicable,
     reviewApplicableRemark,
+    templateName,
   } = data;
 
   const requestedStatus = typeof status === "string" ? status : existing.status;
@@ -273,6 +321,16 @@ export async function updateProject(projectId, data, requestingUserId) {
     reviewApplicableRemark === null
   )
     existing.reviewApplicableRemark = reviewApplicableRemark;
+  if (typeof templateName === "string") {
+    if (templateName.trim()) {
+      await resolveTemplateForProject(templateName.trim());
+      existing.templateName = templateName.trim();
+    } else {
+      existing.templateName = null;
+    }
+  } else if (templateName === null) {
+    existing.templateName = null;
+  }
 
   await existing.save();
   invalidateProjects();
@@ -286,7 +344,10 @@ export async function updateProject(projectId, data, requestingUserId) {
       project_id: existing._id,
     });
     if (existingStagesCount === 0) {
-      await createStagesAndChecklistsFromTemplate(existing._id);
+      await createStagesAndChecklistsFromTemplate(
+        existing._id,
+        existing.templateName,
+      );
     }
   }
 

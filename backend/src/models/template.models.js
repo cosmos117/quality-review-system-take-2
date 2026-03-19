@@ -60,11 +60,38 @@ const checklistTemplateSchema = new mongoose.Schema({
  */
 const templateSchema = new mongoose.Schema(
   {
+    // Optional identifier for named templates in the template library.
+    // Legacy singleton template documents may not have this field.
+    templateName: {
+      type: String,
+      trim: true,
+      sparse: true,
+      unique: true,
+    },
+
     name: {
       type: String,
       required: true,
       trim: true,
       default: "Default Quality Review Template",
+    },
+
+    description: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+
+    // Optional custom stage labels (e.g. stage1 => "Planning")
+    stageNames: {
+      type: Map,
+      of: String,
+      default: {},
     },
 
     // Defect Categories

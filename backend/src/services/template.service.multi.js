@@ -54,9 +54,10 @@ async function ensureTemplateConsistency(template) {
   return modified;
 }
 
-async function getTemplateSingleton() {
-  const template = await Template.findOne();
-  if (!template) throw new ApiError(404, "Template not found");
+async function getTemplateByName(templateName) {
+  const template = await Template.findOne({ templateName });
+  if (!template)
+    throw new ApiError(404, `Template "${templateName}" not found`);
   return template;
 }
 
@@ -87,28 +88,226 @@ function findSection(checklist, sectionId) {
 
 // ── Template CRUD ──
 
-export async function createOrUpdateTemplate(name, userId) {
-  let template = await Template.findOne();
-  if (template) {
-    if (name) template.name = name;
-    template.modifiedBy = userId;
-    await template.save();
-    invalidateTemplate();
-    return { template, created: false };
+/**
+ * Create a new template with a unique name
+ */
+export async function createTemplate(
+  templateName,
+  displayName,
+  description,
+  userId,
+) {
+  if (!templateName || !templateName.trim()) {
+    throw new ApiError(400, "templateName is required");
   }
-  template = await Template.create({
-    name: name || "Default Quality Review Template",
+
+  const existing = await Template.findOne({
+    templateName: templateName.trim(),
+  });
+  if (existing) {
+    throw new ApiError(
+      409,
+      `Template with name "${templateName}" already exists`,
+    );
+  }
+
+  const template = await Template.create({
+    templateName: templateName.trim(),
+    name: displayName || templateName.trim(),
+    description: description || "",
     modifiedBy: userId,
   });
+
   invalidateTemplate();
-  return { template, created: true };
+  return template;
 }
 
-export async function getTemplate(stage) {
+/**
+ * Save a complete template payload as a named template.
+ * Payload may include dynamic stageN arrays, stageNames and defectCategories.
+ */
+export async function saveTemplatePayload(
+  templateName,
+  displayName,
+  description,
+  templateData,
+  userId,
+) {
+  const normalizedTemplateName = (templateName || "").trim();
+  if (!normalizedTemplateName) {
+    throw new ApiError(400, "templateName is required");
+  }
+
+  const existing = await Template.findOne({
+    templateName: normalizedTemplateName,
+  });
+  if (existing) {
+    throw new ApiError(
+      409,
+      `Template with name "${normalizedTemplateName}" already exists`,
+    );
+  }
+
+  const payload = {
+    templateName: normalizedTemplateName,
+    name: (displayName || normalizedTemplateName).trim(),
+    description: (description || "").trim(),
+    isActive: true,
+    modifiedBy: userId,
+  };
+
+  if (
+    templateData.stageNames &&
+    typeof templateData.stageNames === "object" &&
+    !Array.isArray(templateData.stageNames)
+  ) {
+    payload.stageNames = templateData.stageNames;
+  }
+
+  if (Array.isArray(templateData.defectCategories)) {
+    payload.defectCategories = templateData.defectCategories.map((cat) => ({
+      name: cat?.name,
+      color: cat?.color || "#2196F3",
+      keywords: Array.isArray(cat?.keywords) ? cat.keywords : [],
+    }));
+  }
+
+  // Copy dynamic stageN fields exactly as stored in existing template format
+  for (const [key, value] of Object.entries(templateData)) {
+    if (/^stage\d{1,2}$/.test(key) && Array.isArray(value)) {
+      payload[key] = value;
+    }
+  }
+
+  const template = await Template.create(payload);
+  invalidateTemplate();
+  return template;
+}
+
+/**
+ * Update an existing named template with a full template payload.
+ */
+export async function updateTemplatePayload(
+  templateName,
+  displayName,
+  description,
+  templateData,
+  userId,
+) {
+  const normalizedTemplateName = (templateName || "").trim();
+  if (!normalizedTemplateName) {
+    throw new ApiError(400, "templateName is required");
+  }
+
+  const existing = await Template.findOne({
+    templateName: normalizedTemplateName,
+  });
+  if (!existing) {
+    throw new ApiError(
+      404,
+      `Template with name "${normalizedTemplateName}" not found`,
+    );
+  }
+
+  const existingObj = existing.toObject({ flattenMaps: true });
+  const existingStageKeys = Object.keys(existingObj).filter((key) =>
+    /^stage\d{1,2}$/.test(key),
+  );
+
+  const payloadStageKeys = Object.keys(templateData || {}).filter((key) =>
+    /^stage\d{1,2}$/.test(key),
+  );
+
+  const setObj = {
+    modifiedBy: userId,
+  };
+
+  if (displayName && displayName.trim()) {
+    setObj.name = displayName.trim();
+  }
+  if (description !== undefined) {
+    setObj.description = (description || "").trim();
+  }
+
+  if (
+    templateData.stageNames &&
+    typeof templateData.stageNames === "object" &&
+    !Array.isArray(templateData.stageNames)
+  ) {
+    setObj.stageNames = templateData.stageNames;
+  }
+
+  if (Array.isArray(templateData.defectCategories)) {
+    setObj.defectCategories = templateData.defectCategories.map((cat) => ({
+      name: cat?.name,
+      color: cat?.color || "#2196F3",
+      keywords: Array.isArray(cat?.keywords) ? cat.keywords : [],
+    }));
+  }
+
+  for (const key of payloadStageKeys) {
+    const value = templateData[key];
+    if (Array.isArray(value)) {
+      setObj[key] = value;
+    }
+  }
+
+  const unsetObj = {};
+  for (const key of existingStageKeys) {
+    if (!payloadStageKeys.includes(key)) {
+      unsetObj[key] = "";
+    }
+  }
+
+  const update = { $set: setObj };
+  if (Object.keys(unsetObj).length > 0) {
+    update.$unset = unsetObj;
+  }
+
+  await Template.updateOne({ _id: existing._id }, update);
+  invalidateTemplate();
+
+  return Template.findOne({ templateName: normalizedTemplateName }).lean();
+}
+
+/**
+ * Get all template names for dropdown (returns array of { templateName, name, description })
+ */
+export async function getAllTemplateNames(isActive = true) {
   return getOrSet(
-    keys.template(stage),
+    keys.template("allNames"),
     async () => {
-      const template = await getTemplateSingleton();
+      const query = isActive ? { isActive: true } : {};
+      const templates = await Template.find(query)
+        .select({
+          templateName: 1,
+          name: 1,
+          description: 1,
+          isActive: 1,
+          createdAt: 1,
+        })
+        .sort({ createdAt: -1 });
+
+      return templates.map((t) => ({
+        templateName: t.templateName,
+        name: t.name,
+        description: t.description,
+        isActive: t.isActive,
+        createdAt: t.createdAt,
+      }));
+    },
+    TTL.TEMPLATES,
+  );
+}
+
+/**
+ * Get complete template by name including all stages/phases
+ */
+export async function getTemplate(templateName, stage) {
+  return getOrSet(
+    keys.template(`${templateName}:${stage || "all"}`),
+    async () => {
+      const template = await getTemplateByName(templateName);
 
       const wasModified = await ensureTemplateConsistency(template);
       if (wasModified) await template.save();
@@ -117,7 +316,9 @@ export async function getTemplate(stage) {
         validateStage(stage);
         return {
           _id: template._id,
+          templateName: template.templateName,
           name: template.name,
+          description: template.description,
           [stage]: template[stage],
           modifiedBy: template.modifiedBy,
           createdAt: template.createdAt,
@@ -133,17 +334,88 @@ export async function getTemplate(stage) {
   );
 }
 
-export async function resetTemplate() {
-  const result = await Template.deleteOne({});
+/**
+ * Update template name or metadata
+ */
+export async function updateTemplateMetadata(templateName, updates, userId) {
+  const template = await getTemplateByName(templateName);
+
+  if (updates.name) template.name = updates.name;
+  if (updates.description !== undefined)
+    template.description = updates.description;
+  if (updates.isActive !== undefined) template.isActive = updates.isActive;
+  if (
+    updates.stageNames &&
+    typeof updates.stageNames === "object" &&
+    !Array.isArray(updates.stageNames)
+  ) {
+    template.stageNames = {
+      ...(template.stageNames?.toObject?.() || template.stageNames || {}),
+      ...updates.stageNames,
+    };
+    template.markModified("stageNames");
+  }
+
+  template.modifiedBy = userId;
+  await template.save();
   invalidateTemplate();
-  return { deletedCount: result.deletedCount };
+  return template;
+}
+
+/**
+ * Delete entire template
+ */
+export async function deleteTemplate(templateName) {
+  const template = await getTemplateByName(templateName);
+  await Template.deleteOne({ _id: template._id });
+  invalidateTemplate();
+  return { deletedCount: 1, templateName };
+}
+
+/**
+ * Duplicate a template with a new name
+ */
+export async function duplicateTemplate(
+  sourceTemplateName,
+  newTemplateName,
+  userId,
+) {
+  const sourceTemplate = await getTemplateByName(sourceTemplateName);
+
+  const existing = await Template.findOne({ templateName: newTemplateName });
+  if (existing) {
+    throw new ApiError(
+      409,
+      `Template with name "${newTemplateName}" already exists`,
+    );
+  }
+
+  const templateData = sourceTemplate.toObject();
+  delete templateData._id;
+  delete templateData.createdAt;
+  delete templateData.updatedAt;
+
+  const newTemplate = await Template.create({
+    ...templateData,
+    templateName: newTemplateName,
+    name: `${sourceTemplate.name} (Copy)`,
+    modifiedBy: userId,
+  });
+
+  invalidateTemplate();
+  return newTemplate;
 }
 
 // ── Checklist (group) management ──
 
-export async function addChecklistToTemplate(stage, text, userId) {
+export async function addChecklistToTemplate(
+  templateName,
+  stage,
+  text,
+  userId,
+) {
   validateStage(stage);
-  const template = await getTemplateSingleton();
+  const template = await getTemplateByName(templateName);
 
   if (!Array.isArray(template[stage])) template[stage] = [];
   template[stage].push({
@@ -160,13 +432,14 @@ export async function addChecklistToTemplate(stage, text, userId) {
 }
 
 export async function updateChecklistInTemplate(
+  templateName,
   checklistId,
   stage,
   text,
   userId,
 ) {
   validateStage(stage);
-  const template = await getTemplateSingleton();
+  const template = await getTemplateByName(templateName);
   const checklist = findChecklist(template, stage, checklistId);
   checklist.text = text.trim();
   template.markModified(stage);
@@ -176,9 +449,14 @@ export async function updateChecklistInTemplate(
   return template;
 }
 
-export async function deleteChecklistFromTemplate(checklistId, stage, userId) {
+export async function deleteChecklistFromTemplate(
+  templateName,
+  checklistId,
+  stage,
+  userId,
+) {
   validateStage(stage);
-  const template = await getTemplateSingleton();
+  const template = await getTemplateByName(templateName);
   findChecklist(template, stage, checklistId);
 
   await Template.collection.updateOne(
@@ -189,12 +467,13 @@ export async function deleteChecklistFromTemplate(checklistId, stage, userId) {
     },
   );
   invalidateTemplate();
-  return Template.findOne().lean();
+  return Template.findOne({ templateName }).lean();
 }
 
 // ── Checkpoint (question) management on checklists ──
 
 export async function addCheckpointToTemplate(
+  templateName,
   checklistId,
   stage,
   text,
@@ -202,7 +481,7 @@ export async function addCheckpointToTemplate(
   userId,
 ) {
   validateStage(stage);
-  const template = await getTemplateSingleton();
+  const template = await getTemplateByName(templateName);
   const checklist = findChecklist(template, stage, checklistId);
 
   const cpData = { _id: new mongoose.Types.ObjectId(), text: text.trim() };
@@ -216,6 +495,7 @@ export async function addCheckpointToTemplate(
 }
 
 export async function updateCheckpointInTemplate(
+  templateName,
   checkpointId,
   stage,
   checklistId,
@@ -224,7 +504,7 @@ export async function updateCheckpointInTemplate(
   userId,
 ) {
   validateStage(stage);
-  const template = await getTemplateSingleton();
+  const template = await getTemplateByName(templateName);
   const checklist = findChecklist(template, stage, checklistId);
   const checkpoint = checklist.checkpoints.find(
     (item) => item._id.toString() === checkpointId,
@@ -241,13 +521,14 @@ export async function updateCheckpointInTemplate(
 }
 
 export async function deleteCheckpointFromTemplate(
+  templateName,
   checkpointId,
   stage,
   checklistId,
   userId,
 ) {
   validateStage(stage);
-  const template = await getTemplateSingleton();
+  const template = await getTemplateByName(templateName);
   const checklist = findChecklist(template, stage, checklistId);
 
   if (
@@ -273,14 +554,20 @@ export async function deleteCheckpointFromTemplate(
     },
   );
   invalidateTemplate();
-  return Template.findOne().lean();
+  return Template.findOne({ templateName }).lean();
 }
 
 // ── Section management ──
 
-export async function addSectionToChecklist(checklistId, stage, text, userId) {
+export async function addSectionToChecklist(
+  templateName,
+  checklistId,
+  stage,
+  text,
+  userId,
+) {
   validateStage(stage);
-  const template = await getTemplateSingleton();
+  const template = await getTemplateByName(templateName);
   const checklist = findChecklist(template, stage, checklistId);
 
   if (!checklist.sections) checklist.sections = [];
@@ -297,6 +584,7 @@ export async function addSectionToChecklist(checklistId, stage, text, userId) {
 }
 
 export async function updateSectionInChecklist(
+  templateName,
   checklistId,
   sectionId,
   stage,
@@ -304,7 +592,7 @@ export async function updateSectionInChecklist(
   userId,
 ) {
   validateStage(stage);
-  const template = await getTemplateSingleton();
+  const template = await getTemplateByName(templateName);
   const checklist = findChecklist(template, stage, checklistId);
   const section = findSection(checklist, sectionId);
   section.text = text.trim();
@@ -316,13 +604,14 @@ export async function updateSectionInChecklist(
 }
 
 export async function deleteSectionFromChecklist(
+  templateName,
   checklistId,
   sectionId,
   stage,
   userId,
 ) {
   validateStage(stage);
-  const template = await getTemplateSingleton();
+  const template = await getTemplateByName(templateName);
   const checklist = findChecklist(template, stage, checklistId);
 
   if (
@@ -350,12 +639,13 @@ export async function deleteSectionFromChecklist(
     },
   );
   invalidateTemplate();
-  return Template.findOne().lean();
+  return Template.findOne({ templateName }).lean();
 }
 
 // ── Checkpoint management on sections ──
 
 export async function addCheckpointToSection(
+  templateName,
   checklistId,
   sectionId,
   stage,
@@ -364,7 +654,7 @@ export async function addCheckpointToSection(
   userId,
 ) {
   validateStage(stage);
-  const template = await getTemplateSingleton();
+  const template = await getTemplateByName(templateName);
   const checklist = findChecklist(template, stage, checklistId);
   const section = findSection(checklist, sectionId);
 
@@ -379,6 +669,7 @@ export async function addCheckpointToSection(
 }
 
 export async function updateCheckpointInSection(
+  templateName,
   checklistId,
   sectionId,
   checkpointId,
@@ -388,7 +679,7 @@ export async function updateCheckpointInSection(
   userId,
 ) {
   validateStage(stage);
-  const template = await getTemplateSingleton();
+  const template = await getTemplateByName(templateName);
   const checklist = findChecklist(template, stage, checklistId);
   const section = findSection(checklist, sectionId);
   const checkpoint = section.checkpoints.find(
@@ -407,6 +698,7 @@ export async function updateCheckpointInSection(
 }
 
 export async function deleteCheckpointFromSection(
+  templateName,
   checklistId,
   sectionId,
   checkpointId,
@@ -414,7 +706,7 @@ export async function deleteCheckpointFromSection(
   userId,
 ) {
   validateStage(stage);
-  const template = await getTemplateSingleton();
+  const template = await getTemplateByName(templateName);
   const checklist = findChecklist(template, stage, checklistId);
   const section = findSection(checklist, sectionId);
 
@@ -442,14 +734,19 @@ export async function deleteCheckpointFromSection(
     },
   );
   invalidateTemplate();
-  return Template.findOne().lean();
+  return Template.findOne({ templateName }).lean();
 }
 
 // ── Stage management ──
 
-export async function addStageToTemplate(stage, stageName, userId) {
+export async function addStageToTemplate(
+  templateName,
+  stage,
+  stageName,
+  userId,
+) {
   validateStage(stage);
-  const template = await getTemplateSingleton();
+  const template = await getTemplateByName(templateName);
 
   if (template[stage] !== undefined) {
     const existingStages = Object.keys(template.toObject()).filter((key) =>
@@ -471,12 +768,12 @@ export async function addStageToTemplate(stage, stageName, userId) {
     { $set: updateObj },
   );
   invalidateTemplate();
-  return Template.findOne().lean();
+  return Template.findOne({ templateName }).lean();
 }
 
-export async function deleteStageFromTemplate(stage, userId) {
+export async function deleteStageFromTemplate(templateName, stage, userId) {
   validateStage(stage);
-  const template = await getTemplateSingleton();
+  const template = await getTemplateByName(templateName);
 
   if (template[stage] === undefined) {
     const availableStages = Object.keys(template.toObject()).filter((key) =>
@@ -496,39 +793,14 @@ export async function deleteStageFromTemplate(stage, userId) {
     { $unset: unsetObj, $set: { modifiedBy: userId } },
   );
   invalidateTemplate();
-  return Template.findOne().lean();
+  return Template.findOne({ templateName }).lean();
 }
 
-export async function renameStageInTemplate(stage, stageName, userId) {
-  validateStage(stage);
-  if (!stageName || !stageName.trim()) {
-    throw new ApiError(400, "stageName is required");
-  }
-
-  const template = await getTemplateSingleton();
-  if (template[stage] === undefined) {
-    throw new ApiError(404, `Stage ${stage} not found`);
-  }
-
-  await Template.collection.updateOne(
-    { _id: template._id },
-    {
-      $set: {
-        [`stageNames.${stage}`]: stageName.trim(),
-        modifiedBy: userId,
-      },
-    },
-  );
-
-  invalidateTemplate();
-  return Template.findOne().lean();
-}
-
-export async function getAllStages() {
+export async function getAllStages(templateName) {
   return getOrSet(
-    keys.template("allStages"),
+    keys.template(`${templateName}:allStages`),
     async () => {
-      const template = await getTemplateSingleton();
+      const template = await getTemplateByName(templateName);
 
       const stageKeys = Object.keys(template.toObject())
         .filter((key) => /^stage\d{1,2}$/.test(key))
@@ -551,11 +823,16 @@ export async function getAllStages() {
 
 // ── Defect categories ──
 
-export async function updateDefectCategories(defectCategories, userId) {
-  const template = await getTemplateSingleton();
+export async function updateDefectCategories(
+  templateName,
+  defectCategories,
+  userId,
+) {
+  const template = await getTemplateByName(templateName);
   template.defectCategories = defectCategories.map((cat) => ({
     name: cat.name,
     color: cat.color || "#2196F3",
+    keywords: cat.keywords || [],
   }));
   template.modifiedBy = userId;
   await template.save();
@@ -565,68 +842,77 @@ export async function updateDefectCategories(defectCategories, userId) {
 
 // ── Seed ──
 
-export async function seedTemplate(userId) {
-  let template = await Template.findOne();
-  if (template) return { template, alreadyExists: true };
+/**
+ * Create sample templates for testing
+ */
+export async function seedSampleTemplates(userId) {
+  const existing = await Template.countDocuments();
+  if (existing > 0) {
+    return { message: "Templates already exist", count: existing };
+  }
 
-  template = await Template.create({
-    name: "Quality Review Process Template",
+  const fealTemplate = await Template.create({
+    templateName: "FEA_Checklist",
+    name: "FEA Checklist",
+    description: "Finite Element Analysis quality review template",
     stage1: [
       {
-        text: "Planning & Requirements",
+        text: "Model Setup",
         checkpoints: [
-          { text: "Project scope documented and approved" },
-          { text: "Requirements clearly defined" },
-          { text: "Timeline and budget approved" },
+          { text: "Geometry imported correctly" },
+          { text: "Material properties defined" },
+          { text: "Boundary conditions applied" },
         ],
       },
       {
-        text: "Team Setup",
+        text: "Meshing",
         checkpoints: [
-          { text: "Team members assigned" },
-          { text: "Roles and responsibilities defined" },
-          { text: "Communication channels established" },
+          { text: "Mesh density appropriate" },
+          { text: "Element quality verified" },
+          { text: "Refinement zones checked" },
         ],
       },
     ],
     stage2: [
       {
-        text: "Development & Testing",
+        text: "Analysis Execution",
         checkpoints: [
-          { text: "Code review completed" },
-          { text: "Unit tests written and passed" },
-          { text: "Integration testing done" },
-        ],
-      },
-      {
-        text: "Quality Assurance",
-        checkpoints: [
-          { text: "All bugs documented and fixed" },
-          { text: "Performance testing completed" },
-          { text: "Security review done" },
-        ],
-      },
-    ],
-    stage3: [
-      {
-        text: "Deployment Preparation",
-        checkpoints: [
-          { text: "Deployment plan documented" },
-          { text: "Rollback plan prepared" },
-          { text: "Production environment ready" },
-        ],
-      },
-      {
-        text: "Post-Deployment",
-        checkpoints: [
-          { text: "Deployment successful" },
-          { text: "Monitoring and logging active" },
-          { text: "User documentation complete" },
+          { text: "Solver parameters verified" },
+          { text: "Convergence criteria set" },
+          { text: "Run time reasonable" },
         ],
       },
     ],
     modifiedBy: userId,
   });
+
+  const cfmTemplate = await Template.create({
+    templateName: "CFM_Checklist",
+    name: "CFM Checklist",
+    description: "Computational Fluid Mechanics review template",
+    stage1: [
+      {
+        text: "Domain Setup",
+        checkpoints: [
+          { text: "Domain geometry defined" },
+          { text: "Inlet/outlet conditions set" },
+          { text: "Wall properties applied" },
+        ],
+      },
+    ],
+    stage2: [
+      {
+        text: "Solution",
+        checkpoints: [
+          { text: "Residuals converged" },
+          { text: "Mass balance verified" },
+          { text: "Results physically reasonable" },
+        ],
+      },
+    ],
+    modifiedBy: userId,
+  });
+
   invalidateTemplate();
-  return { template, alreadyExists: false };
+  return { created: 2, templates: [fealTemplate, cfmTemplate] };
 }

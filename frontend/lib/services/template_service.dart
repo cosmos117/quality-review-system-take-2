@@ -13,6 +13,7 @@ class TemplateService {
   TemplateService(this.http);
 
   static const String _baseUrl = '${ApiConfig.baseUrl}/templates';
+  static const String _libraryBaseUrl = '${ApiConfig.baseUrl}/template-library';
 
   /// Ensure token is set from current user
   void _ensureToken() {
@@ -25,17 +26,183 @@ class TemplateService {
     }
   }
 
+  String _templateRoot(String? templateName) {
+    if (templateName != null && templateName.trim().isNotEmpty) {
+      final encoded = Uri.encodeComponent(templateName.trim());
+      return '$_libraryBaseUrl/$encoded';
+    }
+    return _baseUrl;
+  }
+
+  Future<void> deleteNamedTemplate(String templateName) async {
+    try {
+      _ensureToken();
+      final root = _templateRoot(templateName);
+      await http.delete(Uri.parse(root));
+      _cache.clear();
+    } catch (e) {
+      throw Exception('Error deleting template: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> updateNamedTemplateMetadata({
+    required String templateName,
+    String? name,
+    String? description,
+    bool? isActive,
+    Map<String, dynamic>? stageNames,
+  }) async {
+    try {
+      _ensureToken();
+      final body = <String, dynamic>{};
+      if (name != null) body['name'] = name;
+      if (description != null) body['description'] = description;
+      if (isActive != null) body['isActive'] = isActive;
+      if (stageNames != null) body['stageNames'] = stageNames;
+
+      final root = _templateRoot(templateName);
+      final response = await http.patchJson(Uri.parse(root), body);
+      _cache.clear();
+      return response['data'] as Map<String, dynamic>? ?? response;
+    } catch (e) {
+      throw Exception('Error updating template metadata: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> renameStage({
+    required String stage,
+    required String stageName,
+    String? templateName,
+  }) async {
+    try {
+      _ensureToken();
+      if (!_isValidStage(stage)) {
+        throw Exception('Invalid stage format');
+      }
+      if (stageName.trim().isEmpty) {
+        throw Exception('Stage name is required');
+      }
+
+      if (templateName != null && templateName.trim().isNotEmpty) {
+        final current = await fetchTemplate(templateName: templateName);
+        final currentStageNames =
+            (current['stageNames'] as Map<String, dynamic>?) ?? {};
+        final merged = {...currentStageNames, stage: stageName.trim()};
+        return updateNamedTemplateMetadata(
+          templateName: templateName,
+          stageNames: merged,
+        );
+      }
+
+      final response = await http.patchJson(
+        Uri.parse('$_baseUrl/stages/$stage/name'),
+        {'stageName': stageName.trim()},
+      );
+      _cache.clear();
+      return response['data'] as Map<String, dynamic>? ?? response;
+    } catch (e) {
+      throw Exception('Error renaming stage: $e');
+    }
+  }
+
+  /// Get all saved template names for dropdown.
+  Future<List<Map<String, dynamic>>> fetchTemplateNames({
+    bool forceRefresh = false,
+  }) async {
+    return _cache.get('template:names', () async {
+      try {
+        _ensureToken();
+        final response = await http.getJson(Uri.parse('$_libraryBaseUrl/list'));
+        final data = response['data'];
+        if (data is List) {
+          return data.map((e) {
+            if (e is Map<String, dynamic>) return e;
+            return <String, dynamic>{};
+          }).toList();
+        }
+        return <Map<String, dynamic>>[];
+      } catch (e) {
+        throw Exception('Error fetching template names: $e');
+      }
+    }, forceRefresh: forceRefresh);
+  }
+
+  /// Save a complete template payload as a new named template.
+  Future<Map<String, dynamic>> saveTemplateAs({
+    required String templateName,
+    required Map<String, dynamic> templateData,
+    String? displayName,
+    String? description,
+  }) async {
+    try {
+      _ensureToken();
+      final body = <String, dynamic>{
+        'templateName': templateName,
+        'templateData': templateData,
+      };
+      if (displayName != null && displayName.trim().isNotEmpty) {
+        body['name'] = displayName.trim();
+      }
+      if (description != null) {
+        body['description'] = description;
+      }
+
+      final response = await http.postJson(
+        Uri.parse('$_libraryBaseUrl/save'),
+        body,
+      );
+      _cache.clear();
+      return response['data'] as Map<String, dynamic>? ?? response;
+    } catch (e) {
+      throw Exception('Error saving template: $e');
+    }
+  }
+
+  /// Save/update a complete payload into an existing named template.
+  Future<Map<String, dynamic>> saveTemplate({
+    required String templateName,
+    required Map<String, dynamic> templateData,
+    String? displayName,
+    String? description,
+  }) async {
+    try {
+      _ensureToken();
+      final body = <String, dynamic>{'templateData': templateData};
+      if (displayName != null && displayName.trim().isNotEmpty) {
+        body['name'] = displayName.trim();
+      }
+      if (description != null) {
+        body['description'] = description;
+      }
+
+      final root = _templateRoot(templateName);
+      final response = await http.putJson(Uri.parse('$root/save'), body);
+      _cache.clear();
+      return response['data'] as Map<String, dynamic>? ?? response;
+    } catch (e) {
+      throw Exception('Error updating template: $e');
+    }
+  }
+
   /// Fetch the complete template with all stages
   /// Optional [stage] parameter to filter by specific stage (stage1, stage2, stage3, stage4, etc.)
   Future<Map<String, dynamic>> fetchTemplate({
     String? stage,
+    String? templateName,
     bool forceRefresh = false,
   }) async {
-    final cacheKey = stage != null ? 'template:$stage' : 'template:full';
+    final root = _templateRoot(templateName);
+    final cacheKeyBase = templateName != null
+        ? 'template:named:$templateName'
+        : 'template:legacy';
+    final cacheKey = stage != null
+        ? '$cacheKeyBase:$stage'
+        : '$cacheKeyBase:full';
+
     return _cache.get(cacheKey, () async {
       try {
         _ensureToken();
-        String urlString = _baseUrl;
+        String urlString = root;
         if (stage != null && _isValidStage(stage)) {
           urlString = '$urlString?stage=$stage';
         }
@@ -80,6 +247,7 @@ class TemplateService {
   Future<Map<String, dynamic>> addChecklist({
     required String stage,
     required String checklistName,
+    String? templateName,
   }) async {
     try {
       _ensureToken();
@@ -89,7 +257,8 @@ class TemplateService {
         );
       }
 
-      final response = await http.postJson(Uri.parse('$_baseUrl/checklists'), {
+      final root = _templateRoot(templateName);
+      final response = await http.postJson(Uri.parse('$root/checklists'), {
         'stage': stage,
         'text': checklistName,
       });
@@ -108,6 +277,7 @@ class TemplateService {
     required String checklistId,
     required String stage,
     required String newName,
+    String? templateName,
   }) async {
     try {
       _ensureToken();
@@ -115,8 +285,9 @@ class TemplateService {
         throw Exception('Invalid stage format');
       }
 
+      final root = _templateRoot(templateName);
       final response = await http.patchJson(
-        Uri.parse('$_baseUrl/checklists/$checklistId'),
+        Uri.parse('$root/checklists/$checklistId'),
         {'stage': stage, 'text': newName},
       );
       _cache.clear();
@@ -132,6 +303,7 @@ class TemplateService {
   Future<void> deleteChecklist({
     required String checklistId,
     required String stage,
+    String? templateName,
   }) async {
     try {
       _ensureToken();
@@ -139,7 +311,8 @@ class TemplateService {
         throw Exception('Invalid stage format');
       }
 
-      await http.deleteJson(Uri.parse('$_baseUrl/checklists/$checklistId'), {
+      final root = _templateRoot(templateName);
+      await http.deleteJson(Uri.parse('$root/checklists/$checklistId'), {
         'stage': stage,
       });
       _cache.clear();
@@ -160,6 +333,7 @@ class TemplateService {
     required String questionText,
     String? categoryId,
     String? sectionId,
+    String? templateName,
   }) async {
     try {
       _ensureToken();
@@ -167,10 +341,11 @@ class TemplateService {
         throw Exception('Invalid stage format');
       }
 
+      final root = _templateRoot(templateName);
       // Build endpoint based on whether sectionId is provided
       final String endpoint = sectionId != null
-          ? '$_baseUrl/checklists/$checklistId/sections/$sectionId/checkpoints'
-          : '$_baseUrl/checklists/$checklistId/checkpoints';
+          ? '$root/checklists/$checklistId/sections/$sectionId/checkpoints'
+          : '$root/checklists/$checklistId/checkpoints';
 
       final body = {
         'stage': stage,
@@ -200,6 +375,7 @@ class TemplateService {
     required String newText,
     String? categoryId,
     String? sectionId,
+    String? templateName,
   }) async {
     try {
       _ensureToken();
@@ -207,10 +383,13 @@ class TemplateService {
         throw Exception('Invalid stage format');
       }
 
+      final root = _templateRoot(templateName);
       // Choose endpoint based on section presence
       final String endpoint = sectionId != null
-          ? '$_baseUrl/checklists/$checklistId/sections/$sectionId/checkpoints/$checkpointId'
-          : '$_baseUrl/checkpoints/$checkpointId';
+          ? '$root/checklists/$checklistId/sections/$sectionId/checkpoints/$checkpointId'
+          : (templateName != null
+                ? '$root/checklists/$checklistId/checkpoints/$checkpointId'
+                : '$_baseUrl/checkpoints/$checkpointId');
 
       final body = {
         'checklistId': checklistId,
@@ -238,6 +417,7 @@ class TemplateService {
     required String checklistId,
     required String stage,
     String? sectionId,
+    String? templateName,
   }) async {
     try {
       _ensureToken();
@@ -245,10 +425,13 @@ class TemplateService {
         throw Exception('Invalid stage format');
       }
 
+      final root = _templateRoot(templateName);
       // Build endpoint based on whether sectionId is provided
       final String endpoint = sectionId != null
-          ? '$_baseUrl/checklists/$checklistId/sections/$sectionId/checkpoints/$checkpointId'
-          : '$_baseUrl/checkpoints/$checkpointId';
+          ? '$root/checklists/$checklistId/sections/$sectionId/checkpoints/$checkpointId'
+          : (templateName != null
+                ? '$root/checklists/$checklistId/checkpoints/$checkpointId'
+                : '$_baseUrl/checkpoints/$checkpointId');
 
       final response = await http.deleteJson(Uri.parse(endpoint), {
         'checklistId': checklistId,
@@ -262,13 +445,24 @@ class TemplateService {
   }
 
   /// Update defect categories in template
-  Future<void> updateDefectCategories(List<dynamic> categories) async {
+  Future<void> updateDefectCategories(
+    List<dynamic> categories, {
+    String? templateName,
+  }) async {
     try {
       _ensureToken();
 
-      await http.patchJson(Uri.parse('$_baseUrl/defect-categories'), {
+      final body = {
         'defectCategories': categories.map((c) => c.toJson()).toList(),
-      });
+      };
+
+      if (templateName != null && templateName.trim().isNotEmpty) {
+        final root = _templateRoot(templateName);
+        await http.putJson(Uri.parse('$root/categories'), body);
+      } else {
+        await http.patchJson(Uri.parse('$_baseUrl/defect-categories'), body);
+      }
+
       _cache.clear();
     } catch (e) {
       throw Exception('Error updating defect categories: $e');
@@ -283,6 +477,7 @@ class TemplateService {
     required String checklistId,
     required String stage,
     required String sectionName,
+    String? templateName,
   }) async {
     try {
       _ensureToken();
@@ -290,8 +485,9 @@ class TemplateService {
         throw Exception('Invalid stage format');
       }
 
+      final root = _templateRoot(templateName);
       final response = await http.postJson(
-        Uri.parse('$_baseUrl/checklists/$checklistId/sections'),
+        Uri.parse('$root/checklists/$checklistId/sections'),
         {'stage': stage, 'text': sectionName},
       );
       _cache.clear();
@@ -311,6 +507,7 @@ class TemplateService {
     required String sectionId,
     required String stage,
     required String newName,
+    String? templateName,
   }) async {
     try {
       _ensureToken();
@@ -318,10 +515,14 @@ class TemplateService {
         throw Exception('Invalid stage format');
       }
 
-      final response = await http.putJson(
-        Uri.parse('$_baseUrl/checklists/$checklistId/sections/$sectionId'),
-        {'stage': stage, 'text': newName},
+      final root = _templateRoot(templateName);
+      final uri = Uri.parse(
+        '$root/checklists/$checklistId/sections/$sectionId',
       );
+      final body = {'stage': stage, 'text': newName};
+      final response = templateName != null
+          ? await http.patchJson(uri, body)
+          : await http.putJson(uri, body);
       _cache.clear();
       return response['data'] as Map<String, dynamic>? ?? response;
     } catch (e) {
@@ -337,6 +538,7 @@ class TemplateService {
     required String checklistId,
     required String sectionId,
     required String stage,
+    String? templateName,
   }) async {
     try {
       _ensureToken();
@@ -344,8 +546,9 @@ class TemplateService {
         throw Exception('Invalid stage format');
       }
 
+      final root = _templateRoot(templateName);
       await http.deleteJson(
-        Uri.parse('$_baseUrl/checklists/$checklistId/sections/$sectionId'),
+        Uri.parse('$root/checklists/$checklistId/sections/$sectionId'),
         {'stage': stage},
       );
       _cache.clear();
@@ -362,6 +565,7 @@ class TemplateService {
   Future<Map<String, dynamic>> addStage({
     required String stage,
     String? stageName,
+    String? templateName,
   }) async {
     try {
       _ensureToken();
@@ -371,12 +575,13 @@ class TemplateService {
         );
       }
 
+      final root = _templateRoot(templateName);
       final body = {'stage': stage};
       if (stageName != null && stageName.trim().isNotEmpty) {
         body['stageName'] = stageName.trim();
       }
 
-      final response = await http.postJson(Uri.parse('$_baseUrl/stages'), body);
+      final response = await http.postJson(Uri.parse('$root/stages'), body);
       _cache.clear();
       return response['data'] as Map<String, dynamic>? ?? response;
     } catch (e) {
@@ -386,7 +591,10 @@ class TemplateService {
 
   /// Delete a stage from the template
   /// [stage] must be in format: stage1, stage2, stage3, stage4, etc.
-  Future<void> deleteStage({required String stage}) async {
+  Future<void> deleteStage({
+    required String stage,
+    String? templateName,
+  }) async {
     try {
       _ensureToken();
       if (!_isValidStage(stage)) {
@@ -395,7 +603,8 @@ class TemplateService {
         );
       }
 
-      await http.deleteJson(Uri.parse('$_baseUrl/stages/$stage'), {});
+      final root = _templateRoot(templateName);
+      await http.deleteJson(Uri.parse('$root/stages/$stage'), {});
       _cache.clear();
     } catch (e) {
       throw Exception('Error deleting stage: $e');
@@ -403,11 +612,19 @@ class TemplateService {
   }
 
   /// Get all stages with their names from the template
-  Future<Map<String, String>> getStages({bool forceRefresh = false}) async {
-    return _cache.get('template:stages', () async {
+  Future<Map<String, String>> getStages({
+    String? templateName,
+    bool forceRefresh = false,
+  }) async {
+    final cacheKey = templateName != null
+        ? 'template:named:$templateName:stages'
+        : 'template:stages';
+
+    return _cache.get(cacheKey, () async {
       try {
         _ensureToken();
-        final response = await http.getJson(Uri.parse('$_baseUrl/stages'));
+        final root = _templateRoot(templateName);
+        final response = await http.getJson(Uri.parse('$root/stages'));
         final stagesData = response['data'] as Map<String, dynamic>? ?? {};
 
         return stagesData.map((key, value) {
@@ -424,14 +641,19 @@ class TemplateService {
   /// Validate template completeness
   /// Returns a map with 'isComplete' boolean and 'incompletePhases' list
   /// Each phase should have at least one checklist with at least one question
-  Future<Map<String, dynamic>> validateTemplateCompleteness() async {
+  Future<Map<String, dynamic>> validateTemplateCompleteness({
+    String? templateName,
+  }) async {
     try {
       _ensureToken();
-      final template = await fetchTemplate();
+      final template = await fetchTemplate(templateName: templateName);
       final incompletePhases = <String>[];
 
-      // Get phase names
-      final phaseNames = template['phaseNames'] as Map<String, dynamic>? ?? {};
+      // Support both keys for backward compatibility
+      final phaseNames =
+          template['stageNames'] as Map<String, dynamic>? ??
+          template['phaseNames'] as Map<String, dynamic>? ??
+          {};
 
       // Get all stage keys (stage1, stage2, etc.)
       final stageKeys =

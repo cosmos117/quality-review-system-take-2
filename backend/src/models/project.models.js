@@ -37,6 +37,13 @@ const projectSchema = new mongoose.Schema(
     end_date: {
       type: Date,
     },
+    // Optional named checklist template for this project.
+    // If null, the legacy default template is used.
+    templateName: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     created_by: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

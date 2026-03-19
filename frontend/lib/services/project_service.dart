@@ -88,6 +88,8 @@ class ProjectService {
       userRole = j['userRole']?.toString();
     }
 
+    final templateName = j['templateName']?.toString();
+
     return Project(
       id: id,
       projectNo: projectNo,
@@ -103,6 +105,7 @@ class ProjectService {
       reviewApplicableRemark: reviewApplicableRemark,
       overallDefectRate: overallDefectRate,
       userRole: userRole,
+      templateName: templateName,
     );
   }
 
@@ -130,6 +133,10 @@ class ProjectService {
         'isReviewApplicable': p.isReviewApplicable,
       if (p.reviewApplicableRemark != null)
         'reviewApplicableRemark': p.reviewApplicableRemark,
+      'templateName':
+          (p.templateName != null && p.templateName!.trim().isNotEmpty)
+          ? p.templateName!.trim()
+          : null,
     };
   }
 

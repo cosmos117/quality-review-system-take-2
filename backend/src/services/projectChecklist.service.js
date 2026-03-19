@@ -65,7 +65,37 @@ export const ensureProjectChecklist = async ({ projectId, stageDoc }) => {
   });
   if (existing) return existing;
 
-  const template = await Template.findOne().lean();
+  const project = await Project.findById(projectId)
+    .select("templateName")
+    .lean();
+  if (!project) {
+    throw new ApiError(404, "Project not found");
+  }
+
+  let template = null;
+  if (project.templateName && project.templateName.trim()) {
+    template = await Template.findOne({
+      templateName: project.templateName.trim(),
+      isActive: { $ne: false },
+    }).lean();
+  }
+
+  if (!template) {
+    template = await Template.findOne({
+      $or: [
+        { templateName: { $exists: false } },
+        { templateName: null },
+        { templateName: "" },
+      ],
+    })
+      .sort({ createdAt: 1 })
+      .lean();
+  }
+
+  if (!template) {
+    template = await Template.findOne().sort({ createdAt: 1 }).lean();
+  }
+
   if (!template) {
     throw new ApiError(
       404,
@@ -73,7 +103,8 @@ export const ensureProjectChecklist = async ({ projectId, stageDoc }) => {
     );
   }
 
-  const stageKey = inferStageKey(stageDoc.stage_name) || "stage1";
+  const stageKey =
+    stageDoc.stage_key || inferStageKey(stageDoc.stage_name) || "stage1";
   const groups = mapTemplateToGroups(template[stageKey] || []);
 
   const created = await ProjectChecklist.create({
@@ -210,7 +241,9 @@ const calculateIterationDefectRates = (checklist) => {
 };
 
 export const getProjectChecklist = async (projectId, stageId) => {
-  const stageDoc = await Stage.findOne({ _id: stageId, project_id: projectId }).select("_id stage_name").lean();
+  const stageDoc = await Stage.findOne({ _id: stageId, project_id: projectId })
+    .select("_id stage_name stage_key")
+    .lean();
   if (!stageDoc) {
     throw new ApiError(404, "Stage not found for this project");
   }
@@ -234,7 +267,9 @@ export const updateExecutorAnswer = async (
   { answer, remark, images, categoryId, severity },
   userId,
 ) => {
-  const stageDoc = await Stage.findOne({ _id: stageId, project_id: projectId }).select("_id stage_name").lean();
+  const stageDoc = await Stage.findOne({ _id: stageId, project_id: projectId })
+    .select("_id stage_name stage_key")
+    .lean();
   if (!stageDoc) {
     throw new ApiError(404, "Stage not found for this project");
   }
@@ -260,7 +295,8 @@ export const updateExecutorAnswer = async (
 
   if (answer !== undefined) question.executorAnswer = answer;
   if (remark !== undefined) question.executorRemark = remark || "";
-  if (images !== undefined) question.executorImages = Array.isArray(images) ? images : [];
+  if (images !== undefined)
+    question.executorImages = Array.isArray(images) ? images : [];
   if (categoryId !== undefined) question.categoryId = categoryId || "";
   if (severity !== undefined) question.severity = severity || "";
 
@@ -288,7 +324,9 @@ export const updateReviewerStatus = async (
   { answer, status, remark, images, categoryId, severity },
   userId,
 ) => {
-  const stageDoc = await Stage.findOne({ _id: stageId, project_id: projectId }).select("_id stage_name").lean();
+  const stageDoc = await Stage.findOne({ _id: stageId, project_id: projectId })
+    .select("_id stage_name stage_key")
+    .lean();
   if (!stageDoc) {
     throw new ApiError(404, "Stage not found for this project");
   }
@@ -315,7 +353,8 @@ export const updateReviewerStatus = async (
   if (answer !== undefined) question.reviewerAnswer = answer;
   if (status !== undefined) question.reviewerStatus = status;
   if (remark !== undefined) question.reviewerRemark = remark || "";
-  if (images !== undefined) question.reviewerImages = Array.isArray(images) ? images : [];
+  if (images !== undefined)
+    question.reviewerImages = Array.isArray(images) ? images : [];
   if (categoryId !== undefined) question.categoryId = categoryId || "";
   if (severity !== undefined) question.severity = severity || "";
 
@@ -339,7 +378,9 @@ export const getChecklistIterations = async (projectId, stageId) => {
   const checklist = await ProjectChecklist.findOne({
     projectId,
     stageId,
-  }).populate("iterations.revertedBy", "name email").lean();
+  })
+    .populate("iterations.revertedBy", "name email")
+    .lean();
 
   if (!checklist) {
     return { iterations: [], currentIteration: 1 };
@@ -357,7 +398,9 @@ export const getDefectRatesPerIteration = async (projectId, phaseNum) => {
   const stage = await Stage.findOne({
     project_id: projectId,
     stage_key: stageKey,
-  }).select("_id").lean();
+  })
+    .select("_id")
+    .lean();
 
   if (!stage) {
     return { iterations: [], currentDefectRate: 0 };
@@ -438,7 +481,9 @@ export const getDefectRatesPerIteration = async (projectId, phaseNum) => {
 };
 
 export const getOverallDefectRate = async (projectId) => {
-  const stages = await Stage.find({ project_id: projectId }).select("_id stage_key stage_name").lean();
+  const stages = await Stage.find({ project_id: projectId })
+    .select("_id stage_key stage_name")
+    .lean();
 
   if (!stages || stages.length === 0) {
     return {
@@ -450,8 +495,13 @@ export const getOverallDefectRate = async (projectId) => {
   }
 
   const stageIds = stages.map((s) => s._id);
-  const checklists = await ProjectChecklist.find({ projectId, stageId: { $in: stageIds } }).lean();
-  const checklistMap = new Map(checklists.map((c) => [c.stageId.toString(), c]));
+  const checklists = await ProjectChecklist.find({
+    projectId,
+    stageId: { $in: stageIds },
+  }).lean();
+  const checklistMap = new Map(
+    checklists.map((c) => [c.stageId.toString(), c]),
+  );
 
   let grandTotalQuestions = 0;
   let grandTotalDefects = 0;

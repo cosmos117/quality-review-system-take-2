@@ -49,6 +49,7 @@ import stageRouter from "./routes/stage.routes.js";
 import approvalRoutes from "./routes/approval.routes.js";
 import projectChecklistRoutes from "./routes/projectChecklist.routes.js";
 import templateRoutes from "./routes/template.routes.js";
+import templateMultiRoutes from "./routes/template.multi.routes.js";
 import checkpointRoutes from "./routes/checkpoint.routes.js";
 import analyticsRoutes from "./routes/analytics.routes.js";
 import exportRoutes from "./routes/export.routes.js";
@@ -70,6 +71,7 @@ app.use("/api/v1", authMiddleware, stageRouter);
 app.use("/api/v1", authMiddleware, approvalRoutes);
 app.use("/api/v1", authMiddleware, projectChecklistRoutes);
 app.use("/api/v1/templates", authMiddleware, templateRoutes);
+app.use("/api/v1/template-library", authMiddleware, templateMultiRoutes);
 app.use("/api/v1", authMiddleware, checkpointRoutes);
 app.use("/api/v1", authMiddleware, analyticsRoutes);
 app.use("/api/v1", authMiddleware, exportRoutes);
@@ -81,7 +83,9 @@ app.use((err, req, res, next) => {
   const message = err.message || "Internal Server Error";
 
   if (statusCode >= 500) {
-    logger.error(`${req.method} ${req.originalUrl} - ${message}`, { stack: err.stack });
+    logger.error(`${req.method} ${req.originalUrl} - ${message}`, {
+      stack: err.stack,
+    });
   }
 
   res.status(statusCode).json({
