@@ -235,7 +235,51 @@ class AdminChecklistTemplatePage
                 child: Obx(() {
                   final visible = c.visiblePhaseIndexes;
                   if (visible.isEmpty) {
-                    return const Center(child: Text('No phases available'));
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.black12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                const Spacer(),
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF2196F3),
+                                    foregroundColor: Colors.white,
+                                    textStyle: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                  onPressed: () async {
+                                    final name = await _promptStageName(
+                                      context,
+                                    );
+                                    if (name != null) c.addPhase(name);
+                                  },
+                                  icon: const Icon(Icons.add, size: 22),
+                                  label: const Text('Add Phase'),
+                                ),
+                              ],
+                            ),
+                            const Expanded(
+                              child: Center(child: Text('No phases available')),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
                   }
 
                   // Ensure current tab index is within bounds
