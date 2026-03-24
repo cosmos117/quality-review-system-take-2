@@ -20,6 +20,7 @@ class AnalyticsController extends GetxController {
 
   // ── Analytics data ────────────────────────────────────────────────────────
   final summary = Rx<AnalyticsSummary>(AnalyticsSummary.empty);
+  final allDefectCategories = RxList<CategoryCount>();
   final topDefectCategories = RxList<CategoryCount>();
   final defectSeverityDist = RxList<SeverityCount>();
   final drByProject = RxList<ProjectDR>();
@@ -130,6 +131,12 @@ class AnalyticsController extends GetxController {
     chartsError.value = null;
     try {
       final results = await Future.wait([
+        _service.getAllDefectCategories(
+          teamLeader: _tl,
+          project: _proj,
+          defectCategory: _cat,
+          executor: _exc,
+        ),
         _service.getTopDefectCategories(
           teamLeader: _tl,
           project: _proj,
@@ -145,10 +152,11 @@ class AnalyticsController extends GetxController {
         _service.getDrByProject(teamLeader: _tl, executor: _exc),
         _service.getDrByTeamLeader(executor: _exc),
       ]);
-      topDefectCategories.value = results[0] as List<CategoryCount>;
-      defectSeverityDist.value = results[1] as List<SeverityCount>;
-      drByProject.value = results[2] as List<ProjectDR>;
-      drByTeamLeader.value = results[3] as List<TeamLeaderDR>;
+      allDefectCategories.value = results[0] as List<CategoryCount>;
+      topDefectCategories.value = results[1] as List<CategoryCount>;
+      defectSeverityDist.value = results[2] as List<SeverityCount>;
+      drByProject.value = results[3] as List<ProjectDR>;
+      drByTeamLeader.value = results[4] as List<TeamLeaderDR>;
     } catch (e) {
       chartsError.value = e.toString();
     } finally {

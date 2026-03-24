@@ -3,33 +3,26 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../controllers/analytics_controller.dart';
 
-// ── Colour palette ────────────────────────────────────────────────────────────
+// -- Colour palette ------------------------------------------------------------
 
-// Company dashboard palette (teal + green + neutral)
 const _kPrimary = Color(0xFF0F766E);
 const _kInfo = Color(0xFF0D9488);
 const _kAccent = Color(0xFF334155);
 const _kSuccess = Color(0xFF166534);
 const _kWarning = Color(0xFFF59E0B);
 const _kDanger = Color(0xFFB91C1C);
-const _kNeutral = Color(0xFF64748B);
 
-// Backward-compatible aliases used throughout this file.
 const _kBlue = _kPrimary;
 const _kOrange = _kWarning;
 const _kGreen = _kSuccess;
 const _kRed = _kDanger;
-const _kPurple = _kAccent;
-const _kTeal = _kInfo;
 
-// Green palette for Team Leader chart
 const _kGreenDarkest = Color(0xFF14532D);
 const _kGreenDark = Color(0xFF166534);
 const _kGreenMid = Color(0xFF15803D);
 const _kGreenMedium = Color(0xFF16A34A);
 const _kGreenLight = Color(0xFF4ADE80);
 
-// Compact categorical palette used across charts.
 const _kDeepTeal = Color(0xFF0F766E);
 const _kTealMid = Color(0xFF0D9488);
 const _kGreenSoft = Color(0xFF166534);
@@ -44,15 +37,6 @@ const List<Color> _kChartColors = [
   _kStone,
 ];
 
-const List<Color> _kGreenPalette = [
-  _kGreenDarkest,
-  _kGreenDark,
-  _kGreenMid,
-  _kGreenMedium,
-  _kGreenLight,
-];
-
-// Company-like category palette: emphasize teal + neutral support shades.
 const List<Color> _kDefectCategoryPalette = [
   _kDeepTeal,
   _kTealMid,
@@ -60,6 +44,18 @@ const List<Color> _kDefectCategoryPalette = [
   _kSlate,
   _kStone,
 ];
+
+List<Color> _distinctCategoryColors(int count) {
+  if (count <= 0) return const [];
+  final seed = _kDefectCategoryPalette;
+  return List.generate(count, (i) {
+    if (i < seed.length) return seed[i];
+    final hue = (i * 137.508) % 360;
+    final saturation = (0.72 - (i % 3) * 0.08).clamp(0.45, 0.9).toDouble();
+    final lightness = (0.48 + (i % 4) * 0.07).clamp(0.35, 0.75).toDouble();
+    return HSLColor.fromAHSL(1, hue, saturation, lightness).toColor();
+  });
+}
 
 Color _severityColor(String s) {
   switch (s.toLowerCase()) {
@@ -142,7 +138,30 @@ class AnalyticsPage extends StatelessWidget {
                   _KpiRow(ctrl),
                   const SizedBox(height: 24),
 
-                  // Row 2: Top defect categories + Severity distribution
+                  // Row 2: All defect categories + DR by team leader
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: _CardWrapper(
+                          title: 'All Defect Categories',
+                          child: _AllDefectCategoriesChart(ctrl),
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        flex: 2,
+                        child: _CardWrapper(
+                          title: 'Average Defect Rate by Team Leader',
+                          child: _DrByTeamLeaderChart(ctrl),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Row 3: Top defect categories + Severity distribution
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -165,20 +184,14 @@ class AnalyticsPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
 
-                  // Row 3: DR by team leader + DR by project
-                  _ChartRow(
-                    left: _CardWrapper(
-                      title: 'Average Defect Rate by Team Leader',
-                      child: _DrByTeamLeaderChart(ctrl),
-                    ),
-                    right: _CardWrapper(
-                      title: 'Overall Defect Rate by Project',
-                      child: _DrByProjectChart(ctrl),
-                    ),
+                  // Row 4: DR by project
+                  _CardWrapper(
+                    title: 'Overall Defect Rate by Project',
+                    child: _DrByProjectChart(ctrl),
                   ),
                   const SizedBox(height: 24),
 
-                  // Row 4: Defect details table
+                  // Row 5: Defect details table
                   _CardWrapper(
                     title: 'Defect Details',
                     child: _DefectDetailsTable(ctrl),
@@ -513,6 +526,91 @@ class _CardWrapper extends StatelessWidget {
   }
 }
 
+// ── All Defect Categories ───────────────────────────────────────────────────
+
+class _AllDefectCategoriesChart extends StatelessWidget {
+  final AnalyticsController ctrl;
+  const _AllDefectCategoriesChart(this.ctrl);
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      if (ctrl.isChartsLoading.value) return const _LoadingWidget();
+      final data = ctrl.allDefectCategories;
+      if (data.isEmpty) return const _EmptyWidget();
+
+      final total = data.fold(0, (s, d) => s + d.count);
+      final colors = _distinctCategoryColors(data.length);
+
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 200,
+            height: 200,
+            child: CustomPaint(
+              painter: _PiePainter(
+                values: data.map((d) => d.count.toDouble()).toList(),
+                colors: colors,
+              ),
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: SizedBox(
+              height: 220,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: data.asMap().entries.map((e) {
+                    final pct = total > 0
+                        ? (e.value.count / total * 100).toStringAsFixed(1)
+                        : '0';
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: colors[e.key],
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Tooltip(
+                              message: e.value.category,
+                              child: Text(
+                                e.value.category,
+                                style: const TextStyle(fontSize: 12),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '${e.value.count} ($pct%)',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    });
+  }
+}
+
 // ── Top Defect Categories – horizontal bar chart ──────────────────────────────
 
 class _TopDefectCategoriesChart extends StatelessWidget {
@@ -529,10 +627,7 @@ class _TopDefectCategoriesChart extends StatelessWidget {
       if (data.isEmpty) return const _EmptyWidget();
 
       final total = data.fold(0, (s, d) => s + d.count);
-      final colors = List.generate(
-        data.length,
-        (i) => _kDefectCategoryPalette[i % _kDefectCategoryPalette.length],
-      );
+      final colors = _distinctCategoryColors(data.length);
 
       return Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -751,7 +846,7 @@ class _HorizontalBarList extends StatelessWidget {
           child: Row(
             children: [
               SizedBox(
-                width: 160,
+                width: 260,
                 child: Tooltip(
                   message: item.label,
                   child: Text(
@@ -822,73 +917,86 @@ class _RiskColoredHorizontalBarList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (items.isEmpty) return const _EmptyWidget();
     final maxVal = items.map((e) => e.value).reduce((a, b) => a > b ? a : b);
+    const valueWidth = 72.0;
+    const gap = 12.0;
 
-    return Column(
-      children: items.asMap().entries.map((entry) {
-        final item = entry.value;
-        final fraction = maxVal > 0
-            ? (item.value / maxVal).clamp(0.03, 1.0)
-            : 0.0;
-        final color = _riskLevelColor(item.value);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth;
+        final labelWidth = (available * 0.42).clamp(360.0, 520.0).toDouble();
+        final barWidth = (available - labelWidth - valueWidth - (gap * 2))
+            .clamp(140.0, 360.0)
+            .toDouble();
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 160,
-                child: Tooltip(
-                  message: item.label,
-                  child: Text(
-                    item.label,
-                    style: const TextStyle(fontSize: 12),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Stack(
-                  alignment: Alignment.centerLeft,
-                  children: [
-                    Container(
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(6),
+        return Column(
+          children: items.asMap().entries.map((entry) {
+            final item = entry.value;
+            final fraction = maxVal > 0
+                ? (item.value / maxVal).clamp(0.03, 1.0).toDouble()
+                : 0.0;
+            final color = _riskLevelColor(item.value);
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: labelWidth,
+                    child: Tooltip(
+                      message: item.label,
+                      child: Text(
+                        item.label,
+                        style: const TextStyle(fontSize: 15),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
                       ),
                     ),
-                    FractionallySizedBox(
-                      widthFactor: fraction,
-                      child: Container(
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(6),
+                  ),
+                  const SizedBox(width: gap),
+                  SizedBox(
+                    width: barWidth,
+                    child: Stack(
+                      alignment: Alignment.centerLeft,
+                      children: [
+                        Container(
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(6),
+                          ),
                         ),
-                      ),
+                        FractionallySizedBox(
+                          widthFactor: fraction,
+                          child: Container(
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: color,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 60,
-                child: Text(
-                  valueLabel(item.value),
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: color,
                   ),
-                  textAlign: TextAlign.end,
-                ),
+                  const SizedBox(width: gap),
+                  SizedBox(
+                    width: valueWidth,
+                    child: Text(
+                      valueLabel(item.value),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: color,
+                      ),
+                      textAlign: TextAlign.end,
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          }).toList(),
         );
-      }).toList(),
+      },
     );
   }
 }

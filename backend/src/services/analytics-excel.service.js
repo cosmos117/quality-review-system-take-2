@@ -50,11 +50,16 @@ export async function getRawAnalyticsData() {
         .populate("role", "role_name")
         .lean(),
       mongoose.model("Template").find({}, "defectCategories").lean(),
-      mongoose.model("ProjectChecklist").find()
+      mongoose
+        .model("ProjectChecklist")
+        .find()
         .populate("groups.questions.answeredBy.executor", "name")
         .populate("groups.sections.questions.answeredBy.executor", "name")
         .populate("iterations.groups.questions.answeredBy.executor", "name")
-        .populate("iterations.groups.sections.questions.answeredBy.executor", "name")
+        .populate(
+          "iterations.groups.sections.questions.answeredBy.executor",
+          "name",
+        )
         .lean(),
     ]);
 
@@ -71,7 +76,7 @@ export async function getRawAnalyticsData() {
   // Build project → team leader array map
   const tlMap = new Map(); // projectId → string[]
   const execMap = new Map(); // projectId → string[] (collected executors)
-  
+
   for (const m of memberships) {
     const roleName = m.role?.role_name?.toLowerCase() ?? "";
     const pid = m.project_id?.toString();
@@ -100,8 +105,8 @@ export async function getRawAnalyticsData() {
       // Split by comma, slash, semicolon, or newline
       const names = rawNames
         .split(/[,/;\n]/)
-        .map(n => n.trim())
-        .filter(n => n.length > 0); // Empty strings already filtered out
+        .map((n) => n.trim())
+        .filter((n) => n.length > 0); // Empty strings already filtered out
 
       for (const name of names) {
         // Skip only specified invalid values (case-insensitive comparison)
@@ -122,7 +127,7 @@ export async function getRawAnalyticsData() {
     const teamLeaders = tlMap.get(pid) ?? [];
     // Build executor string per project for use as fallback in detail rows
     const projectExecutors = (execMap.get(pid) ?? []).join(", ");
-    
+
     return {
       projectNumber: p.project_no ?? "",
       projectName: p.project_name ?? "",
@@ -166,9 +171,11 @@ export async function getRawAnalyticsData() {
       const processQuestion = (question) => {
         // Extract executor name from question's answered by reference
         const questionExecutor = question.answeredBy?.executor?.name ?? "";
-        
+
         // Use question executor if available, otherwise fall back to project-level executors
-        const finalExecutor = questionExecutor.trim() ? questionExecutor : projectExecutors;
+        const finalExecutor = questionExecutor.trim()
+          ? questionExecutor
+          : projectExecutors;
         // If still empty, use dash as placeholder
         const executor = finalExecutor.trim() || "-";
 
@@ -211,7 +218,11 @@ export async function getRawAnalyticsData() {
     }
   }
 
-  const result = { summaryRows, detailRows, allExecutors: Array.from(allExecutorsSet).sort() };
+  const result = {
+    summaryRows,
+    detailRows,
+    allExecutors: Array.from(allExecutorsSet).sort(),
+  };
   _rawCache.set(RAW_CACHE_KEY, result);
   return result;
 }
@@ -316,17 +327,17 @@ export function computeAnalytics(summaryRows, detailRows, filters = {}) {
     ? parseFloat(Math.max(...rates).toFixed(2))
     : 0;
 
-  // ── Top defect categories (top 5) ────────────────────────────────────────
+  // ── Defect categories (all + top 5) ──────────────────────────────────────
   const catCounts = {};
   for (const r of filtered) {
     if (r.defectCategory) {
       catCounts[r.defectCategory] = (catCounts[r.defectCategory] ?? 0) + 1;
     }
   }
-  const topDefectCategories = Object.entries(catCounts)
+  const allDefectCategories = Object.entries(catCounts)
     .map(([category, count]) => ({ category, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
+    .sort((a, b) => b.count - a.count);
+  const topDefectCategories = allDefectCategories.slice(0, 5);
 
   // ── Severity distribution ─────────────────────────────────────────────────
   const sevCounts = {};
@@ -409,6 +420,7 @@ export function computeAnalytics(summaryRows, detailRows, filters = {}) {
 
   return {
     summary: { totalProjects, averageDefectRate, maxDefectRate },
+    allDefectCategories,
     topDefectCategories,
     severityDistribution,
     drByProject,

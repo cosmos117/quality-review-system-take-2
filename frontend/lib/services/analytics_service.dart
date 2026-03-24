@@ -15,13 +15,16 @@ class AnalyticsSummary {
   });
 
   factory AnalyticsSummary.fromJson(Map<String, dynamic> j) => AnalyticsSummary(
-        totalProjects: (j['totalProjects'] as num?)?.toInt() ?? 0,
-        averageDefectRate: (j['averageDefectRate'] as num?)?.toDouble() ?? 0.0,
-        maxDefectRate: (j['maxDefectRate'] as num?)?.toDouble() ?? 0.0,
-      );
+    totalProjects: (j['totalProjects'] as num?)?.toInt() ?? 0,
+    averageDefectRate: (j['averageDefectRate'] as num?)?.toDouble() ?? 0.0,
+    maxDefectRate: (j['maxDefectRate'] as num?)?.toDouble() ?? 0.0,
+  );
 
-  static const empty =
-      AnalyticsSummary(totalProjects: 0, averageDefectRate: 0, maxDefectRate: 0);
+  static const empty = AnalyticsSummary(
+    totalProjects: 0,
+    averageDefectRate: 0,
+    maxDefectRate: 0,
+  );
 }
 
 class CategoryCount {
@@ -30,9 +33,9 @@ class CategoryCount {
   const CategoryCount({required this.category, required this.count});
 
   factory CategoryCount.fromJson(Map<String, dynamic> j) => CategoryCount(
-        category: j['category']?.toString() ?? '',
-        count: (j['count'] as num?)?.toInt() ?? 0,
-      );
+    category: j['category']?.toString() ?? '',
+    count: (j['count'] as num?)?.toInt() ?? 0,
+  );
 }
 
 class SeverityCount {
@@ -41,9 +44,9 @@ class SeverityCount {
   const SeverityCount({required this.severity, required this.count});
 
   factory SeverityCount.fromJson(Map<String, dynamic> j) => SeverityCount(
-        severity: j['severity']?.toString() ?? '',
-        count: (j['count'] as num?)?.toInt() ?? 0,
-      );
+    severity: j['severity']?.toString() ?? '',
+    count: (j['count'] as num?)?.toInt() ?? 0,
+  );
 }
 
 class ProjectDR {
@@ -52,23 +55,26 @@ class ProjectDR {
   const ProjectDR({required this.project, required this.defectRate});
 
   factory ProjectDR.fromJson(Map<String, dynamic> j) => ProjectDR(
-        project: j['project']?.toString() ?? '',
-        defectRate: (j['defectRate'] as num?)?.toDouble() ?? 0.0,
-      );
+    project: j['project']?.toString() ?? '',
+    defectRate: (j['defectRate'] as num?)?.toDouble() ?? 0.0,
+  );
 }
 
 class TeamLeaderDR {
   final String teamLeader;
   final double avgDR;
   final int projectCount;
-  const TeamLeaderDR(
-      {required this.teamLeader, required this.avgDR, required this.projectCount});
+  const TeamLeaderDR({
+    required this.teamLeader,
+    required this.avgDR,
+    required this.projectCount,
+  });
 
   factory TeamLeaderDR.fromJson(Map<String, dynamic> j) => TeamLeaderDR(
-        teamLeader: j['teamLeader']?.toString() ?? '',
-        avgDR: (j['avgDR'] as num?)?.toDouble() ?? 0.0,
-        projectCount: (j['projectCount'] as num?)?.toInt() ?? 0,
-      );
+    teamLeader: j['teamLeader']?.toString() ?? '',
+    avgDR: (j['avgDR'] as num?)?.toDouble() ?? 0.0,
+    projectCount: (j['projectCount'] as num?)?.toInt() ?? 0,
+  );
 }
 
 class DefectDetail {
@@ -91,21 +97,25 @@ class DefectDetail {
   });
 
   factory DefectDetail.fromJson(Map<String, dynamic> j) => DefectDetail(
-        projectNumber: j['project_number']?.toString() ?? '',
-        projectName: j['project_name']?.toString() ?? '',
-        teamLeader: j['team_leader']?.toString() ?? '',
-        executor: j['executor']?.toString() ?? '',
-        defectCategory: j['defect_category']?.toString() ?? '',
-        defectSeverity: j['defect_severity']?.toString() ?? '',
-        reviewerRemark: j['reviewer_remark']?.toString() ?? '',
-      );
+    projectNumber: j['project_number']?.toString() ?? '',
+    projectName: j['project_name']?.toString() ?? '',
+    teamLeader: j['team_leader']?.toString() ?? '',
+    executor: j['executor']?.toString() ?? '',
+    defectCategory: j['defect_category']?.toString() ?? '',
+    defectSeverity: j['defect_severity']?.toString() ?? '',
+    reviewerRemark: j['reviewer_remark']?.toString() ?? '',
+  );
 }
 
 class AnalyticsProjectItem {
   final String id;
   final String name;
   final String no;
-  const AnalyticsProjectItem({required this.id, required this.name, required this.no});
+  const AnalyticsProjectItem({
+    required this.id,
+    required this.name,
+    required this.no,
+  });
 
   factory AnalyticsProjectItem.fromJson(Map<String, dynamic> j) =>
       AnalyticsProjectItem(
@@ -135,7 +145,8 @@ class AnalyticsService {
     String? search,
   }) {
     final p = <String, String>{};
-    if (teamLeader != null && teamLeader.isNotEmpty) p['teamLeader'] = teamLeader;
+    if (teamLeader != null && teamLeader.isNotEmpty)
+      p['teamLeader'] = teamLeader;
     if (project != null && project.isNotEmpty) p['project'] = project;
     if (defectCategory != null && defectCategory.isNotEmpty) {
       p['defectCategory'] = defectCategory;
@@ -153,8 +164,14 @@ class AnalyticsService {
     String? defectCategory,
     String? executor,
   }) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/analytics/summary')
-        .replace(queryParameters: _q(teamLeader: teamLeader, project: project, defectCategory: defectCategory, executor: executor));
+    final uri = Uri.parse('${ApiConfig.baseUrl}/analytics/summary').replace(
+      queryParameters: _q(
+        teamLeader: teamLeader,
+        project: project,
+        defectCategory: defectCategory,
+        executor: executor,
+      ),
+    );
     final res = await _http.getJson(uri);
     final data = res['data'];
     if (data is Map<String, dynamic>) return AnalyticsSummary.fromJson(data);
@@ -167,11 +184,48 @@ class AnalyticsService {
     String? defectCategory,
     String? executor,
   }) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/analytics/top-defect-categories')
-        .replace(queryParameters: _q(teamLeader: teamLeader, project: project, defectCategory: defectCategory, executor: executor));
+    final uri =
+        Uri.parse(
+          '${ApiConfig.baseUrl}/analytics/top-defect-categories',
+        ).replace(
+          queryParameters: _q(
+            teamLeader: teamLeader,
+            project: project,
+            defectCategory: defectCategory,
+            executor: executor,
+          ),
+        );
     final res = await _http.getJson(uri);
     final list = res['data'] as List? ?? [];
-    return list.cast<Map<String, dynamic>>().map(CategoryCount.fromJson).toList();
+    return list
+        .cast<Map<String, dynamic>>()
+        .map(CategoryCount.fromJson)
+        .toList();
+  }
+
+  Future<List<CategoryCount>> getAllDefectCategories({
+    String? teamLeader,
+    String? project,
+    String? defectCategory,
+    String? executor,
+  }) async {
+    final uri =
+        Uri.parse(
+          '${ApiConfig.baseUrl}/analytics/all-defect-categories',
+        ).replace(
+          queryParameters: _q(
+            teamLeader: teamLeader,
+            project: project,
+            defectCategory: defectCategory,
+            executor: executor,
+          ),
+        );
+    final res = await _http.getJson(uri);
+    final list = res['data'] as List? ?? [];
+    return list
+        .cast<Map<String, dynamic>>()
+        .map(CategoryCount.fromJson)
+        .toList();
   }
 
   Future<List<SeverityCount>> getDefectSeverityDistribution({
@@ -180,14 +234,27 @@ class AnalyticsService {
     String? defectCategory,
     String? executor,
   }) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/analytics/defect-severity-distribution')
-        .replace(queryParameters: _q(teamLeader: teamLeader, project: project, defectCategory: defectCategory, executor: executor));
+    final uri =
+        Uri.parse(
+          '${ApiConfig.baseUrl}/analytics/defect-severity-distribution',
+        ).replace(
+          queryParameters: _q(
+            teamLeader: teamLeader,
+            project: project,
+            defectCategory: defectCategory,
+            executor: executor,
+          ),
+        );
     final res = await _http.getJson(uri);
     final list = res['data'] as List? ?? [];
-    return list.cast<Map<String, dynamic>>().map(SeverityCount.fromJson).toList();
+    return list
+        .cast<Map<String, dynamic>>()
+        .map(SeverityCount.fromJson)
+        .toList();
   }
 
-  Future<({List<DefectDetail> data, int total, int page, int limit})> getDefectDetails({
+  Future<({List<DefectDetail> data, int total, int page, int limit})>
+  getDefectDetails({
     String? teamLeader,
     String? project,
     String? defectCategory,
@@ -196,17 +263,18 @@ class AnalyticsService {
     int limit = 20,
     String? search,
   }) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/analytics/defect-details').replace(
-      queryParameters: _q(
-        teamLeader: teamLeader,
-        project: project,
-        defectCategory: defectCategory,
-        executor: executor,
-        page: page.toString(),
-        limit: limit.toString(),
-        search: search,
-      ),
-    );
+    final uri = Uri.parse('${ApiConfig.baseUrl}/analytics/defect-details')
+        .replace(
+          queryParameters: _q(
+            teamLeader: teamLeader,
+            project: project,
+            defectCategory: defectCategory,
+            executor: executor,
+            page: page.toString(),
+            limit: limit.toString(),
+            search: search,
+          ),
+        );
     final res = await _http.getJson(uri);
     final d = res['data'] as Map<String, dynamic>? ?? {};
     final list = (d['data'] as List? ?? []).cast<Map<String, dynamic>>();
@@ -236,26 +304,38 @@ class AnalyticsService {
     return ((res['data'] as List?) ?? []).cast<String>();
   }
 
-  Future<List<ProjectDR>> getDrByProject({String? teamLeader, String? executor}) async {
+  Future<List<ProjectDR>> getDrByProject({
+    String? teamLeader,
+    String? executor,
+  }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/analytics/dr-by-project')
-        .replace(queryParameters: _q(teamLeader: teamLeader, executor: executor));
+        .replace(
+          queryParameters: _q(teamLeader: teamLeader, executor: executor),
+        );
     final res = await _http.getJson(uri);
     final list = res['data'] as List? ?? [];
     return list.cast<Map<String, dynamic>>().map(ProjectDR.fromJson).toList();
   }
 
   Future<List<TeamLeaderDR>> getDrByTeamLeader({String? executor}) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/analytics/dr-by-team-leader')
-        .replace(queryParameters: executor != null ? _q(executor: executor) : {});
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/analytics/dr-by-team-leader',
+    ).replace(queryParameters: executor != null ? _q(executor: executor) : {});
     final res = await _http.getJson(uri);
     final list = res['data'] as List? ?? [];
-    return list.cast<Map<String, dynamic>>().map(TeamLeaderDR.fromJson).toList();
+    return list
+        .cast<Map<String, dynamic>>()
+        .map(TeamLeaderDR.fromJson)
+        .toList();
   }
 
   Future<List<AnalyticsProjectItem>> getProjects() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/analytics/projects');
     final res = await _http.getJson(uri);
     final list = res['data'] as List? ?? [];
-    return list.cast<Map<String, dynamic>>().map(AnalyticsProjectItem.fromJson).toList();
+    return list
+        .cast<Map<String, dynamic>>()
+        .map(AnalyticsProjectItem.fromJson)
+        .toList();
   }
 }

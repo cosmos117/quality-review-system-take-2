@@ -18,7 +18,8 @@ import {
 
 export const getProjectAnalysis = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
+  if (!mongoose.isValidObjectId(projectId))
+    throw new ApiError(400, "Invalid projectId");
 
   const data = await analyticsService.getProjectAnalysis(projectId);
   const message = data.summary
@@ -31,26 +32,44 @@ export const getProjectAnalysis = asyncHandler(async (req, res) => {
 
 export const getDefectsPerPhase = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
+  if (!mongoose.isValidObjectId(projectId))
+    throw new ApiError(400, "Invalid projectId");
 
   const result = await analyticsService.getDefectsPerPhase(projectId);
-  return res.status(200).json(new ApiResponse(200, result, "Defects per phase retrieved successfully"));
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, result, "Defects per phase retrieved successfully"),
+    );
 });
 
 export const getDefectsPerChecklist = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
+  if (!mongoose.isValidObjectId(projectId))
+    throw new ApiError(400, "Invalid projectId");
 
   const result = await analyticsService.getDefectsPerChecklist(projectId);
-  return res.status(200).json(new ApiResponse(200, result, "Defects per checklist retrieved successfully"));
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        result,
+        "Defects per checklist retrieved successfully",
+      ),
+    );
 });
 
 export const getCategoryDistribution = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
+  if (!mongoose.isValidObjectId(projectId))
+    throw new ApiError(400, "Invalid projectId");
 
   const data = await analyticsService.getCategoryDistribution(projectId);
-  const message = data.totalDefects === 0 ? "No defects found" : "Category distribution retrieved successfully";
+  const message =
+    data.totalDefects === 0
+      ? "No defects found"
+      : "Category distribution retrieved successfully";
   return res.status(200).json(new ApiResponse(200, data, message));
 });
 
@@ -66,16 +85,32 @@ export const getCategoryDistribution = asyncHandler(async (req, res) => {
 async function loadAndParse(req) {
   const { teamLeader, project, defectCategory, executor } = req.query;
   const { summaryRows, detailRows } = await getRawAnalyticsData();
-  return { summaryRows, detailRows, teamLeader, project, defectCategory, executor };
+  return {
+    summaryRows,
+    detailRows,
+    teamLeader,
+    project,
+    defectCategory,
+    executor,
+  };
 }
 
 // GET /analytics/summary
 export const getDashboardSummary = asyncHandler(async (req, res) => {
-  const { summaryRows, detailRows, teamLeader, project, defectCategory, executor } =
-    await loadAndParse(req);
+  const {
+    summaryRows,
+    detailRows,
+    teamLeader,
+    project,
+    defectCategory,
+    executor,
+  } = await loadAndParse(req);
 
   const { summary } = computeAnalytics(summaryRows, detailRows, {
-    teamLeader, project, defectCategory, executor,
+    teamLeader,
+    project,
+    defectCategory,
+    executor,
   });
 
   return res.json(new ApiResponse(200, summary, "Summary fetched"));
@@ -83,11 +118,20 @@ export const getDashboardSummary = asyncHandler(async (req, res) => {
 
 // GET /analytics/top-defect-categories
 export const getTopDefectCategories = asyncHandler(async (req, res) => {
-  const { summaryRows, detailRows, teamLeader, project, defectCategory, executor } =
-    await loadAndParse(req);
+  const {
+    summaryRows,
+    detailRows,
+    teamLeader,
+    project,
+    defectCategory,
+    executor,
+  } = await loadAndParse(req);
 
   const { topDefectCategories } = computeAnalytics(summaryRows, detailRows, {
-    teamLeader, project, defectCategory, executor,
+    teamLeader,
+    project,
+    defectCategory,
+    executor,
   });
 
   return res.json(
@@ -95,17 +139,53 @@ export const getTopDefectCategories = asyncHandler(async (req, res) => {
   );
 });
 
-// GET /analytics/defect-severity-distribution
-export const getDefectSeverityDistribution = asyncHandler(async (req, res) => {
-  const { summaryRows, detailRows, teamLeader, project, defectCategory, executor } =
-    await loadAndParse(req);
+// GET /analytics/all-defect-categories
+export const getAllDefectCategories = asyncHandler(async (req, res) => {
+  const {
+    summaryRows,
+    detailRows,
+    teamLeader,
+    project,
+    defectCategory,
+    executor,
+  } = await loadAndParse(req);
 
-  const { severityDistribution } = computeAnalytics(summaryRows, detailRows, {
-    teamLeader, project, defectCategory, executor,
+  const { allDefectCategories } = computeAnalytics(summaryRows, detailRows, {
+    teamLeader,
+    project,
+    defectCategory,
+    executor,
   });
 
   return res.json(
-    new ApiResponse(200, severityDistribution, "Defect severity distribution fetched"),
+    new ApiResponse(200, allDefectCategories, "All defect categories fetched"),
+  );
+});
+
+// GET /analytics/defect-severity-distribution
+export const getDefectSeverityDistribution = asyncHandler(async (req, res) => {
+  const {
+    summaryRows,
+    detailRows,
+    teamLeader,
+    project,
+    defectCategory,
+    executor,
+  } = await loadAndParse(req);
+
+  const { severityDistribution } = computeAnalytics(summaryRows, detailRows, {
+    teamLeader,
+    project,
+    defectCategory,
+    executor,
+  });
+
+  return res.json(
+    new ApiResponse(
+      200,
+      severityDistribution,
+      "Defect severity distribution fetched",
+    ),
   );
 });
 
@@ -126,8 +206,13 @@ export const getDefectDetails = asyncHandler(async (req, res) => {
 
   const { summaryRows, detailRows } = await getRawAnalyticsData();
   const { defectDetails } = computeAnalytics(summaryRows, detailRows, {
-    teamLeader, project, defectCategory, executor,
-    page: pageNum, limitNum, search,
+    teamLeader,
+    project,
+    defectCategory,
+    executor,
+    page: pageNum,
+    limitNum,
+    search,
   });
 
   return res.json(
@@ -146,13 +231,17 @@ export const getDashboardTeamLeaders = asyncHandler(async (req, res) => {
 export const getDashboardDefectCategories = asyncHandler(async (req, res) => {
   const { detailRows } = await getRawAnalyticsData();
   const categories = getDefectCategoriesList(detailRows);
-  return res.json(new ApiResponse(200, categories, "Defect categories fetched"));
+  return res.json(
+    new ApiResponse(200, categories, "Defect categories fetched"),
+  );
 });
 
 // GET /analytics/executors
 export const getDashboardExecutors = asyncHandler(async (req, res) => {
   const { allExecutors } = await getRawAnalyticsData();
-  return res.json(new ApiResponse(200, allExecutors || [], "Executors fetched"));
+  return res.json(
+    new ApiResponse(200, allExecutors || [], "Executors fetched"),
+  );
 });
 
 // GET /analytics/dr-by-project
@@ -161,7 +250,10 @@ export const getDrByProject = asyncHandler(async (req, res) => {
   const { summaryRows, detailRows } = await getRawAnalyticsData();
 
   const { drByProject } = computeAnalytics(summaryRows, detailRows, {
-    teamLeader, project, defectCategory, executor,
+    teamLeader,
+    project,
+    defectCategory,
+    executor,
   });
 
   return res.json(new ApiResponse(200, drByProject, "DR by project fetched"));
@@ -173,10 +265,15 @@ export const getDrByTeamLeader = asyncHandler(async (req, res) => {
   const { summaryRows, detailRows } = await getRawAnalyticsData();
 
   const { drByTeamLeader } = computeAnalytics(summaryRows, detailRows, {
-    teamLeader, project, defectCategory, executor,
+    teamLeader,
+    project,
+    defectCategory,
+    executor,
   });
 
-  return res.json(new ApiResponse(200, drByTeamLeader, "DR by team leader fetched"));
+  return res.json(
+    new ApiResponse(200, drByTeamLeader, "DR by team leader fetched"),
+  );
 });
 
 // GET /analytics/projects  (lightweight list for filter dropdown)
@@ -185,4 +282,3 @@ export const getDashboardProjects = asyncHandler(async (req, res) => {
   const data = getProjectsList(summaryRows);
   return res.json(new ApiResponse(200, data, "Projects fetched"));
 });
-
