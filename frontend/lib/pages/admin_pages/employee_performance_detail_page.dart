@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/projects_controller.dart';
 import '../../models/team_member.dart';
@@ -53,8 +53,13 @@ class _EmployeePerformanceDetailPageState
       final employeeProjectIds = <String>{};
       for (final membership in userProjectsData) {
         final projectId = membership['project_id'];
-        if (projectId is Map && projectId['_id'] != null) {
-          employeeProjectIds.add(projectId['_id'].toString());
+        if (projectId is Map) {
+          final id = projectId['_id'] ?? projectId['id'];
+          if (id != null) {
+            employeeProjectIds.add(id.toString());
+          }
+        } else if (projectId != null) {
+          employeeProjectIds.add(projectId.toString());
         }
       }
 

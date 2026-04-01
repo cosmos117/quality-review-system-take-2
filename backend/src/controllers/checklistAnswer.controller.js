@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const isValidObjectId = (id) => /^[a-fA-F0-9]{24}$/.test(id);
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -10,7 +10,7 @@ export const accumulateDefectsForChecklist = checklistAnswerService.accumulateDe
 const getChecklistAnswers = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase, role } = req.query;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid project ID");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid project ID");
   if (!phase || !role) throw new ApiError(400, "Phase and role query parameters are required");
   const phaseNum = parseInt(phase);
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase number");
@@ -25,7 +25,7 @@ const getChecklistAnswers = asyncHandler(async (req, res) => {
 const saveChecklistAnswers = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase, role, answers } = req.body;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid project ID");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid project ID");
   if (!phase || !role || !answers) throw new ApiError(400, "Phase, role, and answers are required");
   const phaseNum = parseInt(phase);
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase number");
@@ -41,7 +41,7 @@ const saveChecklistAnswers = asyncHandler(async (req, res) => {
 const submitChecklistAnswers = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase, role } = req.body;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid project ID");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid project ID");
   if (!phase || !role) throw new ApiError(400, "Phase and role are required");
   const phaseNum = parseInt(phase);
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase number");
@@ -55,7 +55,7 @@ const submitChecklistAnswers = asyncHandler(async (req, res) => {
 const getSubmissionStatus = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase, role } = req.query;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid project ID");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid project ID");
   if (!phase || !role) throw new ApiError(400, "Phase and role query parameters are required");
   const phaseNum = parseInt(phase);
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase number");

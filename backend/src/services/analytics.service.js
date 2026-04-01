@@ -1,19 +1,28 @@
-import Checkpoint from "../models/checkpoint.models.js";
-import Checklist from "../models/checklist.models.js";
-import Stage from "../models/stage.models.js";
+import prisma from "../config/prisma.js";
+
+const parseJsonField = (field) => {
+    if (!field) return {};
+    if (typeof field === 'string') return JSON.parse(field);
+    return field;
+};
 
 async function fetchProjectData(projectId) {
-  const stages = await Stage.find({ project_id: projectId }).lean();
+  const stages = await prisma.stage.findMany({
+    where: { project_id: projectId },
+  });
   if (stages.length === 0) return { stages: [], checklists: [], checkpoints: [] };
 
-  const stageIds = stages.map((s) => s._id);
-  const checklists = await Checklist.find({ stage_id: { $in: stageIds } }).lean();
+  const stageIds = stages.map((s) => s.id);
+  const checklists = await prisma.checklist.findMany({
+    where: { stage_id: { in: stageIds } },
+  });
   if (checklists.length === 0) return { stages, checklists: [], checkpoints: [] };
 
-  const checklistIds = checklists.map((c) => c._id);
-  const checkpoints = await Checkpoint.find({ checklistId: { $in: checklistIds } })
-    .select("defect checklistId")
-    .lean();
+  const checklistIds = checklists.map((c) => c.id);
+  const checkpoints = await prisma.checkpoint.findMany({
+    where: { checklistId: { in: checklistIds } },
+    select: { defect: true, checklistId: true },
+  });
 
   return { stages, checklists, checkpoints };
 }
@@ -34,27 +43,30 @@ export async function getProjectAnalysis(projectId) {
   if (stages.length === 0 || checklists.length === 0) return emptyResult;
 
   const totalCheckpoints = checkpoints.length;
-  const defectCheckpoints = checkpoints.filter((cp) => cp.defect.isDetected);
+  const defectCheckpoints = checkpoints.filter((cp) => {
+    const defect = parseJsonField(cp.defect);
+    return defect.isDetected;
+  });
   const totalDefects = defectCheckpoints.length;
   const defectRate =
     totalCheckpoints === 0
       ? "0%"
       : ((totalDefects / totalCheckpoints) * 100).toFixed(2) + "%";
 
-  const checklistMap = new Map(checklists.map((c) => [c._id.toString(), c]));
+  const checklistMap = new Map(checklists.map((c) => [c.id, c]));
 
   const defectsByPhase = {};
   stages.forEach((stage) => {
-    defectsByPhase[stage._id.toString()] = {
-      stageId: stage._id, stageName: stage.stage_name,
+    defectsByPhase[stage.id] = {
+      stageId: stage.id, stageName: stage.stage_name,
       totalCheckpoints: 0, defectCount: 0, defectRate: "0%",
     };
   });
 
   const defectsByChecklist = {};
   checklists.forEach((checklist) => {
-    defectsByChecklist[checklist._id.toString()] = {
-      checklistId: checklist._id, checklistName: checklist.checklist_name,
+    defectsByChecklist[checklist.id] = {
+      checklistId: checklist.id, checklistName: checklist.checklist_name,
       totalCheckpoints: 0, defectCount: 0, defectRate: "0%",
     };
   });
@@ -62,19 +74,21 @@ export async function getProjectAnalysis(projectId) {
   const categoryDistribution = {};
 
   checkpoints.forEach((checkpoint) => {
-    const checklistId = checkpoint.checklistId.toString();
+    const checklistId = checkpoint.checklistId;
     const checklist = checklistMap.get(checklistId);
     if (!checklist) return;
 
-    const stageId = checklist.stage_id.toString();
+    const stageId = checklist.stage_id;
     if (defectsByPhase[stageId]) defectsByPhase[stageId].totalCheckpoints += 1;
     if (defectsByChecklist[checklistId]) defectsByChecklist[checklistId].totalCheckpoints += 1;
 
-    if (checkpoint.defect.isDetected) {
+    const defect = parseJsonField(checkpoint.defect);
+
+    if (defect.isDetected) {
       if (defectsByPhase[stageId]) defectsByPhase[stageId].defectCount += 1;
       if (defectsByChecklist[checklistId]) defectsByChecklist[checklistId].defectCount += 1;
 
-      const categoryId = checkpoint.defect.categoryId || "Unassigned";
+      const categoryId = defect.categoryId || "Unassigned";
       categoryDistribution[categoryId] = (categoryDistribution[categoryId] || 0) + 1;
     }
   });
@@ -93,7 +107,7 @@ export async function getProjectAnalysis(projectId) {
   const categoryArray = Object.entries(categoryDistribution)
     .map(([categoryId, count]) => ({
       categoryId, count,
-      percentage: ((count / totalDefects) * 100).toFixed(2) + "%",
+      percentage: totalDefects === 0 ? "0.00%" : ((count / totalDefects) * 100).toFixed(2) + "%",
     }))
     .sort((a, b) => b.count - a.count);
 
@@ -111,18 +125,18 @@ export async function getDefectsPerPhase(projectId) {
 
   return stages.map((stage) => {
     const stageChecklists = checklists.filter(
-      (c) => c.stage_id.toString() === stage._id.toString()
+      (c) => c.stage_id === stage.id
     );
-    const checklistIdsForStage = stageChecklists.map((c) => c._id.toString());
+    const checklistIdsForStage = stageChecklists.map((c) => c.id);
     const checkpointsInStage = checkpoints.filter((cp) =>
-      checklistIdsForStage.includes(cp.checklistId.toString())
+      checklistIdsForStage.includes(cp.checklistId)
     );
 
     const totalCheckpoints = checkpointsInStage.length;
-    const defectCount = checkpointsInStage.filter((cp) => cp.defect.isDetected).length;
+    const defectCount = checkpointsInStage.filter((cp) => parseJsonField(cp.defect).isDetected).length;
 
     return {
-      stageId: stage._id, stageName: stage.stage_name, totalCheckpoints, defectCount,
+      stageId: stage.id, stageName: stage.stage_name, totalCheckpoints, defectCount,
       defectRate: totalCheckpoints === 0
         ? "0%" : ((defectCount / totalCheckpoints) * 100).toFixed(2) + "%",
     };
@@ -134,13 +148,13 @@ export async function getDefectsPerChecklist(projectId) {
 
   return checklists.map((checklist) => {
     const checkpointsInChecklist = checkpoints.filter(
-      (cp) => cp.checklistId.toString() === checklist._id.toString()
+      (cp) => cp.checklistId === checklist.id
     );
     const totalCheckpoints = checkpointsInChecklist.length;
-    const defectCount = checkpointsInChecklist.filter((cp) => cp.defect.isDetected).length;
+    const defectCount = checkpointsInChecklist.filter((cp) => parseJsonField(cp.defect).isDetected).length;
 
     return {
-      checklistId: checklist._id, checklistName: checklist.checklist_name,
+      checklistId: checklist.id, checklistName: checklist.checklist_name,
       stageId: checklist.stage_id, totalCheckpoints, defectCount,
       defectRate: totalCheckpoints === 0
         ? "0%" : ((defectCount / totalCheckpoints) * 100).toFixed(2) + "%",
@@ -151,14 +165,15 @@ export async function getDefectsPerChecklist(projectId) {
 export async function getCategoryDistribution(projectId) {
   const { checkpoints } = await fetchProjectData(projectId);
 
-  const defectedCheckpoints = checkpoints.filter((cp) => cp.defect.isDetected);
+  const defectedCheckpoints = checkpoints.filter((cp) => parseJsonField(cp.defect).isDetected);
   const totalDefects = defectedCheckpoints.length;
 
   if (totalDefects === 0) return { totalDefects: 0, distribution: [] };
 
   const categoryMap = {};
   defectedCheckpoints.forEach((checkpoint) => {
-    const categoryId = checkpoint.defect.categoryId || "Unassigned";
+    const defect = parseJsonField(checkpoint.defect);
+    const categoryId = defect.categoryId || "Unassigned";
     categoryMap[categoryId] = (categoryMap[categoryId] || 0) + 1;
   });
 

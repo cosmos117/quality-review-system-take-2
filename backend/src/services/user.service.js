@@ -1,92 +1,140 @@
-import { User } from "../models/user.models.js";
-import ProjectMembership from "../models/projectMembership.models.js";
+import prisma from "../config/prisma.js";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import { ApiError } from "../utils/ApiError.js";
 import { parsePagination, paginatedResponse } from "../utils/paginate.js";
+import { newId } from "../utils/newId.js";
 import { clearAnalyticsCache } from "./analytics-excel.service.js";
 
 export async function registerUser({ name, email, password, role }) {
-  const existingUser = await User.findOne({ email }).select("_id").lean();
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
   if (existingUser) {
     throw new ApiError(409, "User already exists with this email");
   }
 
-  const user = await User.create({ name, email, password, role });
+  const hashedPassword = await bcrypt.hash(password, 10);
 
-  const createdUser = await User.findById(user._id)
-    .select("-password -accessToken")
-    .lean();
+  const user = await prisma.user.create({
+    data: {
+      id: newId(),
+      name,
+      email: email.toLowerCase().trim(),
+      password: hashedPassword,
+      role,
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
 
-  if (!createdUser) {
-    throw new ApiError(500, "Something went wrong while registering user");
-  }
-
-  return createdUser;
+  return user;
 }
 
 export async function loginUser({ email, password }) {
-  const user = await User.findOne({ email });
+  const user = await prisma.user.findUnique({ where: { email } });
   if (!user) throw new ApiError(404, "User not found");
 
-  const isPasswordValid = await user.isPasswordCorrect(password);
+  const isPasswordValid = await bcrypt.compare(password, user.password);
   if (!isPasswordValid) throw new ApiError(404, "Invalid credentials");
 
-  const accessToken = user.generateAccessToken();
-  user.accessToken = accessToken;
-  await user.save();
+  const accessToken = jwt.sign(
+    { _id: user.id, email: user.email, role: user.role, name: user.name },
+    process.env.ACCESS_TOKEN_SECRET,
+    { expiresIn: process.env.ACCESS_TOKEN_EXPIRY || "7d" }
+  );
 
-  const loggedUser = await User.findById(user._id)
-    .select("-password -accessToken")
-    .lean();
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { accessToken },
+  });
 
+  const { password: _pw, accessToken: _at, ...loggedUser } = user;
   return { ...loggedUser, token: accessToken };
 }
 
 export async function logoutUser(userId) {
-  await User.findByIdAndUpdate(userId, { accessToken: null });
+  await prisma.user.update({
+    where: { id: userId },
+    data: { accessToken: null },
+  });
 }
 
 export async function getAllUsers(query) {
   const { page, limit, skip } = parsePagination(query);
-  const filter = {};
-  const total = await User.countDocuments(filter);
+  const total = await prisma.user.count();
 
-  let q = User.find(filter)
-    .select("-password -accessToken")
-    .sort({ createdAt: -1 })
-    .lean();
+  const users = await prisma.user.findMany({
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+    orderBy: { createdAt: "desc" },
+    ...(limit ? { skip, take: limit } : {}),
+  });
 
-  if (limit) q = q.skip(skip).limit(limit);
-
-  const users = await q;
   return paginatedResponse(users, total, { page, limit });
 }
 
 export async function updateUser(userId, { name, email, password, role }) {
-  const user = await User.findById(userId);
+  const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new ApiError(404, "User not found");
 
   if (email && email !== user.email) {
-    const existingUser = await User.findOne({ email }).select("_id").lean();
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
     if (existingUser) throw new ApiError(409, "Email already in use");
   }
 
-  if (name) user.name = name;
-  if (email) user.email = email;
-  if (role) user.role = role;
-  if (password) user.password = password;
+  const data = {};
+  if (name) data.name = name;
+  if (email) data.email = email;
+  if (role) data.role = role;
+  if (password) data.password = await bcrypt.hash(password, 10);
 
-  await user.save();
-
-  return User.findById(user._id).select("-password -accessToken").lean();
+  return prisma.user.update({
+    where: { id: userId },
+    data,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
 }
 
 export async function deleteUser(userId) {
-  const user = await User.findByIdAndDelete(userId);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
   if (!user) throw new ApiError(404, "User not found");
 
-  const deletedMemberships = await ProjectMembership.deleteMany({
-    user_id: userId,
+  const { count: deletedMemberships } = await prisma.projectMembership.deleteMany({
+    where: { user_id: userId },
   });
+
+  await prisma.user.delete({ where: { id: userId } });
+
   clearAnalyticsCache();
-  return { deletedMemberships: deletedMemberships.deletedCount };
+  return { deletedMemberships };
 }

@@ -1,13 +1,18 @@
-import ProjectChecklist from "../models/projectChecklist.models.js";
-import ChecklistApproval from "../models/checklistApproval.models.js";
-import Stage from "../models/stage.models.js";
+import prisma from "../config/prisma.js";
 import { ensureProjectChecklist } from "./projectChecklist.service.js";
 import { ApiError } from "../utils/ApiError.js";
 import logger from "../utils/logger.js";
+import { newId } from "../utils/newId.js";
+
+const parseJsonField = (field) => {
+    if (!field) return [];
+    if (typeof field === 'string') return JSON.parse(field);
+    return field;
+};
 
 const calculateCurrentMismatches = (group) => {
   let mismatchCount = 0;
-  for (const question of group.questions) {
+  for (const question of group.questions || []) {
     if (
       question.executorAnswer &&
       question.reviewerAnswer &&
@@ -16,8 +21,8 @@ const calculateCurrentMismatches = (group) => {
       mismatchCount++;
     }
   }
-  for (const section of group.sections) {
-    for (const question of section.questions) {
+  for (const section of group.sections || []) {
+    for (const question of section.questions || []) {
       if (
         question.executorAnswer &&
         question.reviewerAnswer &&
@@ -30,13 +35,9 @@ const calculateCurrentMismatches = (group) => {
   return mismatchCount;
 };
 
-/**
- * Accumulate defects for all groups in a checklist.
- * Adds current mismatches to existing defect count (incremental only, never decrements).
- */
-export const accumulateDefectsForChecklist = (checklist) => {
+export const accumulateDefectsForChecklistGroups = (groups) => {
   let totalNewDefects = 0;
-  for (const group of checklist.groups) {
+  for (const group of groups) {
     const currentMismatches = calculateCurrentMismatches(group);
     const existingDefectCount = group.defectCount || 0;
     group.defectCount = existingDefectCount + currentMismatches;
@@ -47,32 +48,30 @@ export const accumulateDefectsForChecklist = (checklist) => {
 
 export const getChecklistAnswers = async (projectId, phaseNum, normalizedRole) => {
   const stageKey = `stage${phaseNum}`;
-  const stage = await Stage.findOne({
-    project_id: projectId,
-    stage_key: stageKey,
-  }).select("_id stage_name").lean();
+  const stage = await prisma.stage.findFirst({
+    where: { project_id: projectId, stage_key: stageKey },
+    select: { id: true, stage_name: true },
+  });
 
-  if (!stage) {
-    return {};
-  }
+  if (!stage) return {};
 
-  let checklist = await ProjectChecklist.findOne({
-    projectId,
-    stageId: stage._id,
-  }).lean();
+  let checklist = await prisma.projectChecklist.findUnique({
+    where: { projectId_stageId: { projectId, stageId: stage.id } }
+  });
 
   if (!checklist) {
     try {
-      checklist = await ensureProjectChecklist({ projectId, stageDoc: stage });
+      checklist = await ensureProjectChecklist({ projectId, stageDoc: { _id: stage.id, stage_name: stage.stage_name, stage_key: stageKey } });
     } catch (_) {
       return {};
     }
   }
 
   const answerMap = {};
+  const groups = parseJsonField(checklist.groups);
 
-  checklist.groups.forEach((group) => {
-    group.questions.forEach((q) => {
+  groups.forEach((group) => {
+    (group.questions || []).forEach((q) => {
       const key = q._id ? q._id.toString() : q.text;
       if (normalizedRole === "executor") {
         answerMap[key] = {
@@ -97,8 +96,8 @@ export const getChecklistAnswers = async (projectId, phaseNum, normalizedRole) =
       }
     });
 
-    group.sections.forEach((section) => {
-      section.questions.forEach((q) => {
+    (group.sections || []).forEach((section) => {
+      (section.questions || []).forEach((q) => {
         const key = q._id ? q._id.toString() : q.text;
         if (normalizedRole === "executor") {
           answerMap[key] = {
@@ -130,68 +129,56 @@ export const getChecklistAnswers = async (projectId, phaseNum, normalizedRole) =
 
 export const saveChecklistAnswers = async (projectId, phaseNum, normalizedRole, answers, userId) => {
   const stageKey = `stage${phaseNum}`;
-  const stage = await Stage.findOne({
-    project_id: projectId,
-    stage_key: stageKey,
-  }).select("_id stage_name").lean();
+  const stage = await prisma.stage.findFirst({
+    where: { project_id: projectId, stage_key: stageKey },
+    select: { id: true, stage_name: true },
+  });
 
-  if (!stage) {
-    throw new ApiError(404, "Stage not found for this phase");
-  }
+  if (!stage) throw new ApiError(404, "Stage not found for this phase");
 
-  let checklist = await ProjectChecklist.findOne({
-    projectId,
-    stageId: stage._id,
+  let checklist = await prisma.projectChecklist.findUnique({
+    where: { projectId_stageId: { projectId, stageId: stage.id } },
   });
 
   if (!checklist) {
     try {
-      checklist = await ensureProjectChecklist({ projectId, stageDoc: stage });
+      checklist = await ensureProjectChecklist({ projectId, stageDoc: { _id: stage.id, stage_name: stage.stage_name, stage_key: stageKey } });
     } catch (err) {
       throw new ApiError(500, `Failed to create checklist: ${err.message}`);
     }
   }
 
   const savedAnswers = [];
+  const groups = parseJsonField(checklist.groups);
 
   for (const [subQuestion, answerData] of Object.entries(answers)) {
     if (!answerData || typeof answerData !== "object") continue;
 
     const { answer, remark, images, categoryId, severity } = answerData;
-
     let found = false;
-    let groupIndex = 0;
 
-    for (const group of checklist.groups) {
-      let qIndex = 0;
-      for (const q of group.questions) {
+    for (const group of groups) {
+      for (const q of group.questions || []) {
         const matchByText = q.text === subQuestion;
         const matchById = q._id && q._id.toString() === subQuestion;
 
         if (matchByText || matchById) {
-          const questionPath = `groups.${groupIndex}.questions.${qIndex}`;
           if (normalizedRole === "executor") {
             if (answer !== undefined) q.executorAnswer = answer;
             if (remark !== undefined) q.executorRemark = remark || "";
-            if (images !== undefined) {
-              q.executorImages = Array.isArray(images) ? images : [];
-              checklist.markModified(`${questionPath}.executorImages`);
-            }
+            if (images !== undefined) q.executorImages = Array.isArray(images) ? images : [];
             if (!q.answeredBy) q.answeredBy = {};
             q.answeredBy.executor = userId;
             if (!q.answeredAt) q.answeredAt = {};
-            q.answeredAt.executor = new Date();
+            q.answeredAt.executor = new Date().toISOString();
           } else {
             if (answer !== undefined) q.reviewerAnswer = answer;
             if (remark !== undefined) q.reviewerRemark = remark || "";
-            if (images !== undefined) {
-              q.reviewerImages = Array.isArray(images) ? images : [];
-              checklist.markModified(`${questionPath}.reviewerImages`);
-            }
+            if (images !== undefined) q.reviewerImages = Array.isArray(images) ? images : [];
             if (!q.answeredBy) q.answeredBy = {};
             q.answeredBy.reviewer = userId;
             if (!q.answeredAt) q.answeredAt = {};
-            q.answeredAt.reviewer = new Date();
+            q.answeredAt.reviewer = new Date().toISOString();
           }
           if (categoryId !== undefined) q.categoryId = categoryId || "";
           if (severity !== undefined) q.severity = severity || "";
@@ -199,42 +186,32 @@ export const saveChecklistAnswers = async (projectId, phaseNum, normalizedRole, 
           savedAnswers.push({ question: subQuestion, updated: true });
           break;
         }
-        qIndex++;
       }
 
       if (found) break;
 
-      let sIndex = 0;
-      for (const section of group.sections) {
-        let sqIndex = 0;
-        for (const q of section.questions) {
+      for (const section of group.sections || []) {
+        for (const q of section.questions || []) {
           const matchByText = q.text === subQuestion;
           const matchById = q._id && q._id.toString() === subQuestion;
 
           if (matchByText || matchById) {
-            const questionPath = `groups.${groupIndex}.sections.${sIndex}.questions.${sqIndex}`;
             if (normalizedRole === "executor") {
               if (answer !== undefined) q.executorAnswer = answer;
               if (remark !== undefined) q.executorRemark = remark || "";
-              if (images !== undefined) {
-                q.executorImages = Array.isArray(images) ? images : [];
-                checklist.markModified(`${questionPath}.executorImages`);
-              }
+              if (images !== undefined) q.executorImages = Array.isArray(images) ? images : [];
               if (!q.answeredBy) q.answeredBy = {};
               q.answeredBy.executor = userId;
               if (!q.answeredAt) q.answeredAt = {};
-              q.answeredAt.executor = new Date();
+              q.answeredAt.executor = new Date().toISOString();
             } else {
               if (answer !== undefined) q.reviewerAnswer = answer;
               if (remark !== undefined) q.reviewerRemark = remark || "";
-              if (images !== undefined) {
-                q.reviewerImages = Array.isArray(images) ? images : [];
-                checklist.markModified(`${questionPath}.reviewerImages`);
-              }
+              if (images !== undefined) q.reviewerImages = Array.isArray(images) ? images : [];
               if (!q.answeredBy) q.answeredBy = {};
               q.answeredBy.reviewer = userId;
               if (!q.answeredAt) q.answeredAt = {};
-              q.answeredAt.reviewer = new Date();
+              q.answeredAt.reviewer = new Date().toISOString();
             }
             if (categoryId !== undefined) q.categoryId = categoryId || "";
             if (severity !== undefined) q.severity = severity || "";
@@ -242,18 +219,17 @@ export const saveChecklistAnswers = async (projectId, phaseNum, normalizedRole, 
             savedAnswers.push({ question: subQuestion, updated: true });
             break;
           }
-          sqIndex++;
         }
         if (found) break;
-        sIndex++;
       }
       if (found) break;
-      groupIndex++;
     }
   }
 
-  checklist.markModified("groups");
-  await checklist.save();
+  await prisma.projectChecklist.update({
+    where: { id: checklist.id },
+    data: { groups }
+  });
 
   return {
     saved_count: savedAnswers.length,
@@ -263,24 +239,22 @@ export const saveChecklistAnswers = async (projectId, phaseNum, normalizedRole, 
 
 export const submitChecklistAnswers = async (projectId, phaseNum, normalizedRole) => {
   const stageKey = `stage${phaseNum}`;
-  const [existingRecord, stage] = await Promise.all([
-    ChecklistApproval.findOne({
-      project_id: projectId,
-      phase: phaseNum,
-    }).lean(),
-    Stage.findOne({
-      project_id: projectId,
-      stage_key: stageKey,
-    }).select("_id").lean(),
-  ]);
+  
+  const existingRecord = await prisma.checklistApproval.findUnique({
+    where: { project_id_phase: { project_id: projectId, phase: phaseNum } }
+  });
+
+  const stage = await prisma.stage.findFirst({
+    where: { project_id: projectId, stage_key: stageKey },
+    select: { id: true }
+  });
 
   const wasReverted = existingRecord?.status === "reverted_to_executor";
   let totalNewDefects = 0;
 
   if (stage) {
-    const checklist = await ProjectChecklist.findOne({
-      projectId,
-      stageId: stage._id,
+    const checklist = await prisma.projectChecklist.findUnique({
+      where: { projectId_stageId: { projectId, stageId: stage.id } }
     });
 
     if (checklist) {
@@ -294,12 +268,16 @@ export const submitChecklistAnswers = async (projectId, phaseNum, normalizedRole
       }
 
       if (shouldAccumulate) {
-        totalNewDefects = accumulateDefectsForChecklist(checklist);
-        checklist.markModified("groups");
-        await checklist.save();
+        const groups = parseJsonField(checklist.groups);
+        totalNewDefects = accumulateDefectsForChecklistGroups(groups);
+        
+        await prisma.projectChecklist.update({
+          where: { id: checklist.id },
+          data: { groups }
+        });
 
         logger.info(
-          `${normalizedRole.charAt(0).toUpperCase() + normalizedRole.slice(1)} submission: Added ${totalNewDefects} new defects to phase ${phaseNum}`,
+          `${normalizedRole.charAt(0).toUpperCase() + normalizedRole.slice(1)} submission: Added ${totalNewDefects} new defects to phase ${phaseNum}`
         );
       }
     }
@@ -316,13 +294,19 @@ export const submitChecklistAnswers = async (projectId, phaseNum, normalizedRole
     updateFields.status = "pending";
   }
 
-  const record = await ChecklistApproval.findOneAndUpdate(
-    { project_id: projectId, phase: phaseNum },
-    { $set: updateFields },
-    { upsert: true, new: true },
-  );
+  const record = await prisma.checklistApproval.upsert({
+    where: { project_id_phase: { project_id: projectId, phase: phaseNum } },
+    update: updateFields,
+    create: {
+      id: newId(),
+      project_id: projectId,
+      phase: phaseNum,
+      status: updateFields.status || "pending",
+      ...updateFields
+    }
+  });
 
-  const responseData = { ...record.toObject() };
+  const responseData = { ...record };
   if (totalNewDefects > 0) {
     responseData.defects_added = totalNewDefects;
   }
@@ -331,10 +315,9 @@ export const submitChecklistAnswers = async (projectId, phaseNum, normalizedRole
 };
 
 export const getSubmissionStatus = async (projectId, phaseNum, normalizedRole) => {
-  const record = await ChecklistApproval.findOne({
-    project_id: projectId,
-    phase: phaseNum,
-  }).lean();
+  const record = await prisma.checklistApproval.findUnique({
+    where: { project_id_phase: { project_id: projectId, phase: phaseNum } },
+  });
 
   return {
     is_submitted: record?.[`${normalizedRole}_submitted`] || false,

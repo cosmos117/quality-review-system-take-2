@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'dart:async';
@@ -401,7 +401,7 @@ class RoleColumn extends StatelessWidget {
               itemBuilder: (context, index) {
                 final q = checklist[index];
                 // sub is Map<String,String>
-                String subKey(Map<String, String> s) => (s['id'] ?? s['text'])!;
+                String subKey(Map<String, String> s) => (s['id']?.isNotEmpty == true ? s['id'] : s['text'])!;
                 String subText(Map<String, String> s) => (s['text'] ?? '');
 
                 // OPTIMIZED: Pre-calculate differs once and cache it
@@ -805,7 +805,7 @@ class RoleColumn extends StatelessWidget {
 
     // Now check if any sub-question differs (no multiple getAnswers calls)
     for (final sub in subQuestions) {
-      final key = (sub['id'] ?? sub['text'])!;
+      final key = (sub['id']?.isNotEmpty == true ? sub['id'] : sub['text'])!;
 
       // Get answers from merged sources (local map priority over cache)
       final a = answers[key]?['answer'] ?? thisRoleSheet[key]?['answer'];

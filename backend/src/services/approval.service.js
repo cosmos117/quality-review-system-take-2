@@ -1,10 +1,14 @@
-import ProjectChecklist from "../models/projectChecklist.models.js";
-import ChecklistApproval from "../models/checklistApproval.models.js";
-import Stage from "../models/stage.models.js";
-import Project from "../models/project.models.js";
-import { accumulateDefectsForChecklist } from "./checklistAnswer.service.js";
+import prisma from "../config/prisma.js";
+import { accumulateDefectsForChecklistGroups } from "./checklistAnswer.service.js";
 import logger from "../utils/logger.js";
 import { ApiError } from "../utils/ApiError.js";
+import { newId } from "../utils/newId.js";
+
+const parseJsonField = (field) => {
+    if (!field) return [];
+    if (typeof field === 'string') return JSON.parse(field);
+    return field;
+};
 
 function answersMatch(execAns, revAns) {
   const execKeys = Object.keys(execAns);
@@ -21,21 +25,18 @@ function answersMatch(execAns, revAns) {
 
 export const compareAnswers = async (projectId, phaseNum) => {
   const stageKey = `stage${phaseNum}`;
-  const stage = await Stage.findOne({
-    project_id: projectId,
-    stage_key: stageKey,
-  })
-    .select("_id")
-    .lean();
+  const stage = await prisma.stage.findFirst({
+    where: { project_id: projectId, stage_key: stageKey },
+    select: { id: true },
+  });
 
   if (!stage) {
     return { match: true, stats: { exec_count: 0, rev_count: 0 } };
   }
 
-  const checklist = await ProjectChecklist.findOne({
-    projectId,
-    stageId: stage._id,
-  }).lean();
+  const checklist = await prisma.projectChecklist.findUnique({
+    where: { projectId_stageId: { projectId, stageId: stage.id } }
+  });
 
   if (!checklist) {
     return { match: true, stats: { exec_count: 0, rev_count: 0 } };
@@ -46,8 +47,10 @@ export const compareAnswers = async (projectId, phaseNum) => {
   let execCount = 0;
   let revCount = 0;
 
-  checklist.groups.forEach((group) => {
-    group.questions.forEach((q) => {
+  const groups = parseJsonField(checklist.groups);
+
+  groups.forEach((group) => {
+    (group.questions || []).forEach((q) => {
       const key = q.text;
       if (q.executorAnswer !== null && q.executorAnswer !== undefined) {
         execMap[key] = { answer: q.executorAnswer };
@@ -59,8 +62,8 @@ export const compareAnswers = async (projectId, phaseNum) => {
       }
     });
 
-    group.sections.forEach((section) => {
-      section.questions.forEach((q) => {
+    (group.sections || []).forEach((section) => {
+      (section.questions || []).forEach((q) => {
         const key = q.text;
         if (q.executorAnswer !== null && q.executorAnswer !== undefined) {
           execMap[key] = { answer: q.executorAnswer };
@@ -79,50 +82,68 @@ export const compareAnswers = async (projectId, phaseNum) => {
 };
 
 export const requestApproval = async (projectId, phaseNum, notes) => {
-  const record = await ChecklistApproval.findOneAndUpdate(
-    { project_id: projectId, phase: phaseNum },
-    {
-      $set: { status: "pending", requested_at: new Date(), notes: notes || "" },
-    },
-    { new: true, upsert: true },
-  );
+  const updateFields = {
+    status: "pending", 
+    requested_at: new Date(), 
+    notes: notes || ""
+  };
+  
+  const record = await prisma.checklistApproval.upsert({
+    where: { project_id_phase: { project_id: projectId, phase: phaseNum } },
+    update: updateFields,
+    create: {
+      id: newId(),
+      project_id: projectId,
+      phase: phaseNum,
+      status: "pending",
+      ...updateFields
+    }
+  });
+  
   return record;
 };
 
 export const approve = async (projectId, phaseNum, userId) => {
-  const record = await ChecklistApproval.findOneAndUpdate(
-    { project_id: projectId, phase: phaseNum },
-    {
-      $set: {
-        status: "approved",
-        decided_at: new Date(),
-        decided_by: userId,
-      },
+  const record = await prisma.checklistApproval.upsert({
+    where: { project_id_phase: { project_id: projectId, phase: phaseNum } },
+    update: {
+      status: "approved",
+      decided_at: new Date(),
+      decided_by: userId,
     },
-    { new: true, upsert: true },
-  );
+    create: {
+      id: newId(),
+      project_id: projectId,
+      phase: phaseNum,
+      status: "approved",
+      decided_at: new Date(),
+      decided_by: userId,
+    }
+  });
 
   const currentStageKey = `stage${phaseNum}`;
-  await Stage.findOneAndUpdate(
-    { project_id: projectId, stage_key: currentStageKey },
-    { $set: { status: "completed" } },
-  );
+  await prisma.stage.updateMany({
+    where: { project_id: projectId, stage_key: currentStageKey },
+    data: { status: "completed" }
+  });
 
   const nextPhaseNum = phaseNum + 1;
   const nextStageKey = `stage${nextPhaseNum}`;
-  const nextStage = await Stage.findOne({
-    project_id: projectId,
-    stage_key: nextStageKey,
-  })
-    .select("_id")
-    .lean();
+  const nextStage = await prisma.stage.findFirst({
+    where: { project_id: projectId, stage_key: nextStageKey },
+    select: { id: true }
+  });
 
   if (nextStage) {
-    await Stage.findByIdAndUpdate(nextStage._id, {
-      $set: { status: "in_progress" },
+    await prisma.stage.update({
+      where: { id: nextStage.id },
+      data: { status: "in_progress" }
     });
   } else {
-    await Project.findByIdAndUpdate(projectId, { status: "completed" });
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { status: "completed" }
+    });
   }
 
   return record;
@@ -130,117 +151,117 @@ export const approve = async (projectId, phaseNum, userId) => {
 
 export const revertToExecutor = async (projectId, phaseNum, notes, userId) => {
   const stageKey = `stage${phaseNum}`;
-  const stage = await Stage.findOne({
-    project_id: projectId,
-    stage_key: stageKey,
-  })
-    .select("_id conflict_count")
-    .lean();
+  const stage = await prisma.stage.findFirst({
+    where: { project_id: projectId, stage_key: stageKey },
+    select: { id: true, conflict_count: true }
+  });
 
   if (!stage) {
-    throw new ApiError(
-      404,
-      `Stage not found for project ${projectId}, phase ${phaseNum}`,
-    );
+    throw new ApiError(404, `Stage not found for project ${projectId}, phase ${phaseNum}`);
   }
 
-  const checklist = await ProjectChecklist.findOne({
-    projectId,
-    stageId: stage._id,
+  const checklist = await prisma.projectChecklist.findUnique({
+    where: { projectId_stageId: { projectId, stageId: stage.id } }
   });
 
   let totalNewDefects = 0;
+  let iterationSaved = null;
 
   if (checklist) {
-    totalNewDefects = accumulateDefectsForChecklist(checklist);
+    const groups = parseJsonField(checklist.groups);
+    const iterations = parseJsonField(checklist.iterations) || [];
+    
+    totalNewDefects = accumulateDefectsForChecklistGroups(groups);
 
-    logger.info(
-      `Reviewer revert: Added ${totalNewDefects} new defects to phase ${phaseNum}`,
-    );
+    logger.info(`Reviewer revert: Added ${totalNewDefects} new defects to phase ${phaseNum}`);
 
-    const approvalRecord = await ChecklistApproval.findOne({
-      project_id: projectId,
-      phase: phaseNum,
-    }).lean();
+    const approvalRecord = await prisma.checklistApproval.findUnique({
+      where: { project_id_phase: { project_id: projectId, phase: phaseNum } }
+    });
 
     const newIteration = {
       iterationNumber: checklist.currentIteration || 1,
-      groups: JSON.parse(JSON.stringify(checklist.groups)),
-      revertedAt: new Date(),
+      groups: JSON.parse(JSON.stringify(groups)),
+      revertedAt: new Date().toISOString(),
       revertedBy: userId,
       revertNotes: notes || "",
       executorSubmittedAt: approvalRecord?.executor_submitted_at || null,
       reviewerSubmittedAt: approvalRecord?.reviewer_submitted_at || null,
     };
 
-    checklist.iterations.push(newIteration);
-    checklist.currentIteration = (checklist.currentIteration || 1) + 1;
+    iterations.push(newIteration);
+    const updatedCurrentIteration = (checklist.currentIteration || 1) + 1;
+    iterationSaved = checklist.currentIteration;
 
-    checklist.markModified("groups");
-    await checklist.save();
+    await prisma.projectChecklist.update({
+      where: { id: checklist.id },
+      data: {
+        groups,
+        iterations,
+        currentIteration: updatedCurrentIteration
+      }
+    });
   }
 
-  const record = await ChecklistApproval.findOneAndUpdate(
-    { project_id: projectId, phase: phaseNum },
-    {
-      $set: {
-        status: "reverted_to_executor",
-        decided_at: new Date(),
-        decided_by: userId,
-        notes: notes || "",
-        executor_submitted: false,
-        executor_submitted_at: null,
-      },
-    },
-    { new: true, upsert: true },
-  );
+  const updateFields = {
+    status: "reverted_to_executor",
+    decided_at: new Date(),
+    decided_by: userId,
+    notes: notes || "",
+    executor_submitted: false,
+    executor_submitted_at: null,
+  };
 
-  await Stage.findOneAndUpdate(
-    { project_id: projectId, stage_key: stageKey },
-    { $inc: { conflict_count: 1 } },
-    { new: true, upsert: false },
-  );
+  const record = await prisma.checklistApproval.upsert({
+    where: { project_id_phase: { project_id: projectId, phase: phaseNum } },
+    update: { ...updateFields, revertCount: { increment: 1 } },
+    create: {
+      id: newId(),
+      project_id: projectId,
+      phase: phaseNum,
+      revertCount: 1,
+      ...updateFields
+    }
+  });
 
-  // Increment revert count to track loopback iterations
-  await ChecklistApproval.findOneAndUpdate(
-    { project_id: projectId, phase: phaseNum },
-    { $inc: { revertCount: 1 } },
-    { new: true, upsert: true },
-  );
-
-  const conflictCount = (stage?.conflict_count || 0) + 1;
+  const updatedStage = await prisma.stage.update({
+    where: { id: stage.id },
+    data: { conflict_count: { increment: 1 } }
+  });
 
   return {
-    ...record.toObject(),
-    conflict_count: conflictCount,
-    iteration_saved: checklist?.currentIteration - 1 || null,
+    ...record,
+    conflict_count: updatedStage.conflict_count,
+    iteration_saved: iterationSaved,
     defects_added: totalNewDefects,
   };
 };
 
 export const getApprovalStatus = async (projectId, phaseNum) => {
-  const record = await ChecklistApproval.findOne({
-    project_id: projectId,
-    phase: phaseNum,
-  }).lean();
-  return record;
+  return await prisma.checklistApproval.findUnique({
+    where: { project_id_phase: { project_id: projectId, phase: phaseNum } }
+  });
 };
 
 export const getRevertCount = async (projectId, phaseNum) => {
-  const record = await ChecklistApproval.findOne({
-    project_id: projectId,
-    phase: phaseNum,
-  })
-    .select("revertCount")
-    .lean();
+  const record = await prisma.checklistApproval.findUnique({
+    where: { project_id_phase: { project_id: projectId, phase: phaseNum } },
+    select: { revertCount: true }
+  });
   return record?.revertCount || 0;
 };
 
 export const incrementRevertCount = async (projectId, phase) => {
-  const record = await ChecklistApproval.findOneAndUpdate(
-    { project_id: projectId, phase: parseInt(phase) },
-    { $inc: { revertCount: 1 } },
-    { new: true, upsert: true },
-  );
+  const record = await prisma.checklistApproval.upsert({
+    where: { project_id_phase: { project_id: projectId, phase: parseInt(phase) } },
+    update: { revertCount: { increment: 1 } },
+    create: {
+      id: newId(),
+      project_id: projectId,
+      phase: parseInt(phase),
+      revertCount: 1,
+      status: "pending"
+    }
+  });
   return record.revertCount;
 };

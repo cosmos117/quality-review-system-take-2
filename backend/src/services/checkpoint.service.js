@@ -1,27 +1,51 @@
-import Checkpoint from "../models/checkpoint.models.js";
-import Checklist from "../models/checklist.models.js";
-import ChecklistAnswer from "../models/checklistAnswer.models.js";
+import prisma from "../config/prisma.js";
 import { ApiError } from "../utils/ApiError.js";
+import { newId } from "../utils/newId.js";
+
+// Helper to safely parse json fields
+const parseJsonField = (field) => {
+    if (!field) return {};
+    if (typeof field === 'string') return JSON.parse(field);
+    return field;
+};
 
 export async function createCheckpoint(checklistId, { question, categoryId }) {
-  const checklist = await Checklist.findById(checklistId).select("_id").lean();
+  const checklist = await prisma.checklist.findUnique({
+    where: { id: checklistId },
+    select: { id: true },
+  });
   if (!checklist) throw new ApiError(404, "Checklist not found");
 
-  return Checkpoint.create({
-    checklistId,
-    question: question.trim(),
-    categoryId: categoryId || undefined,
-    executorResponse: {},
-    reviewerResponse: {},
+  return prisma.checkpoint.create({
+    data: {
+      id: newId(),
+      checklistId,
+      question: question.trim(),
+      categoryId: categoryId || null,
+      executorResponse: {},
+      reviewerResponse: {},
+      defect: {
+        isDetected: false,
+        categoryId: null,
+        severity: null,
+        detectedAt: null,
+        historyCount: 0
+      }
+    }
   });
 }
 
 export async function getCheckpointsByChecklistId(checklistId) {
-  return Checkpoint.find({ checklistId }).sort({ createdAt: 1 }).lean();
+  return prisma.checkpoint.findMany({
+    where: { checklistId },
+    orderBy: { createdAt: "asc" }
+  });
 }
 
 export async function getCheckpointById(checkpointId) {
-  const checkpoint = await Checkpoint.findById(checkpointId).lean();
+  const checkpoint = await prisma.checkpoint.findUnique({
+    where: { id: checkpointId }
+  });
   if (!checkpoint) throw new ApiError(404, "Checkpoint not found");
   return checkpoint;
 }
@@ -29,108 +53,153 @@ export async function getCheckpointById(checkpointId) {
 export async function updateCheckpointResponse(checkpointId, data) {
   const { executorResponse, reviewerResponse, defectCategoryId, categoryId, severity } = data;
 
-  const checkpoint = await Checkpoint.findById(checkpointId);
+  const checkpoint = await prisma.checkpoint.findUnique({
+    where: { id: checkpointId }
+  });
   if (!checkpoint) throw new ApiError(404, "Checkpoint not found");
 
+  const currentExecutorResponse = parseJsonField(checkpoint.executorResponse);
+  const currentReviewerResponse = parseJsonField(checkpoint.reviewerResponse);
+  const currentDefect = parseJsonField(checkpoint.defect);
+
+  let updatedExecutorResponse = { ...currentExecutorResponse };
   if (executorResponse) {
-    checkpoint.executorResponse = {
-      ...checkpoint.executorResponse,
+    updatedExecutorResponse = {
+      ...updatedExecutorResponse,
       ...executorResponse,
-      respondedAt: new Date(),
+      respondedAt: new Date().toISOString()
     };
     if (Array.isArray(executorResponse.images)) {
-      checkpoint.executorResponse.images = executorResponse.images;
+      updatedExecutorResponse.images = executorResponse.images;
     }
   }
 
+  let updatedReviewerResponse = { ...currentReviewerResponse };
   if (reviewerResponse) {
-    checkpoint.reviewerResponse = {
-      ...checkpoint.reviewerResponse,
+    updatedReviewerResponse = {
+      ...updatedReviewerResponse,
       ...reviewerResponse,
-      reviewedAt: new Date(),
+      reviewedAt: new Date().toISOString()
     };
     if (Array.isArray(reviewerResponse.images)) {
-      checkpoint.reviewerResponse.images = reviewerResponse.images;
+      updatedReviewerResponse.images = reviewerResponse.images;
     }
   }
 
+  let updatedCategoryId = checkpoint.categoryId;
   if (categoryId && categoryId.trim()) {
-    checkpoint.categoryId = categoryId.trim();
+    updatedCategoryId = categoryId.trim();
   }
 
+  let updatedDefect = { ...currentDefect, historyCount: currentDefect.historyCount || 0 };
   if (severity && ["Critical", "Non-Critical"].includes(severity)) {
-    checkpoint.defect.severity = severity;
+    updatedDefect.severity = severity;
   }
 
-  if (
-    checkpoint.executorResponse.answer !== null &&
-    checkpoint.reviewerResponse.answer !== null
-  ) {
-    const answersMatch = checkpoint.executorResponse.answer === checkpoint.reviewerResponse.answer;
-    const wasDefectDetected = checkpoint.defect.isDetected;
-    checkpoint.defect.isDetected = !answersMatch;
+  if (updatedExecutorResponse.answer !== undefined && updatedExecutorResponse.answer !== null &&
+      updatedReviewerResponse.answer !== undefined && updatedReviewerResponse.answer !== null) {
+      
+    const answersMatch = updatedExecutorResponse.answer === updatedReviewerResponse.answer;
+    const wasDefectDetected = !!updatedDefect.isDetected;
+    updatedDefect.isDetected = !answersMatch;
 
     if (!answersMatch) {
-      checkpoint.defect.detectedAt = new Date();
+      updatedDefect.detectedAt = new Date().toISOString();
       if (!wasDefectDetected) {
-        checkpoint.defect.historyCount = (checkpoint.defect.historyCount || 0) + 1;
+        updatedDefect.historyCount += 1;
       }
-      if (defectCategoryId) checkpoint.defect.categoryId = defectCategoryId;
-      if (!checkpoint.defect.categoryId && checkpoint.categoryId) {
-        checkpoint.defect.categoryId = checkpoint.categoryId;
+      if (defectCategoryId) updatedDefect.categoryId = defectCategoryId;
+      if (!updatedDefect.categoryId && updatedCategoryId) {
+        updatedDefect.categoryId = updatedCategoryId;
       }
     } else {
-      checkpoint.defect.isDetected = false;
-      checkpoint.defect.categoryId = null;
-      checkpoint.defect.detectedAt = null;
+      updatedDefect.isDetected = false;
+      updatedDefect.categoryId = null;
+      updatedDefect.detectedAt = null;
     }
   }
 
-  await checkpoint.save();
-  return checkpoint;
+  const updatedCheckpoint = await prisma.checkpoint.update({
+    where: { id: checkpointId },
+    data: {
+      executorResponse: updatedExecutorResponse,
+      reviewerResponse: updatedReviewerResponse,
+      categoryId: updatedCategoryId,
+      defect: updatedDefect
+    }
+  });
+
+  return updatedCheckpoint;
 }
 
 export async function deleteCheckpoint(checkpointId) {
-  const checkpoint = await Checkpoint.findById(checkpointId);
+  const checkpoint = await prisma.checkpoint.findUnique({ where: { id: checkpointId } });
   if (!checkpoint) throw new ApiError(404, "Checkpoint not found");
-  await checkpoint.deleteOne();
+  
+  await prisma.checkpoint.delete({ where: { id: checkpointId } });
 }
 
 export async function assignDefectCategory(checkpointId, { categoryId, severity }) {
-  const checkpoint = await Checkpoint.findById(checkpointId);
+  const checkpoint = await prisma.checkpoint.findUnique({ where: { id: checkpointId } });
   if (!checkpoint) throw new ApiError(404, "Checkpoint not found");
 
-  checkpoint.defect.isDetected = true;
-  checkpoint.defect.categoryId = categoryId.trim();
-  checkpoint.defect.detectedAt = new Date();
-  if (severity) checkpoint.defect.severity = severity;
-  if (checkpoint.defect.historyCount === 0) checkpoint.defect.historyCount = 1;
+  const currentDefect = parseJsonField(checkpoint.defect);
+  
+  const updatedDefect = {
+    ...currentDefect,
+    isDetected: true,
+    categoryId: categoryId.trim(),
+    detectedAt: new Date().toISOString(),
+    historyCount: Math.max(currentDefect.historyCount || 0, 1)
+  };
 
-  await checkpoint.save();
-  return checkpoint;
+  if (severity) updatedDefect.severity = severity;
+
+  const updatedCheckpoint = await prisma.checkpoint.update({
+    where: { id: checkpointId },
+    data: { defect: updatedDefect }
+  });
+
+  return updatedCheckpoint;
 }
 
 export async function getDefectStatsByChecklist(checklistId) {
-  const checkpoints = await Checkpoint.find({ checklistId }).select("question defect").lean();
+  const checkpoints = await prisma.checkpoint.findMany({
+    where: { checklistId },
+    select: { question: true, defect: true }
+  });
+  
   const totalCheckpoints = checkpoints.length;
 
-  const checklist = await Checklist.findById(checklistId).populate("stage_id", "project_id phase").lean();
-  if (!checklist || !checklist.stage_id) throw new ApiError(404, "Checklist or stage not found");
+  const checklist = await prisma.checklist.findUnique({
+    where: { id: checklistId },
+    include: {
+      stage: { select: { project_id: true, stage_key: true } }
+    }
+  });
+  
+  if (!checklist || !checklist.stage) throw new ApiError(404, "Checklist or stage not found");
 
-  const stage = checklist.stage_id;
-  const projectId = stage.project_id;
-  const phase = stage.phase;
+  const projectId = checklist.stage.project_id;
+  
+  // Try to parse phase number from stageKey
+  const stageKey = checklist.stage.stage_key || "";
+  const match = stageKey.match(/stage(\d+)/i);
+  const phase = match ? parseInt(match[1], 10) : 1; 
 
-  const allAnswers = await ChecklistAnswer.find({ project_id: projectId, phase }).lean();
-
-  const answersByQuestion = {};
-  allAnswers.forEach((ans) => {
-    if (!answersByQuestion[ans.sub_question]) answersByQuestion[ans.sub_question] = {};
-    answersByQuestion[ans.sub_question][ans.role] = ans.answer;
+  // Fallback Phase
+  const allAnswers = await prisma.checklistAnswer.findMany({
+    where: { project_id: projectId, phase }
   });
 
+  const answersByQuestion = {};
+  for (const ans of allAnswers) {
+    if (!answersByQuestion[ans.sub_question]) answersByQuestion[ans.sub_question] = {};
+    answersByQuestion[ans.sub_question][ans.role] = ans.answer;
+  }
+
   let totalDefectsInHistory = 0;
-  checkpoints.forEach((cp) => {
+  for (const cp of checkpoints) {
     const roleAnswers = answersByQuestion[cp.question];
     if (
       roleAnswers &&
@@ -140,7 +209,7 @@ export async function getDefectStatsByChecklist(checklistId) {
     ) {
       totalDefectsInHistory++;
     }
-  });
+  }
 
   const defectRate = totalCheckpoints > 0
     ? ((totalDefectsInHistory / totalCheckpoints) * 100).toFixed(2)
@@ -151,13 +220,15 @@ export async function getDefectStatsByChecklist(checklistId) {
 
 export async function suggestDefectCategory(checkpointId, remark) {
   if (checkpointId !== "dummy") {
-    const checkpoint = await Checkpoint.findById(checkpointId).select("_id").lean();
+    const checkpoint = await prisma.checkpoint.findUnique({
+      where: { id: checkpointId },
+      select: { id: true }
+    });
     if (!checkpoint) throw new ApiError(404, "Checkpoint not found");
   }
 
-  const { suggestCategory } = await import("../services/categorizationService.js");
-  const Template = (await import("../models/template.models.js")).default;
-  const template = await Template.findOne().lean();
+  const { suggestCategory } = await import("../categorizationService.js");
+  const template = await prisma.template.findFirst();
 
   if (!template || !template.defectCategories) {
     return {
@@ -166,7 +237,9 @@ export async function suggestDefectCategory(checkpointId, remark) {
     };
   }
 
-  const suggestion = suggestCategory(remark, template.defectCategories);
+  const defectCategories = parseJsonField(template.defectCategories);
+
+  const suggestion = suggestCategory(remark, defectCategories);
   return {
     suggestedCategoryId: suggestion.suggestedCategoryId,
     categoryName: suggestion.categoryName,

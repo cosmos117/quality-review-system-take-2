@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const isValidObjectId = (id) => /^[a-fA-F0-9]{24}$/.test(id);
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -6,7 +6,7 @@ import * as stageService from "../services/stage.service.js";
 
 const listStagesForProject = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
-  if (!mongoose.isValidObjectId(projectId)) {
+  if (!isValidObjectId(projectId)) {
     throw new ApiError(400, "Invalid projectId");
   }
   const result = await stageService.listStagesForProject(projectId, req.user?._id);
@@ -15,7 +15,7 @@ const listStagesForProject = asyncHandler(async (req, res) => {
 
 const getStageById = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  if (!mongoose.isValidObjectId(id)) {
+  if (!isValidObjectId(id)) {
     throw new ApiError(400, "Invalid stage id");
   }
   const stage = await stageService.getStageById(id);
@@ -26,7 +26,7 @@ const createStage = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { stage_name, stage_key, description, status } = req.body;
 
-  if (!mongoose.isValidObjectId(projectId)) {
+  if (!isValidObjectId(projectId)) {
     throw new ApiError(400, "Invalid projectId");
   }
   if (!stage_name?.trim()) {
@@ -46,7 +46,7 @@ const createStage = asyncHandler(async (req, res) => {
 
 const updateStage = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  if (!mongoose.isValidObjectId(id)) {
+  if (!isValidObjectId(id)) {
     throw new ApiError(400, "Invalid stage id");
   }
   const { stage_name, description, status } = req.body;
@@ -56,7 +56,7 @@ const updateStage = asyncHandler(async (req, res) => {
 
 const deleteStage = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  if (!mongoose.isValidObjectId(id)) {
+  if (!isValidObjectId(id)) {
     throw new ApiError(400, "Invalid stage id");
   }
   const deleted = await stageService.deleteStage(id);

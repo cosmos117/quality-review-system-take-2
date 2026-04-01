@@ -47,3 +47,5 @@ frontend/android/app/release
 # ===== Backend (Node.js) =====
 backend/node_modules/
 backend/.env
+
+/generated/prisma

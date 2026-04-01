@@ -1,155 +1,153 @@
-import Project from "../models/project.models.js";
-import ProjectMembership from "../models/projectMembership.models.js";
-import Template from "../models/template.models.js";
-import Stage from "../models/stage.models.js";
-import Checklist from "../models/checklist.models.js";
-import Checkpoint from "../models/checkpoint.models.js";
-import ProjectChecklist from "../models/projectChecklist.models.js";
-import ChecklistAnswer from "../models/checklistAnswer.models.js";
-import ChecklistApproval from "../models/checklistApproval.models.js";
-import ChecklistTransaction from "../models/checklistTransaction.models.js";
+import prisma from "../config/prisma.js";
 import { deleteImagesByFileIds } from "../gridfs.js";
 import { parsePagination, paginatedResponse } from "../utils/paginate.js";
 import { ApiError } from "../utils/ApiError.js";
-import {
-  getOrSet,
-  keys,
-  TTL,
-  invalidateProjects,
-  invalidateStages,
-} from "../utils/cache.js";
+import { getOrSet, keys, TTL, invalidateProjects, invalidateStages } from "../utils/cache.js";
 import { clearAnalyticsCache } from "./analytics-excel.service.js";
+import { newId } from "../utils/newId.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
 async function resolveTemplateForProject(projectOrTemplateName) {
-  const templateName =
-    typeof projectOrTemplateName === "string"
-      ? projectOrTemplateName
-      : projectOrTemplateName?.templateName;
+  const templateName = typeof projectOrTemplateName === "string" 
+    ? projectOrTemplateName 
+    : projectOrTemplateName?.templateName;
 
   if (templateName && templateName.trim()) {
-    const named = await Template.findOne({
-      templateName: templateName.trim(),
-      isActive: { $ne: false },
-    }).lean();
-    if (!named) {
-      throw new ApiError(404, `Template \"${templateName}\" not found`);
-    }
+    const named = await prisma.template.findFirst({
+      where: { 
+        templateName: templateName.trim(),
+        isActive: true 
+      }
+    });
+    if (!named) throw new ApiError(404, `Template "${templateName}" not found`);
     return named;
   }
 
-  const legacy = await Template.findOne({
-    $or: [
-      { templateName: { $exists: false } },
-      { templateName: null },
-      { templateName: "" },
-    ],
-  })
-    .sort({ createdAt: 1 })
-    .lean();
+  const legacy = await prisma.template.findFirst({
+    where: {
+      OR: [
+        { templateName: null },
+        { templateName: "" }
+      ]
+    },
+    orderBy: { createdAt: 'asc' }
+  });
 
   if (legacy) return legacy;
 
-  const anyTemplate = await Template.findOne().sort({ createdAt: 1 }).lean();
+  const anyTemplate = await prisma.template.findFirst({
+    orderBy: { createdAt: 'asc' }
+  });
+  
   if (!anyTemplate) {
-    throw new ApiError(
-      404,
-      "Template not found. Please create a template first.",
-    );
+    throw new ApiError(404, "Template not found. Please create a template first.");
   }
   return anyTemplate;
 }
 
+// Ensure parsing of template json 
+const parseJsonField = (field) => {
+    if (!field) return {};
+    if (typeof field === 'string') return JSON.parse(field);
+    return field;
+};
+
 async function syncCheckpointsWithTemplate(projectId) {
   try {
-    const project = await Project.findById(projectId)
-      .select("templateName")
-      .lean();
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { templateName: true }
+    });
     if (!project) return;
 
     const template = await resolveTemplateForProject(project);
+    const templateStageData = parseJsonField(template.stageData);
 
-    const stages = await Stage.find(
-      { project_id: projectId },
-      "_id stage_name stage_key",
-    ).lean();
+    const stages = await prisma.stage.findMany({
+      where: { project_id: projectId },
+      select: { id: true, stage_name: true, stage_key: true }
+    });
 
     const deriveStageKeyFromName = (stageName) => {
-      const match = stageName
-        .toLowerCase()
-        .match(/(?:phase|stage)\s*(\d{1,2})/);
+      const match = stageName.toLowerCase().match(/(?:phase|stage)\s*(\d{1,2})/);
       return match ? `stage${parseInt(match[1])}` : null;
     };
 
-    const bulkOps = [];
+    const checkpointsToUpdate = [];
 
     for (const stage of stages) {
-      const templateStageKey =
-        stage.stage_key || deriveStageKeyFromName(stage.stage_name);
+      const templateStageKey = stage.stage_key || deriveStageKeyFromName(stage.stage_name);
       if (!templateStageKey) continue;
 
-      const templateChecklists = template[templateStageKey] || [];
-      const checklists = await Checklist.find(
-        { stage_id: stage._id },
-        "_id checklist_name checkpoints",
-      ).lean();
+      const templateChecklists = templateStageData[templateStageKey] || [];
+      const checklists = await prisma.checklist.findMany({
+        where: { stage_id: stage.id },
+        select: { id: true, checklist_name: true }
+      });
 
       for (const checklist of checklists) {
-        const templateChecklist = templateChecklists.find(
-          (tc) => tc.text === checklist.checklist_name,
-        );
+        const templateChecklist = templateChecklists.find(tc => tc.text === checklist.checklist_name);
         if (!templateChecklist) continue;
 
-        for (const checkpoint of checklist.checkpoints || []) {
-          const templateCheckpoint = templateChecklist.checkpoints?.find(
-            (tcp) => tcp.text === checkpoint.question,
-          );
+        const checkpoints = await prisma.checkpoint.findMany({
+          where: { checklistId: checklist.id }
+        });
+
+        for (const checkpoint of checkpoints) {
+          const templateCheckpoint = templateChecklist.checkpoints?.find(tcp => tcp.text === checkpoint.question);
           if (templateCheckpoint?.categoryId) {
-            bulkOps.push({
-              updateOne: {
-                filter: { _id: checkpoint._id },
-                update: { $set: { categoryId: templateCheckpoint.categoryId } },
-              },
+            checkpointsToUpdate.push({
+              id: checkpoint.id,
+              categoryId: templateCheckpoint.categoryId
             });
           }
         }
       }
     }
 
-    if (bulkOps.length > 0) {
-      await Checkpoint.bulkWrite(bulkOps);
+    if (checkpointsToUpdate.length > 0) {
+      // Prisma does not have a native bulkWrite for updates with different values, 
+      // so we use a transaction of updates
+      await prisma.$transaction(
+        checkpointsToUpdate.map(update => 
+          prisma.checkpoint.update({
+            where: { id: update.id },
+            data: { categoryId: update.categoryId }
+          })
+        )
+      );
     }
-  } catch {
-    // Don't throw
+  } catch (error) {
+    // Silent failure
   }
 }
 
 async function createStagesAndChecklistsFromTemplate(projectId, templateName) {
   try {
     const template = await resolveTemplateForProject(templateName);
+    const stageData = parseJsonField(template.stageData);
+    const stageNames = parseJsonField(template.stageNames);
 
-    const stageKeys = Object.keys(template)
+    const stageKeys = Object.keys(stageData)
       .filter((key) => /^stage\d{1,2}$/.test(key))
-      .sort(
-        (a, b) =>
-          parseInt(a.replace("stage", "")) - parseInt(b.replace("stage", "")),
-      );
-
-    const stageNames = template.stageNames || {};
+      .sort((a, b) => parseInt(a.replace("stage", "")) - parseInt(b.replace("stage", "")));
 
     for (const stageKey of stageKeys) {
       const stageNum = parseInt(stageKey.replace("stage", ""));
       const stageName = stageNames[stageKey] || `Phase ${stageNum}`;
 
-      const stage = await Stage.create({
-        project_id: projectId,
-        stage_name: stageName,
-        stage_key: stageKey,
-        status: "pending",
+      const stage = await prisma.stage.create({
+        data: {
+          id: newId(),
+          project_id: projectId,
+          stage_name: stageName,
+          stage_key: stageKey,
+          status: "pending"
+        }
       });
 
-      const templateGroups = template[stageKey] || [];
+      const templateGroups = stageData[stageKey] || [];
       const groups = templateGroups.map((tg) => ({
         groupName: tg.text,
         questions: (tg.checkpoints || []).map((cp) => ({
@@ -171,15 +169,18 @@ async function createStagesAndChecklistsFromTemplate(projectId, templateName) {
         })),
       }));
 
-      await ProjectChecklist.create({
-        projectId,
-        stageId: stage._id,
-        stage: stageKey,
-        groups,
+      await prisma.projectChecklist.create({
+        data: {
+          id: newId(),
+          projectId,
+          stageId: stage.id,
+          stage: stageKey,
+          groups
+        }
       });
     }
-  } catch {
-    // Don't throw
+  } catch (error) {
+    // Silent failure
   }
 }
 
@@ -188,78 +189,87 @@ async function createStagesAndChecklistsFromTemplate(projectId, templateName) {
 export async function getAllProjects(query) {
   const { page, limit, skip } = parsePagination(query);
   const queryStr = `p${page}_l${limit}`;
+
   return getOrSet(
     keys.allProjects(queryStr),
     async () => {
-      const filter = {};
-      const total = await Project.countDocuments(filter);
+      const total = await prisma.project.count();
 
-      let q = Project.find(filter)
-        .populate("created_by", "name email")
-        .sort({ createdAt: -1 })
-        .lean();
+      const projects = await prisma.project.findMany({
+        include: {
+          creator: { select: { name: true, email: true } }
+        },
+        orderBy: { createdAt: "desc" },
+        ...(limit ? { skip, take: limit } : {})
+      });
 
-      if (limit) q = q.skip(skip).limit(limit);
+      // Format `created_by` back for legacy compatibility
+      const formattedProjects = projects.map(p => ({
+        ...p,
+        created_by: p.creator
+      }));
 
-      const projects = await q;
-      return paginatedResponse(projects, total, { page, limit });
+      return paginatedResponse(formattedProjects, total, { page, limit });
     },
-    TTL.PROJECTS,
+    TTL.PROJECTS
   );
 }
 
 export async function getProjectsForUser(userId) {
-  const memberships = await ProjectMembership.find({ user_id: userId })
-    .populate({
-      path: "project_id",
-      select:
-        "project_name project_no status priority start_date end_date created_by isReviewApplicable reviewApplicableRemark overallDefectRate templateName createdAt",
-      populate: { path: "created_by", select: "name email" },
-    })
-    .populate("role", "role_name")
-    .lean();
+  const memberships = await prisma.projectMembership.findMany({
+    where: { user_id: userId },
+    include: {
+      project: {
+        include: {
+          creator: { select: { name: true, email: true } }
+        }
+      },
+      role: { select: { role_name: true } }
+    }
+  });
 
-  const projectIds = memberships
-    .filter((m) => m.project_id)
-    .map((m) => m.project_id._id);
+  const validMemberships = memberships.filter(m => m.project != null);
+  const projectIds = validMemberships.map(m => m.project_id);
 
-  const allMemberships = await ProjectMembership.find(
-    { project_id: { $in: projectIds } },
-    "project_id user_id",
-  ).lean();
+  const allMemberships = await prisma.projectMembership.findMany({
+    where: { project_id: { in: projectIds } },
+    select: { project_id: true, user_id: true }
+  });
 
   const projectMembersMap = {};
   for (const m of allMemberships) {
-    const pid = m.project_id.toString();
-    if (!projectMembersMap[pid]) projectMembersMap[pid] = [];
-    projectMembersMap[pid].push(m.user_id);
+    if (!projectMembersMap[m.project_id]) projectMembersMap[m.project_id] = [];
+    projectMembersMap[m.project_id].push(m.user_id);
   }
 
-  return memberships
-    .filter((m) => m.project_id)
-    .map((m) => {
-      const project = m.project_id;
-      const pid = project._id.toString();
-      return {
-        ...project,
-        userRole: m.role?.role_name || null,
-        membershipId: m._id,
-        assignedEmployees: projectMembersMap[pid] || [],
-      };
-    });
+  return validMemberships.map((m) => {
+    const project = m.project;
+    const formattedProject = {
+      ...project,
+      created_by: project.creator
+    };
+    
+    return {
+      ...formattedProject,
+      userRole: m.role?.role_name || null,
+      membershipId: m.id,
+      assignedEmployees: projectMembersMap[project.id] || [],
+    };
+  });
 }
 
 export async function getProjectById(id) {
   return getOrSet(
     keys.projectById(id),
     async () => {
-      const project = await Project.findById(id)
-        .populate("created_by", "name email")
-        .lean();
+      const project = await prisma.project.findUnique({
+        where: { id },
+        include: { creator: { select: { name: true, email: true } } }
+      });
       if (!project) throw new ApiError(404, "Project not found");
-      return project;
+      return { ...project, created_by: project.creator };
     },
-    TTL.PROJECT_BY_ID,
+    TTL.PROJECT_BY_ID
   );
 }
 
@@ -268,90 +278,79 @@ export async function createProject(data) {
     await resolveTemplateForProject(data.templateName.trim());
   }
 
-  const project = await Project.create(data);
+  const projectData = {
+    ...data,
+    id: newId()
+  };
+
+  if (projectData.start_date) {
+    projectData.start_date = new Date(projectData.start_date);
+  }
+  if (projectData.end_date) {
+    projectData.end_date = new Date(projectData.end_date);
+  }
+
+
+  const project = await prisma.project.create({
+    data: projectData,
+    include: { creator: { select: { name: true, email: true } } }
+  });
+
   invalidateProjects();
-  return Project.findById(project._id)
-    .populate("created_by", "name email")
-    .lean();
+  return { ...project, created_by: project.creator };
 }
 
 export async function updateProject(projectId, data, requestingUserId) {
-  const existing = await Project.findById(projectId);
+  const existing = await prisma.project.findUnique({ where: { id: projectId } });
   if (!existing) throw new ApiError(404, "Project not found");
 
   const prevStatus = existing.status;
-  const {
-    project_no,
-    internal_order_no,
-    project_name,
-    description,
-    status,
-    priority,
-    start_date,
-    end_date,
-    isReviewApplicable,
-    reviewApplicableRemark,
-    templateName,
-  } = data;
+  const requestedStatus = typeof data.status === "string" ? data.status : existing.status;
 
-  const requestedStatus = typeof status === "string" ? status : existing.status;
   if (prevStatus === "pending" && requestedStatus === "in_progress") {
-    const assigned = await ProjectMembership.findOne({
-      project_id: existing._id,
-      user_id: requestingUserId,
-    })
-      .select("_id")
-      .lean();
-    if (!assigned)
-      throw new ApiError(403, "Only assigned users can start this project");
+    const assigned = await prisma.projectMembership.findFirst({
+      where: { project_id: projectId, user_id: requestingUserId }
+    });
+    if (!assigned) throw new ApiError(403, "Only assigned users can start this project");
   }
 
-  existing.project_no = project_no ?? existing.project_no;
-  existing.internal_order_no = internal_order_no ?? existing.internal_order_no;
-  if (typeof project_name === "string") existing.project_name = project_name;
-  if (typeof description === "string") existing.description = description;
-  if (typeof status === "string") existing.status = status;
-  if (typeof priority === "string") existing.priority = priority;
-  if (start_date) existing.start_date = start_date;
-  if (end_date) existing.end_date = end_date;
-  if (typeof isReviewApplicable === "string" || isReviewApplicable === null)
-    existing.isReviewApplicable = isReviewApplicable;
-  if (
-    typeof reviewApplicableRemark === "string" ||
-    reviewApplicableRemark === null
-  )
-    existing.reviewApplicableRemark = reviewApplicableRemark;
-  if (typeof templateName === "string") {
-    if (templateName.trim()) {
-      await resolveTemplateForProject(templateName.trim());
-      existing.templateName = templateName.trim();
+  const updateData = {};
+  if (data.project_no !== undefined) updateData.project_no = data.project_no;
+  if (data.internal_order_no !== undefined) updateData.internal_order_no = data.internal_order_no;
+  if (typeof data.project_name === "string") updateData.project_name = data.project_name;
+  if (typeof data.description === "string") updateData.description = data.description;
+  if (typeof data.status === "string") updateData.status = data.status;
+  if (typeof data.priority === "string") updateData.priority = data.priority;
+  if (data.start_date) updateData.start_date = new Date(data.start_date);
+  if (data.end_date) updateData.end_date = new Date(data.end_date);
+  if (data.isReviewApplicable !== undefined) updateData.isReviewApplicable = data.isReviewApplicable;
+  if (data.reviewApplicableRemark !== undefined) updateData.reviewApplicableRemark = data.reviewApplicableRemark;
+  
+  if (data.templateName !== undefined) {
+    if (data.templateName && data.templateName.trim()) {
+      await resolveTemplateForProject(data.templateName.trim());
+      updateData.templateName = data.templateName.trim();
     } else {
-      existing.templateName = null;
+      updateData.templateName = null;
     }
-  } else if (templateName === null) {
-    existing.templateName = null;
   }
 
-  await existing.save();
+  const updatedProject = await prisma.project.update({
+    where: { id: projectId },
+    data: updateData,
+    include: { creator: { select: { name: true, email: true } } }
+  });
+
   invalidateProjects();
 
-  const project = await Project.findById(existing._id)
-    .populate("created_by", "name email")
-    .lean();
-
-  if (prevStatus === "pending" && existing.status === "in_progress") {
-    const existingStagesCount = await Stage.countDocuments({
-      project_id: existing._id,
-    });
+  if (prevStatus === "pending" && updatedProject.status === "in_progress") {
+    const existingStagesCount = await prisma.stage.count({ where: { project_id: projectId } });
     if (existingStagesCount === 0) {
-      await createStagesAndChecklistsFromTemplate(
-        existing._id,
-        existing.templateName,
-      );
+      await createStagesAndChecklistsFromTemplate(projectId, updatedProject.templateName);
     }
   }
 
-  return project;
+  return { ...updatedProject, created_by: updatedProject.creator };
 }
 
 export async function syncProjectCheckpointCategories(projectId) {
@@ -362,11 +361,12 @@ export async function getProjectStages(projectId) {
   return getOrSet(
     keys.projectStages(projectId),
     async () => {
-      const stages = await Stage.find({ project_id: projectId })
-        .sort({ createdAt: 1 })
-        .lean();
-      return stages.map((stage) => ({
-        _id: stage._id,
+      const stages = await prisma.stage.findMany({
+        where: { project_id: projectId },
+        orderBy: { createdAt: "asc" }
+      });
+      return stages.map(stage => ({
+        _id: stage.id,
         stage_name: stage.stage_name,
         stage_key: stage.stage_key,
         status: stage.status,
@@ -374,85 +374,75 @@ export async function getProjectStages(projectId) {
         conflict_count: stage.conflict_count || 0,
       }));
     },
-    TTL.PROJECT_STAGES,
+    TTL.PROJECT_STAGES
   );
 }
 
 export async function deleteProject(projectId) {
-  const project = await Project.findById(projectId).select("_id").lean();
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { id: true }
+  });
   if (!project) throw new ApiError(404, "Project not found");
 
   const deletionStats = {};
 
-  // Parallelize independent delete operations
-  const [
-    deletedMemberships,
-    deletedAnswers,
-    deletedApprovals,
-    projectChecklists,
-  ] = await Promise.all([
-    ProjectMembership.deleteMany({ project_id: projectId }),
-    ChecklistAnswer.deleteMany({ project_id: projectId }),
-    ChecklistApproval.deleteMany({ project_id: projectId }),
-    ProjectChecklist.find(
-      { projectId },
-      "groups.questions.executorImages groups.questions.reviewerImages groups.sections.questions.executorImages groups.sections.questions.reviewerImages iterations.groups.questions.executorImages iterations.groups.questions.reviewerImages iterations.groups.sections.questions.executorImages iterations.groups.sections.questions.reviewerImages",
-    ).lean(),
-  ]);
+  // Find IDs for nested deletion
+  const projectChecklists = await prisma.projectChecklist.findMany({
+    where: { projectId }
+  });
+  const stages = await prisma.stage.findMany({
+    where: { project_id: projectId },
+    select: { id: true }
+  });
+  const stageIds = stages.map(s => s.id);
 
-  deletionStats.memberships = deletedMemberships.deletedCount;
-  deletionStats.checklistAnswers = deletedAnswers.deletedCount;
-  deletionStats.checklistApprovals = deletedApprovals.deletedCount;
-  // Collect and delete all images
+  const checklists = await prisma.checklist.findMany({
+    where: { stage_id: { in: stageIds } },
+    select: { id: true }
+  });
+  const checklistIds = checklists.map(c => c.id);
+
+  // Collect images to delete from GridFS/Local Storage
   try {
     const allFileIds = [];
-
+    
     for (const checklist of projectChecklists) {
-      for (const group of checklist.groups || []) {
+      const groups = parseJsonField(checklist.groups) || [];
+      const iterations = parseJsonField(checklist.iterations) || [];
+
+      // Collect from groups
+      for (const group of groups) {
         for (const question of group.questions || []) {
-          allFileIds.push(
-            ...(question.executorImages?.map((img) => img.fileId) || []),
-          );
-          allFileIds.push(
-            ...(question.reviewerImages?.map((img) => img.fileId) || []),
-          );
+          if (question.executorImages) allFileIds.push(...question.executorImages.map(img => img.fileId));
+          if (question.reviewerImages) allFileIds.push(...question.reviewerImages.map(img => img.fileId));
         }
         for (const section of group.sections || []) {
           for (const question of section.questions || []) {
-            allFileIds.push(
-              ...(question.executorImages?.map((img) => img.fileId) || []),
-            );
-            allFileIds.push(
-              ...(question.reviewerImages?.map((img) => img.fileId) || []),
-            );
+            if (question.executorImages) allFileIds.push(...question.executorImages.map(img => img.fileId));
+            if (question.reviewerImages) allFileIds.push(...question.reviewerImages.map(img => img.fileId));
           }
         }
       }
-      for (const iteration of checklist.iterations || []) {
+
+      // Collect from iterations
+      for (const iteration of iterations) {
         for (const group of iteration.groups || []) {
           for (const question of group.questions || []) {
-            allFileIds.push(
-              ...(question.executorImages?.map((img) => img.fileId) || []),
-            );
-            allFileIds.push(
-              ...(question.reviewerImages?.map((img) => img.fileId) || []),
-            );
+            if (question.executorImages) allFileIds.push(...question.executorImages.map(img => img.fileId));
+            if (question.reviewerImages) allFileIds.push(...question.reviewerImages.map(img => img.fileId));
           }
           for (const section of group.sections || []) {
             for (const question of section.questions || []) {
-              allFileIds.push(
-                ...(question.executorImages?.map((img) => img.fileId) || []),
-              );
-              allFileIds.push(
-                ...(question.reviewerImages?.map((img) => img.fileId) || []),
-              );
+              if (question.executorImages) allFileIds.push(...question.executorImages.map(img => img.fileId));
+              if (question.reviewerImages) allFileIds.push(...question.reviewerImages.map(img => img.fileId));
             }
           }
         }
       }
     }
 
-    const uniqueFileIds = [...new Set(allFileIds.filter((id) => id))];
+    const uniqueFileIds = [...new Set(allFileIds.filter(id => id))];
     if (uniqueFileIds.length > 0) {
       await deleteImagesByFileIds(uniqueFileIds);
       deletionStats.imagesDeleted = uniqueFileIds.length;
@@ -461,40 +451,38 @@ export async function deleteProject(projectId) {
     deletionStats.imagesDeleteError = imageError.message;
   }
 
-  const deletedProjectChecklists = await ProjectChecklist.deleteMany({
-    projectId,
-  });
-  deletionStats.projectChecklists = deletedProjectChecklists.deletedCount;
-
-  const stages = await Stage.find({ project_id: projectId }, "_id").lean();
-  const stageIds = stages.map((s) => s._id);
-  deletionStats.stages = stages.length;
-
-  const checklists = await Checklist.find(
-    { stage_id: { $in: stageIds } },
-    "_id",
-  ).lean();
-  const checklistIds = checklists.map((c) => c._id);
-
-  // Parallelize independent delete operations
+  // Delete records from database using Prisma Transaction to ensure data integrity
   const [
+    deletedMemberships,
+    deletedAnswers,
+    deletedApprovals,
+    deletedProjectChecklists,
     deletedCheckpoints,
     deletedTransactions,
     deletedChecklists,
     deletedStages,
-  ] = await Promise.all([
-    Checkpoint.deleteMany({ checklistId: { $in: checklistIds } }),
-    ChecklistTransaction.deleteMany({ checklist_id: { $in: checklistIds } }),
-    Checklist.deleteMany({ stage_id: { $in: stageIds } }),
-    Stage.deleteMany({ project_id: projectId }),
+    deletedProject
+  ] = await prisma.$transaction([
+    prisma.projectMembership.deleteMany({ where: { project_id: projectId } }),
+    prisma.checklistAnswer.deleteMany({ where: { project_id: projectId } }),
+    prisma.checklistApproval.deleteMany({ where: { project_id: projectId } }),
+    prisma.projectChecklist.deleteMany({ where: { projectId } }),
+    prisma.checkpoint.deleteMany({ where: { checklistId: { in: checklistIds.length > 0 ? checklistIds : [''] } } }),
+    prisma.checklistTransaction.deleteMany({ where: { checklist_id: { in: checklistIds.length > 0 ? checklistIds : [''] } } }),
+    prisma.checklist.deleteMany({ where: { stage_id: { in: stageIds.length > 0 ? stageIds : [''] } } }),
+    prisma.stage.deleteMany({ where: { project_id: projectId } }),
+    prisma.project.delete({ where: { id: projectId } })
   ]);
 
-  deletionStats.checkpoints = deletedCheckpoints.deletedCount;
-  deletionStats.checklistTransactions = deletedTransactions.deletedCount;
-  deletionStats.checklists = deletedChecklists.deletedCount;
-  deletionStats.stagesDeleted = deletedStages.deletedCount;
+  deletionStats.memberships = deletedMemberships.count;
+  deletionStats.checklistAnswers = deletedAnswers.count;
+  deletionStats.checklistApprovals = deletedApprovals.count;
+  deletionStats.projectChecklists = deletedProjectChecklists.count;
+  deletionStats.checkpoints = deletedCheckpoints.count;
+  deletionStats.checklistTransactions = deletedTransactions.count;
+  deletionStats.checklists = deletedChecklists.count;
+  deletionStats.stagesDeleted = deletedStages.count;
 
-  await Project.findByIdAndDelete(projectId);
   invalidateProjects();
   invalidateStages(projectId);
   clearAnalyticsCache();

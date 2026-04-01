@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const isValidObjectId = (id) => /^[a-fA-F0-9]{24}$/.test(id);
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -12,8 +12,8 @@ export const inferStageKey = projectChecklistService.inferStageKey;
 const getProjectChecklist = asyncHandler(async (req, res) => {
   const { projectId, stageId } = req.params;
   if (
-    !mongoose.isValidObjectId(projectId) ||
-    !mongoose.isValidObjectId(stageId)
+    !isValidObjectId(projectId) ||
+    !isValidObjectId(stageId)
   ) {
     throw new ApiError(400, "Invalid projectId or stageId");
   }
@@ -24,10 +24,10 @@ const getProjectChecklist = asyncHandler(async (req, res) => {
 const updateExecutorAnswer = asyncHandler(async (req, res) => {
   const { projectId, stageId, groupId, questionId } = req.params;
   const { answer, remark, images, categoryId, severity } = req.body;
-  if (!mongoose.isValidObjectId(projectId) || !mongoose.isValidObjectId(stageId)) {
+  if (!isValidObjectId(projectId) || !isValidObjectId(stageId)) {
     throw new ApiError(400, "Invalid projectId or stageId");
   }
-  if (!mongoose.isValidObjectId(groupId) || !mongoose.isValidObjectId(questionId)) {
+  if (!isValidObjectId(groupId) || !isValidObjectId(questionId)) {
     throw new ApiError(400, "Invalid groupId or questionId");
   }
   if (!projectChecklistService.allowedExecutorAnswers.includes(answer === undefined ? null : answer)) {
@@ -45,10 +45,10 @@ const updateExecutorAnswer = asyncHandler(async (req, res) => {
 const updateReviewerStatus = asyncHandler(async (req, res) => {
   const { projectId, stageId, groupId, questionId } = req.params;
   const { answer, status, remark, images, categoryId, severity } = req.body;
-  if (!mongoose.isValidObjectId(projectId) || !mongoose.isValidObjectId(stageId)) {
+  if (!isValidObjectId(projectId) || !isValidObjectId(stageId)) {
     throw new ApiError(400, "Invalid projectId or stageId");
   }
-  if (!mongoose.isValidObjectId(groupId) || !mongoose.isValidObjectId(questionId)) {
+  if (!isValidObjectId(groupId) || !isValidObjectId(questionId)) {
     throw new ApiError(400, "Invalid groupId or questionId");
   }
   if (answer !== undefined && !["Yes", "No", "NA", null].includes(answer)) {
@@ -68,8 +68,8 @@ const updateReviewerStatus = asyncHandler(async (req, res) => {
 
 const getChecklistIterations = asyncHandler(async (req, res) => {
   const { projectId, stageId } = req.params;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
-  if (!mongoose.isValidObjectId(stageId)) throw new ApiError(400, "Invalid stageId");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
+  if (!isValidObjectId(stageId)) throw new ApiError(400, "Invalid stageId");
   const data = await projectChecklistService.getChecklistIterations(projectId, stageId);
   const message = data.totalIterations === undefined ? "No checklist found" : "Iterations fetched successfully";
   return res.status(200).json(new ApiResponse(200, data, message));
@@ -78,7 +78,7 @@ const getChecklistIterations = asyncHandler(async (req, res) => {
 const getDefectRatesPerIteration = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase } = req.query;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
   const phaseNum = parseInt(phase || "1");
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase");
   const data = await projectChecklistService.getDefectRatesPerIteration(projectId, phaseNum);
@@ -88,7 +88,7 @@ const getDefectRatesPerIteration = asyncHandler(async (req, res) => {
 
 const getOverallDefectRate = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
   const data = await projectChecklistService.getOverallDefectRate(projectId);
   const message = data.phaseBreakdown.length === 0
     ? "No stages found for this project"

@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const isValidObjectId = (id) => /^[a-fA-F0-9]{24}$/.test(id);
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -7,7 +7,7 @@ import * as approvalService from "../services/approval.service.js";
 const compareAnswers = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase } = req.query;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
   const phaseNum = parseInt(phase || "1");
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase");
   const data = await approvalService.compareAnswers(projectId, phaseNum);
@@ -17,7 +17,7 @@ const compareAnswers = asyncHandler(async (req, res) => {
 const requestApproval = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase, notes } = req.body;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
   const phaseNum = parseInt(phase || "1");
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase");
   const data = await approvalService.requestApproval(projectId, phaseNum, notes);
@@ -27,7 +27,7 @@ const requestApproval = asyncHandler(async (req, res) => {
 const approve = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase } = req.body;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
   const phaseNum = parseInt(phase || "1");
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase");
   const userId = req.user?._id || null;
@@ -38,7 +38,7 @@ const approve = asyncHandler(async (req, res) => {
 const revertToExecutor = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase, notes } = req.body;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
   const phaseNum = parseInt(phase || "1");
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase");
   const userId = req.user?._id || null;
@@ -49,7 +49,7 @@ const revertToExecutor = asyncHandler(async (req, res) => {
 const getApprovalStatus = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase } = req.query;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
   const phaseNum = parseInt(phase || "1");
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase");
   const data = await approvalService.getApprovalStatus(projectId, phaseNum);
@@ -60,7 +60,7 @@ const getApprovalStatus = asyncHandler(async (req, res) => {
 const getRevertCount = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase } = req.query;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
   const phaseNum = parseInt(phase || "1");
   if (isNaN(phaseNum) || phaseNum < 1) throw new ApiError(400, "Invalid phase");
   const revertCount = await approvalService.getRevertCount(projectId, phaseNum);
@@ -70,7 +70,7 @@ const getRevertCount = asyncHandler(async (req, res) => {
 const incrementRevertCount = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
   const { phase } = req.body;
-  if (!mongoose.isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
   if (!phase || isNaN(phase) || phase < 1) throw new ApiError(400, "Invalid phase");
   const revertCount = await approvalService.incrementRevertCount(projectId, phase);
   return res.status(200).json(new ApiResponse(200, { revertCount }, "Revert count incremented"));

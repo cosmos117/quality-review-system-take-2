@@ -1,10 +1,11 @@
 import ExcelJS from "exceljs";
-import mongoose from "mongoose";
-import { User } from "../models/user.models.js";
-import Project from "../models/project.models.js";
-import Stage from "../models/stage.models.js";
-import { Role } from "../models/roles.models.js";
-import ProjectMembership from "../models/projectMembership.models.js";
+import prisma from "../config/prisma.js";
+
+const parseJsonField = (field) => {
+    if (!field) return [];
+    if (typeof field === 'string') return JSON.parse(field);
+    return field;
+};
 
 const safeValue = (val, defaultVal = "") => {
   if (val === null || val === undefined) return defaultVal;
@@ -12,47 +13,36 @@ const safeValue = (val, defaultVal = "") => {
   return val;
 };
 
-/**
- * Generates a master Excel workbook buffer with 4 sheets:
- * Project Summary, Questions & Answers, Employee Performance, Review Not Applicable.
- */
 export const generateMasterExcel = async () => {
-  const [users, projects, stages, roles, memberships, templates, projectChecklists] =
-    await Promise.all([
-      User.find({}, "-password -accessToken").lean(),
-      Project.find().populate("created_by", "name email").lean(),
-      Stage.find({}, "_id project_id stage_name stage_key status conflict_count").lean(),
-      Role.find({}, "_id role_name").lean(),
-      ProjectMembership.find()
-        .populate("user_id", "name email _id")
-        .populate("role", "role_name")
-        .lean(),
-      mongoose.model("Template").find({}, "defectCategories").lean(),
-      mongoose.model("ProjectChecklist").find().lean(),
-    ]);
+  const [users, projects, stages, roles, memberships, templates, projectChecklists] = await Promise.all([
+    prisma.user.findMany({ select: { id: true, name: true, email: true } }),
+    prisma.project.findMany({ include: { created_by_user: { select: { name: true, email: true } } } }),
+    prisma.stage.findMany({ select: { id: true, project_id: true, stage_name: true, stage_key: true, status: true, conflict_count: true } }),
+    prisma.role.findMany({ select: { id: true, role_name: true } }),
+    prisma.projectMembership.findMany({ include: { user: { select: { id: true, name: true, email: true } }, role: { select: { role_name: true } } } }),
+    prisma.template.findMany({ select: { defectCategories: true } }),
+    prisma.projectChecklist.findMany(),
+  ]);
 
-  // Create defect category lookup map
   const categoryMap = new Map();
   if (templates && templates.length > 0) {
     templates.forEach((template) => {
-      if (template && template.defectCategories) {
-        template.defectCategories.forEach((cat) => {
-          if (cat._id && cat.name) {
-            categoryMap.set(cat._id.toString(), cat.name);
-          }
-        });
-      }
+      const defectCategories = parseJsonField(template.defectCategories);
+      defectCategories.forEach((cat) => {
+        if (cat._id && cat.name) {
+          categoryMap.set(cat._id.toString(), cat.name);
+        }
+      });
     });
   }
 
-  // Create role-based user maps for each project
   const projectExecutorsMap = new Map();
   const projectReviewersMap = new Map();
   const projectTeamLeadersMap = new Map();
 
   memberships.forEach((membership) => {
-    const projectId = membership.project_id?.toString();
-    const userName = membership.user_id?.name || "";
+    const projectId = membership.project_id;
+    const userName = membership.user?.name || "";
     const roleName = membership.role?.role_name?.toLowerCase() || "";
     if (!userName) return;
 
@@ -131,18 +121,17 @@ export const generateMasterExcel = async () => {
     { width: 25 }, { width: 22 },
   ];
 
-  // Build employee performance map
   const employeePerformanceMap = new Map();
 
   memberships.forEach((membership) => {
-    const userId = membership.user_id?._id?.toString();
-    const userName = membership.user_id?.name || "";
-    const userEmail = membership.user_id?.email || "";
-    const projectId = membership.project_id?.toString();
+    const userId = membership.user_id;
+    const userName = membership.user?.name || "";
+    const userEmail = membership.user?.email || "";
+    const projectId = membership.project_id;
     const roleName = membership.role?.role_name || "";
     if (!userId || !userName || !projectId) return;
 
-    const project = projects.find((p) => p._id?.toString() === projectId);
+    const project = projects.find((p) => p.id === projectId);
     if (!project) return;
 
     if (!employeePerformanceMap.has(userId)) {
@@ -169,12 +158,8 @@ export const generateMasterExcel = async () => {
   });
 
   employeePerformanceMap.forEach((empData) => {
-    const validRates = empData.teamLeaderProjects.filter(
-      (p) => p.defectRate !== null && p.defectRate !== undefined,
-    );
-    const avgDefectRate = validRates.length > 0
-      ? (validRates.reduce((sum, p) => sum + p.defectRate, 0) / validRates.length).toFixed(2)
-      : "";
+    const validRates = empData.teamLeaderProjects.filter((p) => p.defectRate !== null && p.defectRate !== undefined);
+    const avgDefectRate = validRates.length > 0 ? (validRates.reduce((sum, p) => sum + p.defectRate, 0) / validRates.length).toFixed(2) : "";
 
     employeeSheet.addRow([
       safeValue(empData.name), safeValue(empData.email),
@@ -187,11 +172,11 @@ export const generateMasterExcel = async () => {
   for (const project of projects) {
     if (project.isReviewApplicable === "no") continue;
 
-    const projectId = project._id?.toString();
+    const projectId = project.id;
     const year = project.project_no ? project.project_no.substring(0, 4) : "";
 
     const projectStages = stages
-      .filter((s) => s.project_id?.toString() === projectId)
+      .filter((s) => s.project_id === projectId)
       .sort((a, b) => {
         const aNum = parseInt(a.stage_name?.match(/\d+/)?.[0] || "0");
         const bNum = parseInt(b.stage_name?.match(/\d+/)?.[0] || "0");
@@ -202,13 +187,8 @@ export const generateMasterExcel = async () => {
     const reviewersStr = (projectReviewersMap.get(projectId) || []).join(", ");
     const teamLeadersStr = (projectTeamLeadersMap.get(projectId) || []).join(", ");
 
-    const isReviewApplicable =
-      project.isReviewApplicable === null || project.isReviewApplicable === undefined
-        ? "" : project.isReviewApplicable === "yes" ? "Yes" : "No";
-
-    const overallDefectRate =
-      project.overallDefectRate !== null && project.overallDefectRate !== undefined
-        ? project.overallDefectRate.toFixed(2) : "";
+    const isReviewApplicable = project.isReviewApplicable === null || project.isReviewApplicable === undefined ? "" : project.isReviewApplicable === "yes" ? "Yes" : "No";
+    const overallDefectRate = project.overallDefectRate !== null && project.overallDefectRate !== undefined ? project.overallDefectRate.toFixed(2) : "";
 
     summarySheet.addRow([
       safeValue(year), safeValue(project.project_no || ""), safeValue(project.project_name),
@@ -216,12 +196,10 @@ export const generateMasterExcel = async () => {
       safeValue(teamLeadersStr), safeValue(executorsStr), safeValue(reviewersStr),
       safeValue(isReviewApplicable), safeValue(overallDefectRate), safeValue(project.status),
       safeValue(projectStages.length),
-      safeValue(project.created_by?.name || project.created_by?.email || ""),
+      safeValue(project.created_by_user?.name || project.created_by_user?.email || ""),
     ]);
 
-    const projectChecklistDocs = projectChecklists.filter(
-      (pc) => pc.projectId?.toString() === projectId,
-    );
+    const projectChecklistDocs = projectChecklists.filter((pc) => pc.projectId === projectId);
 
     if (projectChecklistDocs.length === 0) {
       detailSheet.addRow([
@@ -233,16 +211,15 @@ export const generateMasterExcel = async () => {
     }
 
     for (const stage of projectStages) {
-      const stageId = stage._id?.toString();
+      const stageId = stage.id;
       const phaseMatch = stage.stage_name?.match(/\d+/);
       const phaseNumber = phaseMatch ? parseInt(phaseMatch[0]) : 0;
 
-      const projectChecklistDoc = projectChecklistDocs.find(
-        (pc) => pc.stageId?.toString() === stageId,
-      );
+      const projectChecklistDoc = projectChecklistDocs.find((pc) => pc.stageId === stageId);
       if (!projectChecklistDoc) continue;
 
-      const groups = projectChecklistDoc.groups || [];
+      const groups = parseJsonField(projectChecklistDoc.groups);
+      
       if (groups.length === 0) {
         detailSheet.addRow([
           safeValue(year), safeValue(project.project_no || ""), safeValue(project.project_name),
@@ -258,9 +235,7 @@ export const generateMasterExcel = async () => {
 
         if (group.questions && Array.isArray(group.questions)) {
           group.questions.forEach((question) => {
-            const categoryName = question.categoryId
-              ? categoryMap.get(question.categoryId.toString()) || `[Unknown: ${question.categoryId}]`
-              : "";
+            const categoryName = question.categoryId ? categoryMap.get(question.categoryId.toString()) || `[Unknown: ${question.categoryId}]` : "";
             detailSheet.addRow([
               safeValue(year), safeValue(project.project_no || ""), safeValue(project.project_name),
               safeValue(project.createdAt ? new Date(project.createdAt).toISOString().split("T")[0] : ""),
@@ -277,9 +252,7 @@ export const generateMasterExcel = async () => {
             const sectionName = section.sectionName || "";
             if (section.questions && Array.isArray(section.questions)) {
               section.questions.forEach((question) => {
-                const categoryName = question.categoryId
-                  ? categoryMap.get(question.categoryId.toString()) || `[Unknown: ${question.categoryId}]`
-                  : "";
+                const categoryName = question.categoryId ? categoryMap.get(question.categoryId.toString()) || `[Unknown: ${question.categoryId}]` : "";
                 detailSheet.addRow([
                   safeValue(year), safeValue(project.project_no || ""), safeValue(project.project_name),
                   safeValue(project.createdAt ? new Date(project.createdAt).toISOString().split("T")[0] : ""),
@@ -321,21 +294,14 @@ export const generateMasterExcel = async () => {
   for (const project of notApplicableProjects) {
     const year = project.project_no ? project.project_no.substring(0, 4) : "";
 
-    const statusDisplay =
-      project.status === "in_progress" ? "In Progress" :
-      project.status === "completed" ? "Completed" :
-      project.status === "pending" ? "Not Started" : project.status;
-
-    const priorityDisplay =
-      project.priority === "high" ? "High" :
-      project.priority === "low" ? "Low" :
-      project.priority === "medium" ? "Medium" : project.priority;
+    const statusDisplay = project.status === "in_progress" ? "In Progress" : project.status === "completed" ? "Completed" : project.status === "pending" ? "Not Started" : project.status;
+    const priorityDisplay = project.priority === "high" ? "High" : project.priority === "low" ? "Low" : project.priority === "medium" ? "Medium" : project.priority;
 
     notApplicableSheet.addRow([
       safeValue(year), safeValue(project.project_no || ""), safeValue(project.project_name),
       safeValue(project.createdAt ? new Date(project.createdAt).toISOString().split("T")[0] : ""),
       safeValue(statusDisplay), safeValue(priorityDisplay),
-      safeValue(project.created_by?.name || project.created_by?.email || ""),
+      safeValue(project.created_by_user?.name || project.created_by_user?.email || ""),
       safeValue(project.reviewApplicableRemark || "No remark provided"),
     ]);
   }

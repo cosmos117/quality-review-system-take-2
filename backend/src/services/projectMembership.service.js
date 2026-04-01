@@ -1,93 +1,127 @@
-import ProjectMembership from "../models/projectMembership.models.js";
-import Project from "../models/project.models.js";
-import { User } from "../models/user.models.js";
-import { Role } from "../models/roles.models.js";
+import prisma from "../config/prisma.js";
 import { parsePagination, paginatedResponse } from "../utils/paginate.js";
 
 export async function getProjectMembers(projectId, query) {
-  const project = await Project.findById(projectId).select("_id project_name").lean();
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { id: true, project_name: true },
+  });
   if (!project) return { error: 404, message: "Project not found" };
 
   const { page, limit, skip } = parsePagination(query);
-  const filter = { project_id: projectId };
-  const total = await ProjectMembership.countDocuments(filter);
+  
+  const total = await prisma.projectMembership.count({
+    where: { project_id: projectId },
+  });
 
-  let q = ProjectMembership.find(filter)
-    .populate("user_id", "name email role")
-    .populate("role", "role_name description")
-    .lean();
+  const members = await prisma.projectMembership.findMany({
+    where: { project_id: projectId },
+    include: {
+      user: { select: { id: true, name: true, email: true, role: true } },
+      role: { select: { id: true, role_name: true, description: true } },
+    },
+    ...(limit ? { skip, take: limit } : {}),
+  });
 
-  if (limit) q = q.skip(skip).limit(limit);
-
-  const members = await q;
-
-  const validMembers = members.filter(
-    (m) => m.user_id && m.user_id._id && m.role && m.role._id
-  );
+  // Re-map to match previous Mongoose format
+  const formattedMembers = members.map((m) => ({
+    ...m,
+    user_id: m.user,
+    role: m.role,
+  }));
 
   return {
-    pagination: paginatedResponse(validMembers, total, { page, limit }),
+    pagination: paginatedResponse(formattedMembers, total, { page, limit }),
     project: project.project_name,
-    members: validMembers,
+    members: formattedMembers,
   };
 }
 
 export async function addProjectMember(projectId, userId, roleId) {
-  const [project, user, role] = await Promise.all([
-    Project.findById(projectId).select("_id").lean(),
-    User.findById(userId).select("_id").lean(),
-    Role.findById(roleId).select("_id").lean(),
-  ]);
+  const project = await prisma.project.findUnique({ where: { id: projectId } });
   if (!project) return { error: 404, message: "Project not found" };
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { error: 404, message: "User not found" };
+
+  const role = await prisma.role.findUnique({ where: { id: roleId } });
   if (!role) return { error: 404, message: "Role not found" };
 
-  const membership = await ProjectMembership.create({
-    project_id: projectId,
-    user_id: userId,
-    role: roleId,
+  const membership = await prisma.projectMembership.create({
+    data: { project_id: projectId, user_id: userId, role_id: roleId },
+    include: {
+      user: { select: { name: true, email: true } },
+      role: { select: { role_name: true, description: true } },
+    },
   });
 
-  return ProjectMembership.findById(membership._id)
-    .populate("user_id", "name email")
-    .populate("role", "role_name description")
-    .lean();
+  return { ...membership, user_id: membership.user, role: membership.role };
 }
 
 export async function updateProjectMember(projectId, userId, roleId) {
-  const role = await Role.findById(roleId).select("_id").lean();
+  const role = await prisma.role.findUnique({ where: { id: roleId } });
   if (!role) return { error: 404, message: "Role not found" };
 
-  const membership = await ProjectMembership.findOneAndUpdate(
-    { project_id: projectId, user_id: userId },
-    { role: roleId },
-    { new: true }
-  )
-    .populate("user_id", "name email")
-    .populate("role", "role_name description")
-    .lean();
+  const existingMembership = await prisma.projectMembership.findFirst({
+    where: { project_id: projectId, user_id: userId },
+  });
 
-  if (!membership) return { error: 404, message: "Project membership not found" };
-  return membership;
+  if (!existingMembership) return { error: 404, message: "Project membership not found" };
+
+  const membership = await prisma.projectMembership.update({
+    where: { id: existingMembership.id },
+    data: { role_id: roleId },
+    include: {
+      user: { select: { name: true, email: true } },
+      role: { select: { role_name: true, description: true } },
+    },
+  });
+
+  return { ...membership, user_id: membership.user, role: membership.role };
 }
 
 export async function removeProjectMember(projectId, userId) {
-  const membership = await ProjectMembership.findOneAndDelete({
-    project_id: projectId,
-    user_id: userId,
+  const existingMembership = await prisma.projectMembership.findFirst({
+    where: { project_id: projectId, user_id: userId },
   });
-  if (!membership) return { error: 404, message: "Project membership not found" };
+
+  if (!existingMembership) return { error: 404, message: "Project membership not found" };
+
+  const membership = await prisma.projectMembership.delete({
+    where: { id: existingMembership.id },
+  });
+
   return membership;
 }
 
 export async function getUserProjects(userId) {
-  const user = await User.findById(userId).select("_id name").lean();
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true },
+  });
   if (!user) return { error: 404, message: "User not found" };
 
-  const projects = await ProjectMembership.find({ user_id: userId })
-    .populate("project_id", "project_name status start_date end_date")
-    .populate("role", "role_name description")
-    .lean();
+  const projects = await prisma.projectMembership.findMany({
+    where: { user_id: userId },
+    include: {
+      project: {
+        select: {
+          id: true,
+          project_name: true,
+          status: true,
+          start_date: true,
+          end_date: true,
+        },
+      },
+      role: { select: { id: true, role_name: true, description: true } },
+    },
+  });
 
-  return { user: user.name, projects };
+  const formattedProjects = projects.map((m) => ({
+    ...m,
+    project_id: m.project,
+    role: m.role,
+  }));
+
+  return { user: user.name, projects: formattedProjects };
 }

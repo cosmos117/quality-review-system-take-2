@@ -1,38 +1,42 @@
-import Checklist from "../models/checklist.models.js";
-import ChecklistHistory from "../models/checklistTransaction.models.js";
+import prisma from "../config/prisma.js";
 import { ApiError } from "../utils/ApiError.js";
 import { parsePagination, paginatedResponse } from "../utils/paginate.js";
+import { newId } from "../utils/newId.js";
 
 export async function createChecklistForStage(stageId, data, createdBy) {
   const { checklist_name, description, status, answers, defectCategory, defectSeverity, remark } = data;
 
-  return Checklist.create({
-    stage_id: stageId,
-    created_by: createdBy,
-    checklist_name,
-    description,
-    status,
-    answers: answers || {},
-    defectCategory: defectCategory || "",
-    defectSeverity: defectSeverity || "",
-    remark: remark || "",
+  return prisma.checklist.create({
+    data: {
+      id: newId(),
+      stage_id: stageId,
+      created_by: createdBy,
+      checklist_name,
+      description,
+      status: status || "draft",
+      answers: answers || {},
+      defectCategory: defectCategory || "",
+      defectSeverity: defectSeverity || "",
+      remark: remark || "",
+    }
   });
 }
 
 export async function listChecklistsForStage(stageId, query) {
   const { page, limit, skip } = parsePagination(query);
-  const filter = { stage_id: stageId };
-  const total = await Checklist.countDocuments(filter);
+  const total = await prisma.checklist.count({ where: { stage_id: stageId } });
 
-  let q = Checklist.find(filter).sort({ createdAt: 1 }).lean();
-  if (limit) q = q.skip(skip).limit(limit);
+  const checklists = await prisma.checklist.findMany({
+    where: { stage_id: stageId },
+    orderBy: { createdAt: "asc" },
+    ...(limit ? { skip, take: limit } : {})
+  });
 
-  const checklists = await q;
   return paginatedResponse(checklists, total, { page, limit });
 }
 
 export async function getChecklistById(id) {
-  const checklist = await Checklist.findById(id).lean();
+  const checklist = await prisma.checklist.findUnique({ where: { id } });
   if (!checklist) throw new ApiError(404, "Checklist not found");
   return checklist;
 }
@@ -53,74 +57,102 @@ export async function updateChecklist(id, data) {
     throw new ApiError(400, "No valid fields provided to update");
   }
 
-  const checklist = await Checklist.findByIdAndUpdate(id, { $set: update }, { new: true, runValidators: true }).lean();
+  const checklist = await prisma.checklist.update({
+    where: { id },
+    data: update
+  });
   if (!checklist) throw new ApiError(404, "Checklist not found");
   return checklist;
 }
 
 export async function deleteChecklist(id) {
-  const deleted = await Checklist.findByIdAndDelete(id);
-  if (!deleted) throw new ApiError(404, "Checklist not found");
-  return deleted;
+  const checklist = await prisma.checklist.findUnique({ where: { id } });
+  if (!checklist) throw new ApiError(404, "Checklist not found");
+  
+  await prisma.checklist.delete({ where: { id } });
+  return checklist;
 }
 
 export async function submitChecklist(checklistId, userId) {
-  const checklist = await Checklist.findById(checklistId);
+  const checklist = await prisma.checklist.findUnique({ where: { id: checklistId } });
   if (!checklist) throw new ApiError(404, "Checklist not found");
 
-  checklist.status = "pending";
-  checklist.revision_number += 1;
-  await checklist.save();
-
-  await ChecklistHistory.create({
-    checklist_id: checklist._id,
-    user_id: userId,
-    action_type: "SUBMITTED_FOR_REVIEW",
-    description: `Checklist "${checklist.checklist_name}" was submitted for review.`,
+  const updatedChecklist = await prisma.checklist.update({
+    where: { id: checklistId },
+    data: {
+      status: "pending",
+      revision_number: { increment: 1 }
+    }
   });
 
-  return checklist;
+  await prisma.checklistTransaction.create({
+    data: {
+      id: newId(),
+      checklist_id: checklist.id,
+      user_id: userId,
+      action_type: "SUBMITTED_FOR_REVIEW",
+      description: `Checklist "${checklist.checklist_name}" was submitted for review.`
+    }
+  });
+
+  return updatedChecklist;
 }
 
 export async function approveChecklist(checklistId, userId) {
-  const checklist = await Checklist.findById(checklistId);
+  const checklist = await prisma.checklist.findUnique({ where: { id: checklistId } });
   if (!checklist) throw new ApiError(404, "Checklist not found");
 
-  checklist.status = "approved";
-  await checklist.save();
-
-  await ChecklistHistory.create({
-    checklist_id: checklist._id,
-    user_id: userId,
-    action_type: "APPROVED",
-    description: `Checklist "${checklist.checklist_name}" was approved.`,
+  const updatedChecklist = await prisma.checklist.update({
+    where: { id: checklistId },
+    data: { status: "approved" }
   });
 
-  return checklist;
+  await prisma.checklistTransaction.create({
+    data: {
+      id: newId(),
+      checklist_id: checklist.id,
+      user_id: userId,
+      action_type: "APPROVED",
+      description: `Checklist "${checklist.checklist_name}" was approved.`
+    }
+  });
+
+  return updatedChecklist;
 }
 
 export async function requestChanges(checklistId, userId, message) {
-  const checklist = await Checklist.findById(checklistId);
+  const checklist = await prisma.checklist.findUnique({ where: { id: checklistId } });
   if (!checklist) throw new ApiError(404, "Checklist not found");
 
-  checklist.status = "changes_requested";
-  await checklist.save();
-
-  await ChecklistHistory.create({
-    checklist_id: checklist._id,
-    user_id: userId,
-    action_type: "CHANGES_REQUESTED",
-    description: message || `Changes were requested for checklist "${checklist.checklist_name}".`,
+  const updatedChecklist = await prisma.checklist.update({
+    where: { id: checklistId },
+    data: { status: "changes_requested" }
   });
 
-  return checklist;
+  await prisma.checklistTransaction.create({
+    data: {
+      id: newId(),
+      checklist_id: checklist.id,
+      user_id: userId,
+      action_type: "CHANGES_REQUESTED",
+      description: message || `Changes were requested for checklist "${checklist.checklist_name}".`
+    }
+  });
+
+  return updatedChecklist;
 }
 
 export async function getChecklistHistory(checklistId) {
-  const history = await ChecklistHistory.find({ checklist_id: checklistId })
-    .populate("user_id", "name email")
-    .sort({ createdAt: 1 })
-    .lean();
+  const history = await prisma.checklistTransaction.findMany({
+    where: { checklist_id: checklistId },
+    include: {
+      user: { select: { id: true, name: true, email: true } }
+    },
+    orderBy: { createdAt: "asc" }
+  });
 
-  return history;
+  return history.map(h => ({
+    ...h,
+    user_id: h.user // Map back to Mongoose format
+  }));
 }

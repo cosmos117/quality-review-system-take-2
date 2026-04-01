@@ -1,106 +1,105 @@
-import { GridFSBucket, ObjectId } from "mongodb";
-import mongoose from "mongoose";
+import fs from "fs/promises";
+import { createReadStream, existsSync } from "fs";
+import path from "path";
+import { v4 as uuidv4 } from "uuid";
 import logger from "./utils/logger.js";
+import { fileURLToPath } from "url";
 
-let db;
-let bucket;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const UPLOADS_DIR = path.join(__dirname, "..", "uploads");
+const METADATA_DIR = path.join(__dirname, "..", "uploads_metadata");
 
-/**
- * Initialize GridFS using Mongoose's existing connection.
- * This ensures GridFS uses the exact same database as all other Mongoose models,
- * so images stored via GridFS are always accessible from any backend instance
- * connected to the same MongoDB.
- *
- * Call this AFTER mongoose.connect() has resolved.
- */
 async function init() {
-  if (bucket) return bucket;
-
-  // Reuse Mongoose's native MongoDB connection — guarantees same DB
-  const conn = mongoose.connection;
-  if (!conn || conn.readyState !== 1) {
-    throw new Error(
-      "Mongoose is not connected. Call init() after mongoose.connect() resolves.",
-    );
-  }
-
-  db = conn.db; // same database Mongoose uses
-  bucket = new GridFSBucket(db, { bucketName: "uploads" });
-  logger.info(`GridFS initialized on database "${db.databaseName}"`);
-  return bucket;
+  await fs.mkdir(UPLOADS_DIR, { recursive: true });
+  await fs.mkdir(METADATA_DIR, { recursive: true });
+  logger.info(`Local storage initialized at ${UPLOADS_DIR}`);
+  return true;
 }
 
-async function uploadImage(
-  questionId,
-  buffer,
-  filename,
-  contentType,
-  role = null,
-) {
-  if (!bucket) throw new Error("GridFS not initialized");
-  return new Promise((resolve, reject) => {
-    const metadata = { questionId, contentType };
-    if (role) metadata.role = role; // Store role (executor or reviewer)
-    const uploadStream = bucket.openUploadStream(filename, { metadata });
-    uploadStream.on("error", (err) => reject(err));
-    uploadStream.on("finish", () => {
-      // Use uploadStream.id provided by the driver - convert to string
-      resolve({ id: uploadStream.id.toString(), filename });
-    });
-    uploadStream.end(buffer);
-  });
+async function uploadImage(questionId, buffer, filename, contentType, role = null) {
+  const fileId = uuidv4();
+  const filePath = path.join(UPLOADS_DIR, fileId);
+  const metadataPath = path.join(METADATA_DIR, `${fileId}.json`);
+
+  const metadata = {
+    _id: fileId,
+    filename,
+    contentType,
+    length: buffer.length,
+    uploadDate: new Date().toISOString(),
+    metadata: {
+      questionId,
+      ...(role ? { role } : {})
+    }
+  };
+
+  await fs.writeFile(filePath, buffer);
+  await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+
+  return { id: fileId, filename };
+}
+
+async function getAllMetadata() {
+  const files = await fs.readdir(METADATA_DIR).catch(() => []);
+  const metadataList = [];
+  for (const file of files) {
+    if (file.endsWith('.json')) {
+      try {
+        const content = await fs.readFile(path.join(METADATA_DIR, file), 'utf-8');
+        metadataList.push(JSON.parse(content));
+      } catch (e) {
+        // ignore parsing errors
+      }
+    }
+  }
+  return metadataList;
 }
 
 async function getImagesByQuestion(questionId) {
-  if (!bucket) throw new Error("GridFS not initialized");
-  const cursor = bucket.find({ "metadata.questionId": questionId });
-  return cursor.toArray();
+  const allMetadata = await getAllMetadata();
+  return allMetadata.filter(m => m.metadata?.questionId === questionId);
 }
 
 async function getImagesByQuestionAndRole(questionId, role) {
-  if (!bucket) throw new Error("GridFS not initialized");
-  // Query for images with the specific role OR with no role (backward compatibility - treat as executor)
-  const query =
-    role === "executor"
-      ? {
-          "metadata.questionId": questionId,
-          $or: [
-            { "metadata.role": "executor" },
-            { "metadata.role": { $exists: false } }, // Old images without role are treated as executor images
-          ],
-        }
-      : {
-          "metadata.questionId": questionId,
-          "metadata.role": role,
-        };
-  const cursor = bucket.find(query);
-  return cursor.toArray();
+  const allMetadata = await getAllMetadata();
+  return allMetadata.filter(m => {
+    if (m.metadata?.questionId !== questionId) return false;
+    if (role === "executor") {
+      return !m.metadata.role || m.metadata.role === "executor";
+    }
+    return m.metadata.role === role;
+  });
 }
 
+// Ensure the returned stream resolves correctly like MongoDB's streams
 async function downloadImageById(fileId) {
-  if (!bucket) throw new Error("GridFS not initialized");
-  return bucket.openDownloadStream(new ObjectId(fileId));
+  const filePath = path.join(UPLOADS_DIR, fileId);
+  if (!existsSync(filePath)) throw new Error("File not found");
+  return createReadStream(filePath);
 }
+
 async function deleteImageById(fileId) {
-  if (!bucket) throw new Error("GridFS not initialized");
-  return bucket.delete(new ObjectId(fileId));
+  const filePath = path.join(UPLOADS_DIR, fileId);
+  const metadataPath = path.join(METADATA_DIR, `${fileId}.json`);
+  
+  try { await fs.unlink(filePath); } catch (e) {}
+  try { await fs.unlink(metadataPath); } catch (e) {}
 }
 
 async function deleteImagesByFileIds(fileIds) {
-  if (!bucket) throw new Error("GridFS not initialized");
-  const deletePromises = fileIds.map((fileId) => {
-    try {
-      return bucket.delete(new ObjectId(fileId));
-    } catch (err) {
-      return null;
-    }
-  });
-  return Promise.allSettled(deletePromises);
+  const promises = fileIds.map(id => deleteImageById(id));
+  return Promise.allSettled(promises);
 }
 
 async function getFileMetadata(fileId) {
-  if (!db) throw new Error("GridFS not initialized");
-  return db.collection("uploads.files").findOne({ _id: new ObjectId(fileId) });
+  const metadataPath = path.join(METADATA_DIR, `${fileId}.json`);
+  try {
+    const content = await fs.readFile(metadataPath, 'utf-8');
+    return JSON.parse(content);
+  } catch (e) {
+    return null;
+  }
 }
 
 export {

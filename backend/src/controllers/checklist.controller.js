@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const isValidObjectId = (id) => /^[a-fA-F0-9]{24}$/.test(id);
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -6,7 +6,7 @@ import * as checklistService from "../services/checklist.service.js";
 
 const createChecklistForStage = asyncHandler(async (req, res) => {
   const { stageId } = req.params;
-  if (!mongoose.isValidObjectId(stageId)) throw new ApiError(400, "Invalid stageId");
+  if (!isValidObjectId(stageId)) throw new ApiError(400, "Invalid stageId");
   if (!req.body.checklist_name?.trim()) throw new ApiError(400, "checklist_name is required");
   const created_by = req.user?._id;
   if (!created_by) throw new ApiError(401, "Not authenticated");
@@ -17,7 +17,7 @@ const createChecklistForStage = asyncHandler(async (req, res) => {
 
 const listChecklistsForStage = asyncHandler(async (req, res) => {
   const { stageId } = req.params;
-  if (!mongoose.isValidObjectId(stageId)) throw new ApiError(400, "Invalid stageId");
+  if (!isValidObjectId(stageId)) throw new ApiError(400, "Invalid stageId");
 
   const result = await checklistService.listChecklistsForStage(stageId, req.query);
   return res.status(200).json(result);
@@ -25,7 +25,7 @@ const listChecklistsForStage = asyncHandler(async (req, res) => {
 
 const getChecklistById = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Invalid checklist id");
+  if (!isValidObjectId(id)) throw new ApiError(400, "Invalid checklist id");
 
   const checklist = await checklistService.getChecklistById(id);
   return res.status(200).json(new ApiResponse(200, checklist, "Checklist fetched successfully"));
@@ -33,7 +33,7 @@ const getChecklistById = asyncHandler(async (req, res) => {
 
 const updateChecklist = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Invalid checklist id");
+  if (!isValidObjectId(id)) throw new ApiError(400, "Invalid checklist id");
 
   const checklist = await checklistService.updateChecklist(id, req.body);
   return res.status(200).json(new ApiResponse(200, checklist, "Checklist updated successfully"));
@@ -41,7 +41,7 @@ const updateChecklist = asyncHandler(async (req, res) => {
 
 const deleteChecklist = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Invalid checklist id");
+  if (!isValidObjectId(id)) throw new ApiError(400, "Invalid checklist id");
 
   const deleted = await checklistService.deleteChecklist(id);
   return res.status(200).json(new ApiResponse(200, deleted, "Checklist deleted successfully"));

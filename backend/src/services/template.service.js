@@ -1,21 +1,33 @@
-import mongoose from "mongoose";
-import Template from "../models/template.models.js";
+import prisma from "../config/prisma.js";
 import { ApiError } from "../utils/ApiError.js";
 import { getOrSet, keys, TTL, invalidateTemplate } from "../utils/cache.js";
+import { newId } from "../utils/newId.js";
 
 const isValidStage = (stage) => /^stage\d{1,2}$/.test(stage);
 
+const parseJsonField = (field) => {
+    if (!field) return {};
+    if (typeof field === 'string') return JSON.parse(field);
+    return field;
+};
+
+const parseJsonArray = (field) => {
+    if (!field) return [];
+    if (typeof field === 'string') return JSON.parse(field);
+    return field;
+};
+
 async function ensureTemplateConsistency(template) {
   let modified = false;
-  const doc = template.toObject ? template.toObject() : template;
-  const stageKeys = Object.keys(doc).filter((k) => /^stage\d{1,2}$/.test(k));
+  const stageData = parseJsonField(template.stageData);
+  const stageKeys = Object.keys(stageData).filter((k) => /^stage\d{1,2}$/.test(k));
 
   for (const stage of stageKeys) {
-    const arr = template[stage];
+    const arr = stageData[stage];
     if (!Array.isArray(arr)) continue;
     arr.forEach((cl) => {
       if (!cl._id) {
-        cl._id = new mongoose.Types.ObjectId();
+        cl._id = newId();
         modified = true;
       }
       if (!Array.isArray(cl.checkpoints)) {
@@ -28,7 +40,7 @@ async function ensureTemplateConsistency(template) {
       }
       cl.sections.forEach((sec) => {
         if (!sec._id) {
-          sec._id = new mongoose.Types.ObjectId();
+          sec._id = newId();
           modified = true;
         }
         if (!Array.isArray(sec.checkpoints)) {
@@ -37,50 +49,51 @@ async function ensureTemplateConsistency(template) {
         }
         sec.checkpoints.forEach((cp) => {
           if (!cp._id) {
-            cp._id = new mongoose.Types.ObjectId();
+            cp._id = newId();
             modified = true;
           }
         });
       });
       cl.checkpoints.forEach((cp) => {
         if (!cp._id) {
-          cp._id = new mongoose.Types.ObjectId();
+          cp._id = newId();
           modified = true;
         }
       });
     });
-    if (modified) template.markModified(stage);
+  }
+
+  if (modified) {
+    template.stageData = stageData;
   }
   return modified;
 }
 
 async function getTemplateSingleton() {
-  const template = await Template.findOne();
+  const template = await prisma.template.findFirst({
+    orderBy: { createdAt: "asc" }
+  });
   if (!template) throw new ApiError(404, "Template not found");
   return template;
 }
 
 function validateStage(stage) {
-  if (!isValidStage(stage))
-    throw new ApiError(400, "Invalid stage format. Must be stage1-99");
+  if (!isValidStage(stage)) throw new ApiError(400, "Invalid stage format. Must be stage1-99");
 }
 
-function findChecklist(template, stage, checklistId) {
-  if (!Array.isArray(template[stage])) {
+function findChecklist(stageData, stage, checklistId) {
+  if (!Array.isArray(stageData[stage])) {
     throw new ApiError(404, `Stage ${stage} not found or has no checklists`);
   }
-  const checklist = template[stage].find(
-    (item) => item._id.toString() === checklistId,
+  const checklist = stageData[stage].find(
+    (item) => item._id === checklistId
   );
-  if (!checklist)
-    throw new ApiError(404, "Checklist not found in specified stage");
+  if (!checklist) throw new ApiError(404, "Checklist not found in specified stage");
   return checklist;
 }
 
 function findSection(checklist, sectionId) {
-  const section = checklist.sections?.find(
-    (item) => item._id.toString() === sectionId,
-  );
+  const section = checklist.sections?.find((item) => item._id === sectionId);
   if (!section) throw new ApiError(404, "Section not found in this checklist");
   return section;
 }
@@ -88,55 +101,90 @@ function findSection(checklist, sectionId) {
 // ── Template CRUD ──
 
 export async function createOrUpdateTemplate(name, userId) {
-  let template = await Template.findOne();
+  let template = await prisma.template.findFirst({
+    orderBy: { createdAt: "asc" }
+  });
+
   if (template) {
-    if (name) template.name = name;
-    template.modifiedBy = userId;
-    await template.save();
+    template = await prisma.template.update({
+      where: { id: template.id },
+      data: {
+        name: name || template.name,
+        modifiedBy: userId
+      }
+    });
     invalidateTemplate();
     return { template, created: false };
   }
-  template = await Template.create({
-    name: name || "Default Quality Review Template",
-    modifiedBy: userId,
+
+  template = await prisma.template.create({
+    data: {
+      id: newId(),
+      name: name || "Default Quality Review Template",
+      templateName: "default_template",
+      modifiedBy: userId,
+      stageData: {},
+      stageNames: {},
+      defectCategories: []
+    }
   });
+
   invalidateTemplate();
   return { template, created: true };
 }
 
 export async function getTemplate(stage) {
   return getOrSet(
-    keys.template(stage),
+    keys.template(stage || "all"),
     async () => {
       const template = await getTemplateSingleton();
 
       const wasModified = await ensureTemplateConsistency(template);
-      if (wasModified) await template.save();
+      if (wasModified) {
+        await prisma.template.update({
+          where: { id: template.id },
+          data: { stageData: template.stageData }
+        });
+      }
 
+      const stageData = parseJsonField(template.stageData);
+      
       if (stage) {
         validateStage(stage);
         return {
-          _id: template._id,
+          _id: template.id,
           name: template.name,
-          [stage]: template[stage],
+          [stage]: stageData[stage] || [],
           modifiedBy: template.modifiedBy,
           createdAt: template.createdAt,
           updatedAt: template.updatedAt,
         };
       }
 
-      return template.toObject
-        ? template.toObject({ flattenMaps: true })
-        : JSON.parse(JSON.stringify(template));
+      const stageNames = parseJsonField(template.stageNames);
+      const defectCategories = parseJsonArray(template.defectCategories);
+
+      return {
+        _id: template.id,
+        name: template.name,
+        templateName: template.templateName,
+        description: template.description,
+        ...stageData,
+        stageNames,
+        defectCategories,
+        modifiedBy: template.modifiedBy,
+        createdAt: template.createdAt,
+        updatedAt: template.updatedAt,
+      };
     },
-    TTL.TEMPLATES,
+    TTL.TEMPLATES
   );
 }
 
 export async function resetTemplate() {
-  const result = await Template.deleteOne({});
+  const result = await prisma.template.deleteMany({});
   invalidateTemplate();
-  return { deletedCount: result.deletedCount };
+  return { deletedCount: result.count };
 }
 
 // ── Checklist (group) management ──
@@ -144,136 +192,122 @@ export async function resetTemplate() {
 export async function addChecklistToTemplate(stage, text, userId) {
   validateStage(stage);
   const template = await getTemplateSingleton();
+  const stageData = parseJsonField(template.stageData);
 
-  if (!Array.isArray(template[stage])) template[stage] = [];
-  template[stage].push({
-    _id: new mongoose.Types.ObjectId(),
+  if (!Array.isArray(stageData[stage])) stageData[stage] = [];
+  stageData[stage].push({
+    _id: newId(),
     text: text.trim(),
     checkpoints: [],
     sections: [],
   });
-  template.markModified(stage);
-  template.modifiedBy = userId;
-  await template.save();
+
+  const updatedTemplate = await prisma.template.update({
+    where: { id: template.id },
+    data: { stageData, modifiedBy: userId }
+  });
+
   invalidateTemplate();
-  return template;
+  return updatedTemplate;
 }
 
-export async function updateChecklistInTemplate(
-  checklistId,
-  stage,
-  text,
-  userId,
-) {
+export async function updateChecklistInTemplate(checklistId, stage, text, userId) {
   validateStage(stage);
   const template = await getTemplateSingleton();
-  const checklist = findChecklist(template, stage, checklistId);
+  const stageData = parseJsonField(template.stageData);
+  const checklist = findChecklist(stageData, stage, checklistId);
+  
   checklist.text = text.trim();
-  template.markModified(stage);
-  template.modifiedBy = userId;
-  await template.save();
+
+  const updatedTemplate = await prisma.template.update({
+    where: { id: template.id },
+    data: { stageData, modifiedBy: userId }
+  });
+
   invalidateTemplate();
-  return template;
+  return updatedTemplate;
 }
 
 export async function deleteChecklistFromTemplate(checklistId, stage, userId) {
   validateStage(stage);
   const template = await getTemplateSingleton();
-  findChecklist(template, stage, checklistId);
+  const stageData = parseJsonField(template.stageData);
+  
+  if (Array.isArray(stageData[stage])) {
+    stageData[stage] = stageData[stage].filter(c => c._id !== checklistId);
+  }
 
-  await Template.collection.updateOne(
-    { _id: template._id },
-    {
-      $pull: { [stage]: { _id: new mongoose.Types.ObjectId(checklistId) } },
-      $set: { modifiedBy: userId },
-    },
-  );
+  const updatedTemplate = await prisma.template.update({
+    where: { id: template.id },
+    data: { stageData, modifiedBy: userId }
+  });
+
   invalidateTemplate();
-  return Template.findOne().lean();
+  return updatedTemplate;
 }
 
 // ── Checkpoint (question) management on checklists ──
 
-export async function addCheckpointToTemplate(
-  checklistId,
-  stage,
-  text,
-  categoryId,
-  userId,
-) {
+export async function addCheckpointToTemplate(checklistId, stage, text, categoryId, userId) {
   validateStage(stage);
   const template = await getTemplateSingleton();
-  const checklist = findChecklist(template, stage, checklistId);
+  const stageData = parseJsonField(template.stageData);
+  const checklist = findChecklist(stageData, stage, checklistId);
 
-  const cpData = { _id: new mongoose.Types.ObjectId(), text: text.trim() };
+  const cpData = { _id: newId(), text: text.trim() };
   if (categoryId) cpData.categoryId = categoryId;
   checklist.checkpoints.push(cpData);
-  template.markModified(stage);
-  template.modifiedBy = userId;
-  await template.save();
+
+  const updatedTemplate = await prisma.template.update({
+    where: { id: template.id },
+    data: { stageData, modifiedBy: userId }
+  });
+
   invalidateTemplate();
-  return template;
+  return updatedTemplate;
 }
 
-export async function updateCheckpointInTemplate(
-  checkpointId,
-  stage,
-  checklistId,
-  text,
-  categoryId,
-  userId,
-) {
+export async function updateCheckpointInTemplate(checkpointId, stage, checklistId, text, categoryId, userId) {
   validateStage(stage);
   const template = await getTemplateSingleton();
-  const checklist = findChecklist(template, stage, checklistId);
-  const checkpoint = checklist.checkpoints.find(
-    (item) => item._id.toString() === checkpointId,
-  );
+  const stageData = parseJsonField(template.stageData);
+  const checklist = findChecklist(stageData, stage, checklistId);
+  const checkpoint = checklist.checkpoints.find(item => item._id === checkpointId);
+  
   if (!checkpoint) throw new ApiError(404, "Checkpoint not found");
 
   checkpoint.text = text.trim();
   if (categoryId !== undefined) checkpoint.categoryId = categoryId;
-  template.markModified(stage);
-  template.modifiedBy = userId;
-  await template.save();
+
+  const updatedTemplate = await prisma.template.update({
+    where: { id: template.id },
+    data: { stageData, modifiedBy: userId }
+  });
+
   invalidateTemplate();
-  return template;
+  return updatedTemplate;
 }
 
-export async function deleteCheckpointFromTemplate(
-  checkpointId,
-  stage,
-  checklistId,
-  userId,
-) {
+export async function deleteCheckpointFromTemplate(checkpointId, stage, checklistId, userId) {
   validateStage(stage);
   const template = await getTemplateSingleton();
-  const checklist = findChecklist(template, stage, checklistId);
+  const stageData = parseJsonField(template.stageData);
+  const checklist = findChecklist(stageData, stage, checklistId);
 
-  if (
-    !checklist.checkpoints.some((item) => item._id.toString() === checkpointId)
-  ) {
+  const initialLength = checklist.checkpoints.length;
+  checklist.checkpoints = checklist.checkpoints.filter(item => item._id !== checkpointId);
+
+  if (checklist.checkpoints.length === initialLength) {
     throw new ApiError(404, "Checkpoint not found");
   }
 
-  await Template.collection.updateOne(
-    { _id: template._id },
-    {
-      $pull: {
-        [`${stage}.$[checklist].checkpoints`]: {
-          _id: new mongoose.Types.ObjectId(checkpointId),
-        },
-      },
-      $set: { modifiedBy: userId },
-    },
-    {
-      arrayFilters: [
-        { "checklist._id": new mongoose.Types.ObjectId(checklistId) },
-      ],
-    },
-  );
+  const updatedTemplate = await prisma.template.update({
+    where: { id: template.id },
+    data: { stageData, modifiedBy: userId }
+  });
+
   invalidateTemplate();
-  return Template.findOne().lean();
+  return updatedTemplate;
 }
 
 // ── Section management ──
@@ -281,168 +315,130 @@ export async function deleteCheckpointFromTemplate(
 export async function addSectionToChecklist(checklistId, stage, text, userId) {
   validateStage(stage);
   const template = await getTemplateSingleton();
-  const checklist = findChecklist(template, stage, checklistId);
+  const stageData = parseJsonField(template.stageData);
+  const checklist = findChecklist(stageData, stage, checklistId);
 
   if (!checklist.sections) checklist.sections = [];
   checklist.sections.push({
-    _id: new mongoose.Types.ObjectId(),
+    _id: newId(),
     text: text.trim(),
     checkpoints: [],
   });
-  template.markModified(stage);
-  template.modifiedBy = userId;
-  await template.save();
+
+  const updatedTemplate = await prisma.template.update({
+    where: { id: template.id },
+    data: { stageData, modifiedBy: userId }
+  });
+
   invalidateTemplate();
-  return template;
+  return updatedTemplate;
 }
 
-export async function updateSectionInChecklist(
-  checklistId,
-  sectionId,
-  stage,
-  text,
-  userId,
-) {
+export async function updateSectionInChecklist(checklistId, sectionId, stage, text, userId) {
   validateStage(stage);
   const template = await getTemplateSingleton();
-  const checklist = findChecklist(template, stage, checklistId);
+  const stageData = parseJsonField(template.stageData);
+  const checklist = findChecklist(stageData, stage, checklistId);
   const section = findSection(checklist, sectionId);
+  
   section.text = text.trim();
-  template.markModified(stage);
-  template.modifiedBy = userId;
-  await template.save();
+
+  const updatedTemplate = await prisma.template.update({
+    where: { id: template.id },
+    data: { stageData, modifiedBy: userId }
+  });
+
   invalidateTemplate();
-  return template;
+  return updatedTemplate;
 }
 
-export async function deleteSectionFromChecklist(
-  checklistId,
-  sectionId,
-  stage,
-  userId,
-) {
+export async function deleteSectionFromChecklist(checklistId, sectionId, stage, userId) {
   validateStage(stage);
   const template = await getTemplateSingleton();
-  const checklist = findChecklist(template, stage, checklistId);
+  const stageData = parseJsonField(template.stageData);
+  const checklist = findChecklist(stageData, stage, checklistId);
 
-  if (
-    !(checklist.sections || []).some(
-      (item) => item._id.toString() === sectionId,
-    )
-  ) {
+  const initialLength = (checklist.sections || []).length;
+  checklist.sections = (checklist.sections || []).filter(item => item._id !== sectionId);
+
+  if (checklist.sections.length === initialLength) {
     throw new ApiError(404, "Section not found in this checklist group");
   }
 
-  await Template.collection.updateOne(
-    { _id: template._id },
-    {
-      $pull: {
-        [`${stage}.$[checklist].sections`]: {
-          _id: new mongoose.Types.ObjectId(sectionId),
-        },
-      },
-      $set: { modifiedBy: userId },
-    },
-    {
-      arrayFilters: [
-        { "checklist._id": new mongoose.Types.ObjectId(checklistId) },
-      ],
-    },
-  );
+  const updatedTemplate = await prisma.template.update({
+    where: { id: template.id },
+    data: { stageData, modifiedBy: userId }
+  });
+
   invalidateTemplate();
-  return Template.findOne().lean();
+  return updatedTemplate;
 }
 
 // ── Checkpoint management on sections ──
 
-export async function addCheckpointToSection(
-  checklistId,
-  sectionId,
-  stage,
-  text,
-  categoryId,
-  userId,
-) {
+export async function addCheckpointToSection(checklistId, sectionId, stage, text, categoryId, userId) {
   validateStage(stage);
   const template = await getTemplateSingleton();
-  const checklist = findChecklist(template, stage, checklistId);
+  const stageData = parseJsonField(template.stageData);
+  const checklist = findChecklist(stageData, stage, checklistId);
   const section = findSection(checklist, sectionId);
 
-  const cpData = { _id: new mongoose.Types.ObjectId(), text: text.trim() };
+  const cpData = { _id: newId(), text: text.trim() };
   if (categoryId) cpData.categoryId = categoryId;
   section.checkpoints.push(cpData);
-  template.markModified(stage);
-  template.modifiedBy = userId;
-  await template.save();
+
+  const updatedTemplate = await prisma.template.update({
+    where: { id: template.id },
+    data: { stageData, modifiedBy: userId }
+  });
+
   invalidateTemplate();
-  return template;
+  return updatedTemplate;
 }
 
-export async function updateCheckpointInSection(
-  checklistId,
-  sectionId,
-  checkpointId,
-  stage,
-  text,
-  categoryId,
-  userId,
-) {
+export async function updateCheckpointInSection(checklistId, sectionId, checkpointId, stage, text, categoryId, userId) {
   validateStage(stage);
   const template = await getTemplateSingleton();
-  const checklist = findChecklist(template, stage, checklistId);
+  const stageData = parseJsonField(template.stageData);
+  const checklist = findChecklist(stageData, stage, checklistId);
   const section = findSection(checklist, sectionId);
-  const checkpoint = section.checkpoints.find(
-    (item) => item._id.toString() === checkpointId,
-  );
-  if (!checkpoint)
-    throw new ApiError(404, "Checkpoint not found in this section");
+
+  const checkpoint = section.checkpoints.find(item => item._id === checkpointId);
+  if (!checkpoint) throw new ApiError(404, "Checkpoint not found in this section");
 
   checkpoint.text = text.trim();
   if (categoryId !== undefined) checkpoint.categoryId = categoryId;
-  template.markModified(stage);
-  template.modifiedBy = userId;
-  await template.save();
+
+  const updatedTemplate = await prisma.template.update({
+    where: { id: template.id },
+    data: { stageData, modifiedBy: userId }
+  });
+
   invalidateTemplate();
-  return template;
+  return updatedTemplate;
 }
 
-export async function deleteCheckpointFromSection(
-  checklistId,
-  sectionId,
-  checkpointId,
-  stage,
-  userId,
-) {
+export async function deleteCheckpointFromSection(checklistId, sectionId, checkpointId, stage, userId) {
   validateStage(stage);
   const template = await getTemplateSingleton();
-  const checklist = findChecklist(template, stage, checklistId);
+  const stageData = parseJsonField(template.stageData);
+  const checklist = findChecklist(stageData, stage, checklistId);
   const section = findSection(checklist, sectionId);
 
-  if (
-    !section.checkpoints.some((item) => item._id.toString() === checkpointId)
-  ) {
+  const initialLength = section.checkpoints.length;
+  section.checkpoints = section.checkpoints.filter(item => item._id !== checkpointId);
+
+  if (section.checkpoints.length === initialLength) {
     throw new ApiError(404, "Checkpoint not found in this section");
   }
 
-  await Template.collection.updateOne(
-    { _id: template._id },
-    {
-      $pull: {
-        [`${stage}.$[checklist].sections.$[section].checkpoints`]: {
-          _id: new mongoose.Types.ObjectId(checkpointId),
-        },
-      },
-      $set: { modifiedBy: userId },
-    },
-    {
-      arrayFilters: [
-        { "checklist._id": new mongoose.Types.ObjectId(checklistId) },
-        { "section._id": new mongoose.Types.ObjectId(sectionId) },
-      ],
-    },
-  );
+  const updatedTemplate = await prisma.template.update({
+    where: { id: template.id },
+    data: { stageData, modifiedBy: userId }
+  });
+
   invalidateTemplate();
-  return Template.findOne().lean();
+  return updatedTemplate;
 }
 
 // ── Stage management ──
@@ -450,78 +446,74 @@ export async function deleteCheckpointFromSection(
 export async function addStageToTemplate(stage, stageName, userId) {
   validateStage(stage);
   const template = await getTemplateSingleton();
+  const stageData = parseJsonField(template.stageData);
+  const stageNames = parseJsonField(template.stageNames);
 
-  if (template[stage] !== undefined) {
-    const existingStages = Object.keys(template.toObject()).filter((key) =>
-      /^stage\d{1,2}$/.test(key),
-    );
-    throw new ApiError(
-      400,
-      `${stage} already exists. Available stages: ${existingStages.join(", ")}`,
-    );
+  if (stageData[stage] !== undefined) {
+    const existingStages = Object.keys(stageData).filter(key => /^stage\d{1,2}$/.test(key));
+    throw new ApiError(400, `${stage} already exists. Available stages: ${existingStages.join(", ")}`);
   }
 
-  const updateObj = { [stage]: [], modifiedBy: userId };
+  stageData[stage] = [];
   if (stageName && stageName.trim()) {
-    updateObj[`stageNames.${stage}`] = stageName.trim();
+    stageNames[stage] = stageName.trim();
   }
 
-  await Template.collection.updateOne(
-    { _id: template._id },
-    { $set: updateObj },
-  );
+  const updatedTemplate = await prisma.template.update({
+    where: { id: template.id },
+    data: { stageData, stageNames, modifiedBy: userId }
+  });
+
   invalidateTemplate();
-  return Template.findOne().lean();
+  return updatedTemplate;
 }
 
 export async function deleteStageFromTemplate(stage, userId) {
   validateStage(stage);
   const template = await getTemplateSingleton();
+  const stageData = parseJsonField(template.stageData);
+  const stageNames = parseJsonField(template.stageNames);
 
-  if (template[stage] === undefined) {
-    const availableStages = Object.keys(template.toObject()).filter((key) =>
-      /^stage\d{1,2}$/.test(key),
-    );
-    throw new ApiError(
-      404,
-      `Stage ${stage} not found. Available stages: ${availableStages.join(", ")}`,
-    );
+  if (stageData[stage] === undefined) {
+    const availableStages = Object.keys(stageData).filter(key => /^stage\d{1,2}$/.test(key));
+    throw new ApiError(404, `Stage ${stage} not found. Available stages: ${availableStages.join(", ")}`);
   }
 
-  const unsetObj = { [stage]: "" };
-  if (template.stageNames?.[stage]) unsetObj[`stageNames.${stage}`] = "";
+  delete stageData[stage];
+  if (stageNames[stage]) {
+    delete stageNames[stage];
+  }
 
-  await Template.collection.updateOne(
-    { _id: template._id },
-    { $unset: unsetObj, $set: { modifiedBy: userId } },
-  );
+  const updatedTemplate = await prisma.template.update({
+    where: { id: template.id },
+    data: { stageData, stageNames, modifiedBy: userId }
+  });
+
   invalidateTemplate();
-  return Template.findOne().lean();
+  return updatedTemplate;
 }
 
 export async function renameStageInTemplate(stage, stageName, userId) {
   validateStage(stage);
-  if (!stageName || !stageName.trim()) {
-    throw new ApiError(400, "stageName is required");
-  }
+  if (!stageName || !stageName.trim()) throw new ApiError(400, "stageName is required");
 
   const template = await getTemplateSingleton();
-  if (template[stage] === undefined) {
+  const stageData = parseJsonField(template.stageData);
+  const stageNames = parseJsonField(template.stageNames);
+
+  if (stageData[stage] === undefined) {
     throw new ApiError(404, `Stage ${stage} not found`);
   }
 
-  await Template.collection.updateOne(
-    { _id: template._id },
-    {
-      $set: {
-        [`stageNames.${stage}`]: stageName.trim(),
-        modifiedBy: userId,
-      },
-    },
-  );
+  stageNames[stage] = stageName.trim();
+
+  const updatedTemplate = await prisma.template.update({
+    where: { id: template.id },
+    data: { stageNames, modifiedBy: userId }
+  });
 
   invalidateTemplate();
-  return Template.findOne().lean();
+  return updatedTemplate;
 }
 
 export async function getAllStages() {
@@ -529,23 +521,20 @@ export async function getAllStages() {
     keys.template("allStages"),
     async () => {
       const template = await getTemplateSingleton();
+      const stageData = parseJsonField(template.stageData);
+      const stageNames = parseJsonField(template.stageNames);
 
-      const stageKeys = Object.keys(template.toObject())
-        .filter((key) => /^stage\d{1,2}$/.test(key))
-        .sort(
-          (a, b) =>
-            parseInt(a.replace("stage", "")) - parseInt(b.replace("stage", "")),
-        );
+      const stageKeys = Object.keys(stageData)
+        .filter(key => /^stage\d{1,2}$/.test(key))
+        .sort((a, b) => parseInt(a.replace("stage", "")) - parseInt(b.replace("stage", "")));
 
       const stages = {};
       for (const key of stageKeys) {
-        stages[key] =
-          template.stageNames?.[key] ||
-          `Phase ${parseInt(key.replace("stage", ""))}`;
+        stages[key] = stageNames[key] || `Phase ${parseInt(key.replace("stage", ""))}`;
       }
       return stages;
     },
-    TTL.TEMPLATES,
+    TTL.TEMPLATES
   );
 }
 
@@ -553,80 +542,111 @@ export async function getAllStages() {
 
 export async function updateDefectCategories(defectCategories, userId) {
   const template = await getTemplateSingleton();
-  template.defectCategories = defectCategories.map((cat) => ({
+  
+  const mappedCategories = defectCategories.map((cat) => ({
     name: cat.name,
     color: cat.color || "#2196F3",
+    keywords: Array.isArray(cat.keywords) ? cat.keywords : [],
   }));
-  template.modifiedBy = userId;
-  await template.save();
+
+  const updatedTemplate = await prisma.template.update({
+    where: { id: template.id },
+    data: { defectCategories: mappedCategories, modifiedBy: userId }
+  });
+
   invalidateTemplate();
-  return template;
+  return updatedTemplate;
 }
 
 // ── Seed ──
 
 export async function seedTemplate(userId) {
-  let template = await Template.findOne();
+  let template = await prisma.template.findFirst({ orderBy: { createdAt: "asc" } });
   if (template) return { template, alreadyExists: true };
 
-  template = await Template.create({
-    name: "Quality Review Process Template",
-    stage1: [
-      {
-        text: "Planning & Requirements",
-        checkpoints: [
-          { text: "Project scope documented and approved" },
-          { text: "Requirements clearly defined" },
-          { text: "Timeline and budget approved" },
+  template = await prisma.template.create({
+    data: {
+      id: newId(),
+      name: "Quality Review Process Template",
+      templateName: "default_template",
+      stageData: {
+        stage1: [
+          {
+            _id: newId(),
+            text: "Planning & Requirements",
+            sections: [],
+            checkpoints: [
+              { _id: newId(), text: "Project scope documented and approved" },
+              { _id: newId(), text: "Requirements clearly defined" },
+              { _id: newId(), text: "Timeline and budget approved" }
+            ],
+          },
+          {
+            _id: newId(),
+            text: "Team Setup",
+            sections: [],
+            checkpoints: [
+              { _id: newId(), text: "Team members assigned" },
+              { _id: newId(), text: "Roles and responsibilities defined" },
+              { _id: newId(), text: "Communication channels established" }
+            ],
+          }
         ],
-      },
-      {
-        text: "Team Setup",
-        checkpoints: [
-          { text: "Team members assigned" },
-          { text: "Roles and responsibilities defined" },
-          { text: "Communication channels established" },
+        stage2: [
+          {
+            _id: newId(),
+            text: "Development & Testing",
+            sections: [],
+            checkpoints: [
+              { _id: newId(), text: "Code review completed" },
+              { _id: newId(), text: "Unit tests written and passed" },
+              { _id: newId(), text: "Integration testing done" }
+            ],
+          },
+          {
+            _id: newId(),
+            text: "Quality Assurance",
+            sections: [],
+            checkpoints: [
+              { _id: newId(), text: "All bugs documented and fixed" },
+              { _id: newId(), text: "Performance testing completed" },
+              { _id: newId(), text: "Security review done" }
+            ],
+          }
         ],
+        stage3: [
+          {
+            _id: newId(),
+            text: "Deployment Preparation",
+            sections: [],
+            checkpoints: [
+              { _id: newId(), text: "Deployment plan documented" },
+              { _id: newId(), text: "Rollback plan prepared" },
+              { _id: newId(), text: "Production environment ready" }
+            ],
+          },
+          {
+            _id: newId(),
+            text: "Post-Deployment",
+            sections: [],
+            checkpoints: [
+              { _id: newId(), text: "Deployment successful" },
+              { _id: newId(), text: "Monitoring and logging active" },
+              { _id: newId(), text: "User documentation complete" }
+            ],
+          }
+        ]
       },
-    ],
-    stage2: [
-      {
-        text: "Development & Testing",
-        checkpoints: [
-          { text: "Code review completed" },
-          { text: "Unit tests written and passed" },
-          { text: "Integration testing done" },
-        ],
+      stageNames: {
+        stage1: "Phase 1 Assessment",
+        stage2: "Phase 2 Assessment",
+        stage3: "Phase 3 Assessment"
       },
-      {
-        text: "Quality Assurance",
-        checkpoints: [
-          { text: "All bugs documented and fixed" },
-          { text: "Performance testing completed" },
-          { text: "Security review done" },
-        ],
-      },
-    ],
-    stage3: [
-      {
-        text: "Deployment Preparation",
-        checkpoints: [
-          { text: "Deployment plan documented" },
-          { text: "Rollback plan prepared" },
-          { text: "Production environment ready" },
-        ],
-      },
-      {
-        text: "Post-Deployment",
-        checkpoints: [
-          { text: "Deployment successful" },
-          { text: "Monitoring and logging active" },
-          { text: "User documentation complete" },
-        ],
-      },
-    ],
-    modifiedBy: userId,
+      defectCategories: [],
+      modifiedBy: userId
+    }
   });
+
   invalidateTemplate();
   return { template, alreadyExists: false };
 }

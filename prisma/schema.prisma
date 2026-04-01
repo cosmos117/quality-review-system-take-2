@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+//////////////////////////////////////////////////////
+// MODELS
+//////////////////////////////////////////////////////
+
+model User {
+  id          String   @id @db.Char(24)
+  name        String
+  email       String   @unique
+  password    String
+  role        String   @default("user") // "admin" | "user"
+  status      String   @default("active") // "active" | "inactive" | "locked"
+  accessToken String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  createdProjects     Project[]             @relation("UserProjects")
+  memberships         ProjectMembership[]
+  stagesCreated       Stage[]               @relation("StageCreator")
+  checklistsCreated   Checklist[]           @relation("ChecklistCreator")
+  answeredBy          ChecklistAnswer[]     @relation("AnsweredBy")
+  approvalDecisions   ChecklistApproval[]   @relation("ApprovalDecider")
+  checklistHistories  ChecklistTransaction[] @relation("TransactionUser")
+}
+
+model Role {
+  id          String   @id @db.Char(24)
+  role_name   String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  memberships ProjectMembership[]
+}
+
+model Project {
+  id                     String    @id @db.Char(24)
+  project_no             String?
+  internal_order_no      String?
+  project_name           String
+  description            String?   @db.Text
+  status                 String    @default("pending") // "pending" | "in_progress" | "completed"
+  priority               String    @default("medium")  // "low" | "medium" | "high"
+  start_date             DateTime
+  end_date               DateTime?
+  templateName           String?
+  isReviewApplicable     String?   // "yes" | "no" | null
+  reviewApplicableRemark String?   @db.Text
+  overallDefectRate      Float?
+  created_by             String    @db.Char(24)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  // Relations
+  creator         User                @relation("UserProjects", fields: [created_by], references: [id])
+  stages          Stage[]
+  memberships     ProjectMembership[]
+  approvals       ChecklistApproval[]
+  checklistAnswers ChecklistAnswer[]
+  projectChecklists ProjectChecklist[]
+}
+
+model ProjectMembership {
+  id         Int      @id @default(autoincrement())
+  project_id String   @db.Char(24)
+  user_id    String   @db.Char(24)
+  role_id    String   @db.Char(24)
+  createdAt  DateTime @default(now())
+
+  // Relations
+  project Project @relation(fields: [project_id], references: [id])
+  user    User    @relation(fields: [user_id], references: [id])
+  role    Role    @relation(fields: [role_id], references: [id])
+
+  @@unique([project_id, user_id, role_id])
+  @@index([project_id])
+  @@index([user_id])
+}
+
+model Stage {
+  id             String   @id @db.Char(24)
+  project_id     String   @db.Char(24)
+  stage_name     String
+  stage_key      String?
+  description    String?  @db.Text
+  status         String   @default("pending") // "pending" | "in_progress" | "completed"
+  created_by     String?  @db.Char(24)
+  loopback_count Int      @default(0)
+  conflict_count Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  project    Project    @relation(fields: [project_id], references: [id])
+  creator    User?      @relation("StageCreator", fields: [created_by], references: [id])
+  checklists Checklist[]
+  projectChecklists ProjectChecklist[]
+
+  @@index([project_id])
+  @@index([project_id, stage_key])
+}
+
+model Checklist {
+  id              String   @id @db.Char(24)
+  stage_id        String   @db.Char(24)
+  created_by      String   @db.Char(24)
+  status          String   @default("draft") // "draft" | "pending" | "approved" | "changes_requested"
+  revision_number Int      @default(0)
+  checklist_name  String
+  description     String?  @db.Text
+  defectCategory  String?  @default("")
+  defectSeverity  String?  @default("") // "" | "Critical" | "Non-Critical" | "C" | "NC"
+  remark          String?  @db.Text
+  answers         Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  stage       Stage    @relation(fields: [stage_id], references: [id])
+  creator     User     @relation("ChecklistCreator", fields: [created_by], references: [id])
+  checkpoints Checkpoint[]
+  transactions ChecklistTransaction[]
+
+  @@index([stage_id])
+}
+
+model Checkpoint {
+  id               String   @id @db.Char(24)
+  checklistId      String   @db.Char(24)
+  question         String   @db.Text
+  categoryId       String?
+  executorResponse Json?
+  reviewerResponse Json?
+  defect           Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  checklist Checklist @relation(fields: [checklistId], references: [id])
+
+  @@index([checklistId])
+}
+
+model ChecklistAnswer {
+  id           String   @id @db.Char(24)
+  project_id   String   @db.Char(24)
+  phase        Int
+  role         String   // "executor" | "reviewer"
+  sub_question String   @db.Text
+  answer       String?  // "Yes" | "No" | null
+  remark       String?  @db.Text
+  images       Json?
+  metadata     Json?
+  answered_by  String?  @db.Char(24)
+  answered_at  DateTime @default(now())
+  is_submitted Boolean  @default(false)
+  categoryId   String?  @default("")
+  severity     String?  @default("") // "" | "Critical" | "Non-Critical"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  project    Project @relation(fields: [project_id], references: [id])
+  answeredBy User?   @relation("AnsweredBy", fields: [answered_by], references: [id])
+
+  @@unique([project_id, phase, role, sub_question(length: 255)])
+  @@index([project_id, phase, role])
+}
+
+model ChecklistApproval {
+  id                    String    @id @db.Char(24)
+  project_id            String    @db.Char(24)
+  phase                 Int
+  status                String    @default("pending") // "pending" | "approved" | "reverted" | "reverted_to_executor"
+  requested_at          DateTime  @default(now())
+  decided_at            DateTime?
+  decided_by            String?   @db.Char(24)
+  notes                 String?   @db.Text
+  revertCount           Int       @default(0)
+  executor_submitted    Boolean   @default(false)
+  executor_submitted_at DateTime?
+  reviewer_submitted    Boolean   @default(false)
+  reviewer_submitted_at DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relations
+  project  Project @relation(fields: [project_id], references: [id])
+  decider  User?   @relation("ApprovalDecider", fields: [decided_by], references: [id])
+
+  @@unique([project_id, phase])
+  @@index([project_id, phase])
+}
+
+model ChecklistTransaction {
+  id           String   @id @db.Char(24)
+  checklist_id String   @db.Char(24)
+  user_id      String   @db.Char(24)
+  action_type  String   // "CREATED" | "SUBMITTED_FOR_REVIEW" | "CHANGES_REQUESTED" | "APPROVED"
+  description  String   @db.Text
+  createdAt    DateTime @default(now())
+
+  // Relations
+  checklist Checklist @relation(fields: [checklist_id], references: [id])
+  user      User      @relation("TransactionUser", fields: [user_id], references: [id])
+
+  @@index([checklist_id])
+}
+
+model Template {
+  id               String   @id @db.Char(24)
+  templateName     String?  @unique
+  name             String   @default("Default Quality Review Template")
+  description      String?  @db.Text
+  isActive         Boolean  @default(true)
+  stageNames       Json?
+  defectCategories Json?
+  stageData        Json?
+  modifiedBy       String?  @db.Char(24)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model ProjectChecklist {
+  id               String   @id @db.Char(24)
+  projectId        String   @db.Char(24)
+  stageId          String   @db.Char(24)
+  stage            String
+  groups           Json?
+  iterations       Json?
+  currentIteration Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id])
+  stageRef Stage  @relation(fields: [stageId], references: [id])
+
+  @@unique([projectId, stageId])
+  @@index([projectId])
+  @@index([stageId])
+}

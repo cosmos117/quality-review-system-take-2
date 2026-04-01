@@ -14,6 +14,6 @@ connectDB()
     })
 })
 .catch((err)=>{
-    logger.error("MongoDB connection failed:", err);
+    logger.error("MySQL connection failed:", err);
     process.exit(1);
 })

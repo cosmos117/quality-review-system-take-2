@@ -1,4 +1,4 @@
-﻿import mongoose from "mongoose";
+const isValidObjectId = (id) => /^[a-fA-F0-9]{24}$/.test(id);
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -18,7 +18,7 @@ import {
 
 export const getProjectAnalysis = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
-  if (!mongoose.isValidObjectId(projectId))
+  if (!isValidObjectId(projectId))
     throw new ApiError(400, "Invalid projectId");
 
   const data = await analyticsService.getProjectAnalysis(projectId);
@@ -32,7 +32,7 @@ export const getProjectAnalysis = asyncHandler(async (req, res) => {
 
 export const getDefectsPerPhase = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
-  if (!mongoose.isValidObjectId(projectId))
+  if (!isValidObjectId(projectId))
     throw new ApiError(400, "Invalid projectId");
 
   const result = await analyticsService.getDefectsPerPhase(projectId);
@@ -45,7 +45,7 @@ export const getDefectsPerPhase = asyncHandler(async (req, res) => {
 
 export const getDefectsPerChecklist = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
-  if (!mongoose.isValidObjectId(projectId))
+  if (!isValidObjectId(projectId))
     throw new ApiError(400, "Invalid projectId");
 
   const result = await analyticsService.getDefectsPerChecklist(projectId);
@@ -62,7 +62,7 @@ export const getDefectsPerChecklist = asyncHandler(async (req, res) => {
 
 export const getCategoryDistribution = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
-  if (!mongoose.isValidObjectId(projectId))
+  if (!isValidObjectId(projectId))
     throw new ApiError(400, "Invalid projectId");
 
   const data = await analyticsService.getCategoryDistribution(projectId);
