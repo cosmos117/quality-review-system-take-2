@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: quality-review-backend
+    env: node
+    rootDir: .
+    buildCommand: "npm install && cd backend && npm install && cd .. && npx prisma generate"
+    startCommand: "cd backend && npm run start"
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # We will set this manually in the Render dashboard for security
+      - key: ACCESS_TOKEN_SECRET
+        generateValue: true
+      - key: ACCESS_TOKEN_EXPIRY
+        value: "7d"
