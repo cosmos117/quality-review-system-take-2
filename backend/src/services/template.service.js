@@ -162,7 +162,35 @@ export async function getTemplate(stage) {
       }
 
       const stageNames = parseJsonField(template.stageNames);
-      const defectCategories = parseJsonArray(template.defectCategories);
+      let defectCategories = parseJsonArray(template.defectCategories);
+
+      // Auto-migrate: ensure every category has a stable _id
+      let catModified = false;
+      defectCategories = defectCategories.map((cat) => {
+        if (!cat._id && !cat.id) {
+          catModified = true;
+          return { ...cat, _id: newId() };
+        }
+        // Normalise: always expose as _id
+        if (!cat._id && cat.id) {
+          return { ...cat, _id: cat.id };
+        }
+        return cat;
+      });
+
+      // Auto-seed defaults if template has no categories saved yet
+      if (defectCategories.length === 0) {
+        defectCategories = getDefaultCategories();
+        catModified = true;
+      }
+
+      if (catModified) {
+        await prisma.template.update({
+          where: { id: template.id },
+          data: { defectCategories }
+        });
+        invalidateTemplate();
+      }
 
       return {
         _id: template.id,
@@ -172,6 +200,7 @@ export async function getTemplate(stage) {
         ...stageData,
         stageNames,
         defectCategories,
+        defectCategoryGroups: parseJsonArray(template.defectCategoryGroups),
         modifiedBy: template.modifiedBy,
         createdAt: template.createdAt,
         updatedAt: template.updatedAt,
@@ -180,6 +209,76 @@ export async function getTemplate(stage) {
     TTL.TEMPLATES
   );
 }
+
+function getDefaultCategories() {
+  const names = [
+    'Incorrect Modelling Strategy - Geometry',
+    'Incorrect Modelling Strategy - Material',
+    'Incorrect Modelling Strategy - Loads',
+    'Incorrect Modelling Strategy - BC',
+    'Incorrect Modelling Strategy - Assumptions',
+    'Incorrect Modelling Strategy - Acceptance Criteria',
+    'Incorrect geometry units',
+    'Incorrect meshing',
+    'Defective mesh quality',
+    'Incorrect contact definition',
+    'Incorrect beam/bolt modeling',
+    'RBE/RBE3 are not modeled properly',
+    'Incorrect loads and Boundary Condition',
+    'Incorrect connectivity',
+    'Incorrect degree of element order',
+    'Incorrect element quality',
+    'Incorrect bolt size',
+    'Incorrect elements order',
+    'Incorrect elements quality',
+    'Incorrect end loads',
+    'Too refined mesh at the non critical regions',
+    'Support Gap',
+    'Support Location',
+    'Incorrect Scope',
+    'free pages',
+    'Incorrect mass modeling',
+    'Incorrect material properties',
+    'Incorrect global output request',
+    'Incorrect loadstep creation',
+    'Incorrect output request',
+    'Incorrect Interpretation',
+    'Incorrect Results location and Values',
+    'Incorrect Observation',
+    'Incorrect Naming',
+    'Missing Results Plot',
+    'Incomplete conclusion, suggestions',
+    'Template not followed',
+    'Checklist not followed',
+    'Planning sheet not followed',
+    'Folder Structure not followed',
+    'Name/revision report incorrect',
+    'Typo Textual Error',
+  ];
+  return names.map((name, i) => {
+    let groupName = 'General';
+    if (name.startsWith('Incorrect Modelling Strategy')) {
+      groupName = 'Modelling Strategy';
+    } else if (name.toLowerCase().includes('results') || name.toLowerCase().includes('output')) {
+      groupName = 'Results & Output';
+    } else if (name.toLowerCase().includes('mesh')) {
+      groupName = 'Meshing';
+    }
+    
+    return {
+      _id: `cat_default_${i + 1}`,
+      name,
+      color: '#2196F3',
+      group: groupName,
+      keywords: name
+        .toLowerCase()
+        .replace(/[-/\\]/g, ' ')
+        .split(/\s+/)
+        .filter((w) => w.length > 1),
+    };
+  });
+}
+
 
 export async function resetTemplate() {
   const result = await prisma.template.deleteMany({});
@@ -540,18 +639,24 @@ export async function getAllStages() {
 
 // ── Defect categories ──
 
-export async function updateDefectCategories(defectCategories, userId) {
+export async function updateDefectCategories(defectCategories, userId, defectCategoryGroups) {
   const template = await getTemplateSingleton();
   
   const mappedCategories = defectCategories.map((cat) => ({
+    _id: cat._id || cat.id || newId(),  // ← preserve or generate _id
     name: cat.name,
     color: cat.color || "#2196F3",
+    group: cat.group || "General",      // ← preserve group field
     keywords: Array.isArray(cat.keywords) ? cat.keywords : [],
   }));
 
   const updatedTemplate = await prisma.template.update({
     where: { id: template.id },
-    data: { defectCategories: mappedCategories, modifiedBy: userId }
+    data: { 
+      defectCategories: mappedCategories, 
+      defectCategoryGroups: defectCategoryGroups || [],
+      modifiedBy: userId 
+    }
   });
 
   invalidateTemplate();

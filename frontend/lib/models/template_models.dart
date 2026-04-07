@@ -46,22 +46,29 @@ class DefectCategory {
   DefectCategory({
     required this.id,
     required this.name,
+    this.group = 'General',
     this.keywords = const [],
   });
 
   final String id;
   String name;
+  String group;
   List<String> keywords;
 
-  DefectCategory copy() =>
-      DefectCategory(id: id, name: name, keywords: List<String>.from(keywords));
+  DefectCategory copy() => DefectCategory(
+      id: id,
+      name: name,
+      group: group,
+      keywords: List<String>.from(keywords));
 
   Map<String, dynamic> toJson() {
-    final json = <String, dynamic>{'name': name, 'keywords': keywords};
-    if (id.length == 24 && RegExp(r'^[0-9a-fA-F]{24}$').hasMatch(id)) {
-      json['_id'] = id;
-    }
-    return json;
+    return <String, dynamic>{
+      '_id': id, // always send _id so backend can read/preserve it
+      'id': id, // also send as 'id' for compatibility
+      'name': name,
+      'group': group,
+      'keywords': keywords,
+    };
   }
 }
 

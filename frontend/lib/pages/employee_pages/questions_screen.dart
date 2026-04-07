@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:get/get.dart';
 import 'package:quality_review/controllers/auth_controller.dart';
@@ -122,9 +122,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     // Only update local state - actual save happens through updateCheckpointResponse
     setState(() {
       _selectedDefectCategory[checkpointId] = categoryId;
-      if (severity != null) {
-        _selectedDefectSeverity[checkpointId] = severity;
-      }
+      // Always update severity (including null = None), so clearing works correctly
+      _selectedDefectSeverity[checkpointId] = severity;
     });
   }
 
@@ -233,9 +232,14 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         _defectCategories = {};
         for (final cat in cats) {
           if (cat is Map<String, dynamic>) {
-            final id = (cat['_id'] ?? '').toString();
+            // Accept both '_id' and 'id' field names for compatibility
+            final id =
+                ((cat['_id'] ?? cat['id'] ?? '') as Object).toString();
             if (id.isNotEmpty) {
-              _defectCategories[id] = cat;
+              // Normalise so downstream code always finds '_id'
+              final normalised = Map<String, dynamic>.from(cat);
+              normalised['_id'] = id;
+              _defectCategories[id] = normalised;
             }
           }
         }
@@ -666,15 +670,18 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
           if (answer != null) {
             final categoryId = (answer['categoryId'] ?? '').toString();
-            final severity = (answer['severity'] ?? '').toString();
+            final rawSeverity = (answer['severity'] ?? '').toString();
 
             // Store using the same key that RoleColumn uses (id ?? text)
             if (categoryId.isNotEmpty) {
               _selectedDefectCategory[key] = categoryId;
+            } else {
+              // Clear category if empty (covers the None case)
+              _selectedDefectCategory.remove(key);
             }
-            if (severity.isNotEmpty) {
-              _selectedDefectSeverity[key] = severity;
-            }
+            // Always write severity so that clearing to None takes effect
+            _selectedDefectSeverity[key] =
+                rawSeverity.isEmpty ? null : rawSeverity;
           } else {}
         }
       }

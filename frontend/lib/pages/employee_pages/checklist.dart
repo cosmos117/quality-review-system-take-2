@@ -1802,62 +1802,78 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
             ),
           ],
         ),
-        // Show suggested categories for reviewer role
+        // Show suggested categories for reviewer role as blue pills below remark
         if (widget.role == 'reviewer' && _suggestedCategories.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Suggested Categories:',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: _suggestedCategories.map((cat) {
+              final id = (cat['_id'] ?? '').toString();
+              final name = (cat['name'] ?? '').toString();
+              final isSelected = selectedCategory == id;
+              return GestureDetector(
+                onTap: widget.editable
+                    ? () {
+                        setState(() {
+                          selectedCategory = id;
+                        });
+                        if (widget.checkpointId != null &&
+                            widget.onCategoryAssigned != null) {
+                          widget.onCategoryAssigned!(
+                            widget.checkpointId!,
+                            id,
+                            severity: selectedSeverity,
+                          );
+                        }
+                        _updateAnswer();
+                      }
+                    : null,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? Colors.blue.shade700
+                        : Colors.blue.shade500,
+                    borderRadius: BorderRadius.circular(20),
+                    border: isSelected
+                        ? Border.all(color: Colors.blue.shade900, width: 2)
+                        : null,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color.fromRGBO(33, 150, 243, 0.2),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isSelected) ...[
+                        const Icon(
+                          Icons.check,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: _suggestedCategories.map((cat) {
-                    final id = (cat['_id'] ?? '').toString();
-                    final name = (cat['name'] ?? '').toString();
-                    final isSelected = selectedCategory == id;
-                    return FilterChip(
-                      label: Text(name, style: const TextStyle(fontSize: 12)),
-                      selected: isSelected,
-                      onSelected: widget.editable
-                          ? (_) {
-                              setState(() {
-                                selectedCategory = id;
-                              });
-                              // Update parent state only, no backend call
-                              if (widget.checkpointId != null &&
-                                  widget.onCategoryAssigned != null) {
-                                widget.onCategoryAssigned!(
-                                  widget.checkpointId!,
-                                  id,
-                                  severity: selectedSeverity,
-                                );
-                              }
-                              // Save will happen through updateCheckpointResponse
-                              _updateAnswer();
-                            }
-                          : null,
-                      backgroundColor: Colors.blue.shade50,
-                      selectedColor: Colors.blue.shade200,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
+              );
+            }).toList(),
           ),
         ],
         // Add defect category and severity for reviewer role
@@ -1886,25 +1902,56 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                     items: [
                       const DropdownMenuItem(value: null, child: Text('None')),
                       ...() {
-                        final seen = <String>{};
-                        return widget.availableCategories
-                            .map((cat) {
-                              final id = (cat['_id'] ?? '').toString();
-                              final name = (cat['name'] ?? 'Unknown')
-                                  .toString();
-                              // Filter out empty or duplicate IDs
-                              if (id.isEmpty || seen.contains(id)) return null;
-                              seen.add(id);
-                              return DropdownMenuItem(
-                                value: id,
-                                child: Text(
-                                  name,
-                                  overflow: TextOverflow.ellipsis,
+                        final groups = <String, List<Map<String, dynamic>>>{};
+                        for (final cat in widget.availableCategories) {
+                          final g = (cat['group'] ?? 'General').toString();
+                          groups.putIfAbsent(g, () => []).add(cat);
+                        }
+
+                        final items = <DropdownMenuItem<String>>[];
+                        final sortedGroups = groups.keys.toList()..sort();
+
+                        for (final g in sortedGroups) {
+                          // HEADER (Disabled)
+                          items.add(DropdownMenuItem<String>(
+                            enabled: false,
+                            value: 'HEADER_$g', // Unique dummy value
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              decoration: const BoxDecoration(
+                                border: Border(bottom: BorderSide(color: Colors.black12)),
+                              ),
+                              child: Text(
+                                g.toUpperCase(),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blueAccent,
+                                  letterSpacing: 1.0,
                                 ),
-                              );
-                            })
-                            .whereType<DropdownMenuItem<String>>()
-                            .toList();
+                              ),
+                            ),
+                          ));
+
+                          // CATEGORIES in this group
+                          final sortedCats = groups[g]!..sort((a, b) =>
+                              (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString()));
+                          
+                          for (final cat in sortedCats) {
+                            final id = (cat['_id'] ?? cat['id'] ?? '').toString();
+                            final name = (cat['name'] ?? 'Unknown').toString();
+                            if (id.isEmpty) continue;
+                            
+                            items.add(DropdownMenuItem<String>(
+                              value: id,
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 12),
+                                child: Text(name, overflow: TextOverflow.ellipsis),
+                              ),
+                            ));
+                          }
+                        }
+                        return items;
                       }(),
                     ],
                     onChanged:

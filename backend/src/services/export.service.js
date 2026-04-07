@@ -16,7 +16,7 @@ const safeValue = (val, defaultVal = "") => {
 export const generateMasterExcel = async () => {
   const [users, projects, stages, roles, memberships, templates, projectChecklists] = await Promise.all([
     prisma.user.findMany({ select: { id: true, name: true, email: true } }),
-    prisma.project.findMany({ include: { created_by_user: { select: { name: true, email: true } } } }),
+    prisma.project.findMany({ include: { creator: { select: { name: true, email: true } } } }),
     prisma.stage.findMany({ select: { id: true, project_id: true, stage_name: true, stage_key: true, status: true, conflict_count: true } }),
     prisma.role.findMany({ select: { id: true, role_name: true } }),
     prisma.projectMembership.findMany({ include: { user: { select: { id: true, name: true, email: true } }, role: { select: { role_name: true } } } }),
@@ -196,7 +196,7 @@ export const generateMasterExcel = async () => {
       safeValue(teamLeadersStr), safeValue(executorsStr), safeValue(reviewersStr),
       safeValue(isReviewApplicable), safeValue(overallDefectRate), safeValue(project.status),
       safeValue(projectStages.length),
-      safeValue(project.created_by_user?.name || project.created_by_user?.email || ""),
+      safeValue(project.creator?.name || project.creator?.email || ""),
     ]);
 
     const projectChecklistDocs = projectChecklists.filter((pc) => pc.projectId === projectId);
@@ -301,7 +301,7 @@ export const generateMasterExcel = async () => {
       safeValue(year), safeValue(project.project_no || ""), safeValue(project.project_name),
       safeValue(project.createdAt ? new Date(project.createdAt).toISOString().split("T")[0] : ""),
       safeValue(statusDisplay), safeValue(priorityDisplay),
-      safeValue(project.created_by_user?.name || project.created_by_user?.email || ""),
+      safeValue(project.creator?.name || project.creator?.email || ""),
       safeValue(project.reviewApplicableRemark || "No remark provided"),
     ]);
   }

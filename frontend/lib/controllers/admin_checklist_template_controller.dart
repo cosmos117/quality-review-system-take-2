@@ -8,6 +8,7 @@ class AdminChecklistTemplateController extends GetxController {
 
   final phases = <PhaseModel>[].obs;
   final defectCategories = <DefectCategory>[].obs;
+  final defectCategoryGroups = <String>[].obs;
   final templateOptions = <Map<String, dynamic>>[].obs;
   final selectedTemplateName = RxnString();
   final isLoading = true.obs;
@@ -230,6 +231,9 @@ class AdminChecklistTemplateController extends GetxController {
 
       phases.value = newPhases;
       defectCategories.value = parsedCategories;
+      defectCategoryGroups.value = _ensureList(templateData['defectCategoryGroups'])
+          .map((e) => e.toString())
+          .toList();
 
       if (defectCategories.isEmpty || defectCategories.length <= 4) {
         defectCategories.value = _getDefaultDefectCategories();
@@ -264,13 +268,15 @@ class AdminChecklistTemplateController extends GetxController {
     }
   }
 
-  Future<void> updateDefectCategories(List<DefectCategory> updated) async {
+  Future<void> updateDefectCategories(List<DefectCategory> updated, {List<String>? groups}) async {
     try {
       await templateService.updateDefectCategories(
         updated,
+        categoryGroups: groups ?? defectCategoryGroups.toList(),
         templateName: selectedTemplateName.value,
       );
       defectCategories.value = updated;
+      if (groups != null) defectCategoryGroups.value = groups;
       Get.snackbar(
         'Saved',
         'Defect categories updated',
@@ -448,6 +454,7 @@ class AdminChecklistTemplateController extends GetxController {
           return DefectCategory(
             id: (catData['_id'] ?? '').toString(),
             name: (catData['name'] ?? '').toString(),
+            group: (catData['group'] ?? 'General').toString(),
             keywords:
                 (catData['keywords'] as List<dynamic>?)
                     ?.map((k) => k.toString())
@@ -460,369 +467,82 @@ class AdminChecklistTemplateController extends GetxController {
   }
 }
 
+/// Auto-generates keywords from a category name by splitting on spaces,
+/// hyphens and slashes, lowercasing, deduplicating, and filtering short tokens.
+List<String> _autoKeywords(String name) {
+  return name
+      .toLowerCase()
+      .replaceAll(RegExp(r'[-/\\]'), ' ')
+      .split(RegExp(r'\s+'))
+      .map((w) => w.trim())
+      .where((w) => w.length > 1)
+      .toSet()
+      .toList();
+}
+
 List<DefectCategory> _getDefaultDefectCategories() {
-  return [
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_1',
-      name: 'Incorrect Modelling Strategy - Geometry',
-      keywords: [
-        'geometry',
-        'modelling',
-        'model',
-        'incorrect strategy',
-        'geometric',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_2',
-      name: 'Incorrect Modelling Strategy - Material',
-      keywords: [
-        'material',
-        'modelling',
-        'properties',
-        'material properties',
-        'incorrect',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_3',
-      name: 'Incorrect Modelling Strategy - Loads',
-      keywords: [
-        'loads',
-        'loading',
-        'force',
-        'boundary condition',
-        'load case',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_4',
-      name: 'Incorrect Modelling Strategy - BC',
-      keywords: ['bc', 'boundary condition', 'constraint', 'support', 'fixed'],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_5',
-      name: 'Incorrect Modelling Strategy - Assumptions',
-      keywords: [
-        'assumptions',
-        'assumption',
-        'simplification',
-        'unclear',
-        'not documented',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_6',
-      name: 'Incorrect Modelling Strategy - Acceptance Criteria',
-      keywords: [
-        'acceptance',
-        'criteria',
-        'acceptance criteria',
-        'requirements',
-        'specification',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_7',
-      name: 'Incorrect geometry units',
-      keywords: ['units', 'geometry units', 'mm', 'cm', 'meter', 'measurement'],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_8',
-      name: 'Incorrect meshing',
-      keywords: ['meshing', 'mesh', 'element', 'discretization', 'refinement'],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_9',
-      name: 'Defective mesh quality',
-      keywords: [
-        'mesh quality',
-        'defective',
-        'aspect ratio',
-        'distorted',
-        'poor quality',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_10',
-      name: 'Incorrect contact definition',
-      keywords: [
-        'contact',
-        'contact definition',
-        'interface',
-        'interaction',
-        'friction',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_11',
-      name: 'Incorrect beam/bolt modeling',
-      keywords: ['beam', 'bolt', 'modeling', 'connection', 'fastener'],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_12',
-      name: 'RBE/RBE3 are not modeled properly',
-      keywords: ['rbe', 'rbe3', 'rigid element', 'constraint', 'coupling'],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_13',
-      name: 'Incorrect loads and Boundary Condition',
-      keywords: [
-        'loads',
-        'boundary condition',
-        'load application',
-        'force',
-        'constraint',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_14',
-      name: 'Incorrect connectivity',
-      keywords: [
-        'connectivity',
-        'nodes',
-        'element connectivity',
-        'connection',
-        'incorrect',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_15',
-      name: 'Incorrect degree of element order',
-      keywords: [
-        'degree of element',
-        'order',
-        'linear',
-        'quadratic',
-        'polynomial',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_16',
-      name: 'Incorrect element quality',
-      keywords: [
-        'element quality',
-        'distorted',
-        'skewed',
-        'aspect ratio',
-        'defective',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_17',
-      name: 'Incorrect bolt size',
-      keywords: ['bolt', 'size', 'diameter', 'incorrect', 'dimension'],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_18',
-      name: 'Incorrect elements order',
-      keywords: ['elements', 'order', 'sequence', 'incorrect', 'wrong'],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_19',
-      name: 'Incorrect elements quality',
-      keywords: ['elements', 'quality', 'poor', 'defective', 'invalid'],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_20',
-      name: 'Incorrect end loads',
-      keywords: ['end loads', 'terminal loads', 'force', 'moment', 'incorrect'],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_21',
-      name: 'Too refined mesh at the non critical regions',
-      keywords: [
-        'refined mesh',
-        'over meshing',
-        'unnecessary refinement',
-        'non critical',
-        'wasteful',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_22',
-      name: 'Support Gap',
-      keywords: [
-        'support',
-        'gap',
-        'missing support',
-        'incomplete support',
-        'void',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_23',
-      name: 'Support Location',
-      keywords: [
-        'support',
-        'location',
-        'positioning',
-        'placement',
-        'incorrect position',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_24',
-      name: 'Incorrect Scope',
-      keywords: ['scope', 'boundary', 'region', 'area', 'out of scope'],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_25',
-      name: 'free pages',
-      keywords: ['free pages', 'blank pages', 'empty', 'unneeded'],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_26',
-      name: 'Incorrect mass modeling',
-      keywords: ['mass', 'mass modeling', 'density', 'weight', 'incorrect'],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_27',
-      name: 'Incorrect material properties',
-      keywords: [
-        'material',
-        'properties',
-        'young modulus',
-        'poisson',
-        'density',
-        'incorrect',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_28',
-      name: 'Incorrect global output request',
-      keywords: [
-        'global output',
-        'output request',
-        'results request',
-        'missing output',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_29',
-      name: 'Incorrect loadstep creation',
-      keywords: [
-        'loadstep',
-        'load step',
-        'step creation',
-        'load case',
-        'step definition',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_30',
-      name: 'Incorrect output request',
-      keywords: ['output', 'request', 'results', 'incorrect', 'missing'],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_31',
-      name: 'Incorrect Interpretation',
-      keywords: [
-        'interpretation',
-        'analysis',
-        'conclusion',
-        'incorrect',
-        'misunderstood',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_32',
-      name: 'Incorrect Results location and Values',
-      keywords: [
-        'results',
-        'values',
-        'location',
-        'incorrect',
-        'wrong',
-        'mismatch',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_33',
-      name: 'Incorrect Observation',
-      keywords: ['observation', 'comment', 'note', 'incorrect', 'inaccurate'],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_34',
-      name: 'Incorrect Naming',
-      keywords: ['naming', 'name', 'label', 'title', 'incorrect', 'misspelled'],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_35',
-      name: 'Missing Results Plot',
-      keywords: ['results', 'plot', 'graph', 'chart', 'missing', 'absent'],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_36',
-      name: 'Incomplete conclusion, suggestions',
-      keywords: [
-        'conclusion',
-        'suggestions',
-        'incomplete',
-        'missing',
-        'recommendations',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_37',
-      name: 'Template not followed',
-      keywords: [
-        'template',
-        'followed',
-        'not followed',
-        'deviation',
-        'non compliance',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_38',
-      name: 'Checklist not followed',
-      keywords: [
-        'checklist',
-        'followed',
-        'not followed',
-        'incomplete',
-        'skipped',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_39',
-      name: 'Planning sheet not followed',
-      keywords: [
-        'planning sheet',
-        'plan',
-        'not followed',
-        'deviation',
-        'unplanned',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_40',
-      name: 'Folder Structure not followed',
-      keywords: [
-        'folder structure',
-        'directory',
-        'organization',
-        'not followed',
-        'incorrect',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_41',
-      name: 'Name/revision report incorrect',
-      keywords: [
-        'name',
-        'revision',
-        'report',
-        'incorrect',
-        'wrong',
-        'mismatch',
-      ],
-    ),
-    DefectCategory(
-      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_42',
-      name: 'Typo Textual Error',
-      keywords: ['typo', 'spelling', 'grammar', 'text', 'error', 'mistake'],
-    ),
+  final names = [
+    'Incorrect Modelling Strategy - Geometry',
+    'Incorrect Modelling Strategy - Material',
+    'Incorrect Modelling Strategy - Loads',
+    'Incorrect Modelling Strategy - BC',
+    'Incorrect Modelling Strategy - Assumptions',
+    'Incorrect Modelling Strategy - Acceptance Criteria',
+    'Incorrect geometry units',
+    'Incorrect meshing',
+    'Defective mesh quality',
+    'Incorrect contact definition',
+    'Incorrect beam/bolt modeling',
+    'RBE/RBE3 are not modeled properly',
+    'Incorrect loads and Boundary Condition',
+    'Incorrect connectivity',
+    'Incorrect degree of element order',
+    'Incorrect element quality',
+    'Incorrect bolt size',
+    'Incorrect elements order',
+    'Incorrect elements quality',
+    'Incorrect end loads',
+    'Too refined mesh at the non critical regions',
+    'Support Gap',
+    'Support Location',
+    'Incorrect Scope',
+    'free pages',
+    'Incorrect mass modeling',
+    'Incorrect material properties',
+    'Incorrect global output request',
+    'Incorrect loadstep creation',
+    'Incorrect output request',
+    'Incorrect Interpretation',
+    'Incorrect Results location and Values',
+    'Incorrect Observation',
+    'Incorrect Naming',
+    'Missing Results Plot',
+    'Incomplete conclusion, suggestions',
+    'Template not followed',
+    'Checklist not followed',
+    'Planning sheet not followed',
+    'Folder Structure not followed',
+    'Name/revision report incorrect',
+    'Typo Textual Error',
   ];
+  return names.asMap().entries.map((entry) {
+    final i = entry.key + 1;
+    final name = entry.value;
+    
+    String groupName = 'General';
+    if (name.startsWith('Incorrect Modelling Strategy')) {
+      groupName = 'Modelling Strategy';
+    } else if (name.toLowerCase().contains('results') || name.toLowerCase().contains('output')) {
+      groupName = 'Results & Output';
+    } else if (name.toLowerCase().contains('mesh')) {
+      groupName = 'Meshing';
+    }
+
+    return DefectCategory(
+      id: 'cat_${DateTime.now().microsecondsSinceEpoch}_$i',
+      name: name,
+      group: groupName,
+      keywords: _autoKeywords(name),
+    );
+  }).toList();
 }

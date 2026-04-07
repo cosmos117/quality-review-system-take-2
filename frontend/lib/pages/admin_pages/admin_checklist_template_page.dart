@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../models/template_models.dart';
 import '../../controllers/admin_checklist_template_controller.dart';
@@ -82,18 +82,21 @@ class AdminChecklistTemplatePage
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF4CAF50),
                             foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                           ),
                           onPressed: () async {
                             await Get.dialog(
                               _DefectCategoryManager(
                                 categories: c.defectCategories.toList(),
-                                onSave: (updated) =>
-                                    c.updateDefectCategories(updated),
+                                controller: c,
+                                onSave: (updated, groups) =>
+                                    c.updateDefectCategories(updated, groups: groups),
                               ),
                             );
                           },
                           icon: const Icon(Icons.category),
-                          label: const Text('Manage Categories'),
+                          label: const Text('Manage Defect Categories'),
                         ),
                       ],
                     ),
@@ -1688,10 +1691,12 @@ List<DefectCategory> _getDefaultDefectCategories() {
 
 class _DefectCategoryManager extends StatefulWidget {
   final List<DefectCategory> categories;
-  final Future<void> Function(List<DefectCategory>) onSave;
+  final AdminChecklistTemplateController controller;
+  final Future<void> Function(List<DefectCategory>, List<String>) onSave;
 
   const _DefectCategoryManager({
     required this.categories,
+    required this.controller,
     required this.onSave,
   });
 
@@ -1699,217 +1704,758 @@ class _DefectCategoryManager extends StatefulWidget {
   State<_DefectCategoryManager> createState() => _DefectCategoryManagerState();
 }
 
-class _DefectCategoryManagerState extends State<_DefectCategoryManager> {
+class _DefectCategoryManagerState extends State<_DefectCategoryManager>
+    with SingleTickerProviderStateMixin {
   late List<DefectCategory> _categories;
   bool _isSaving = false;
+  final _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+
+  // Category Groups tab state
+  late TabController _tabController;
+  String? _selectedGroup; // which group is shown in the right panel
+
+  // â”€â”€ colours â”€â”€
+  static const Color _blue = Color(0xFF2196F3);
+  static const Color _divider = Color(0xFFE0E0E0);
 
   @override
   void initState() {
     super.initState();
     _categories = widget.categories.map((c) => c.copy()).toList();
+    _pendingEmptyGroups.addAll(widget.controller.defectCategoryGroups);
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() => setState(() {}));
+    _searchCtrl.addListener(
+        () => setState(() => _searchQuery = _searchCtrl.text.toLowerCase()));
   }
 
-  Future<void> _addCategory() async {
-    final nameController = TextEditingController();
-    final keywordsController = TextEditingController();
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
-    final newCategory = await showDialog<DefectCategory>(
+  // â”€â”€ helpers â”€â”€
+  List<String> get _groups {
+    final s = _categories.map((c) => c.group).toSet().toList()..sort();
+    return s;
+  }
+
+  List<String> _autoKeywords(String name) => name
+      .toLowerCase()
+      .replaceAll(RegExp(r'[-/\\]'), ' ')
+      .split(RegExp(r'\s+'))
+      .map((w) => w.trim())
+      .where((w) => w.length > 1)
+      .toSet()
+      .toList();
+
+  // â”€â”€ dialogs â”€â”€
+  Future<String?> _promptGroupName({String? initial}) async {
+    final ctrl = TextEditingController(text: initial ?? '');
+    return showDialog<String>(
       context: context,
-      builder: (ctx) {
+      builder: (ctx) => AlertDialog(
+        title: Text(initial == null ? 'New Group' : 'Rename Group'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'e.g. Modelling Strategy',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: _blue, foregroundColor: Colors.white),
+            onPressed: () {
+              final v = ctrl.text.trim();
+              if (v.isNotEmpty) Navigator.pop(ctx, v);
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addNewCategory({required String initialGroup}) async {
+    final nameCtrl = TextEditingController();
+    String currentGroup = initialGroup;
+    final groups = _allGroupNames(_groups); // helper getter
+
+    final cat = await showDialog<DefectCategory>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setSt) {
+        final kws = _autoKeywords(nameCtrl.text);
         return AlertDialog(
-          title: const Text('Add Category'),
+          title: const Text('Add New Category'),
           content: SizedBox(
             width: 480,
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TextField(
-                  controller: nameController,
+                  controller: nameCtrl,
+                  autofocus: true,
+                  onChanged: (_) => setSt(() {}),
                   decoration: const InputDecoration(
                     labelText: 'Category name',
+                    hintText: 'e.g. Incorrect Meshing',
                     border: OutlineInputBorder(),
                     isDense: true,
                   ),
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: keywordsController,
+                const SizedBox(height: 16),
+                 DropdownButtonFormField<String>(
+                  value: groups.contains(currentGroup) ? currentGroup : (groups.isNotEmpty ? groups.first : 'General'),
                   decoration: const InputDecoration(
-                    labelText: 'Keywords (comma-separated)',
+                    labelText: 'Group',
                     border: OutlineInputBorder(),
                     isDense: true,
                   ),
+                  items: [
+                    ...groups.map((g) => DropdownMenuItem(value: g, child: Text(g))),
+                    if (!groups.contains('General'))
+                      const DropdownMenuItem(value: 'General', child: Text('General')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) setSt(() => currentGroup = v);
+                  },
                 ),
+                if (nameCtrl.text.trim().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('Keywords (auto-generated):', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 4,
+                    children: kws.map((k) => Chip(
+                      label: Text(k, style: const TextStyle(fontSize: 11)),
+                      backgroundColor: _blue.withValues(alpha: 0.1),
+                      side: BorderSide.none,
+                      padding: EdgeInsets.zero,
+                    )).toList(),
+                  ),
+                ],
               ],
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2196F3),
-                foregroundColor: Colors.white,
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: _blue, foregroundColor: Colors.white),
               onPressed: () {
-                final name = nameController.text.trim();
-                if (name.isEmpty) {
-                  Navigator.pop(ctx);
-                  return;
-                }
-                final keywords = keywordsController.text
-                    .split(',')
-                    .map((e) => e.trim())
-                    .where((e) => e.isNotEmpty)
-                    .toList();
-                final cat = DefectCategory(
+                final name = nameCtrl.text.trim();
+                if (name.isEmpty) return;
+                Navigator.pop(ctx, DefectCategory(
                   id: 'cat_${DateTime.now().microsecondsSinceEpoch}',
                   name: name,
-                  keywords: keywords,
-                );
-                Navigator.pop(ctx, cat);
+                  group: currentGroup,
+                  keywords: _autoKeywords(name),
+                ));
               },
               child: const Text('Add'),
             ),
           ],
         );
+      }),
+    );
+    if (cat != null) setState(() => _categories.add(cat));
+  }
+
+  /// Let the user pick from master list to assign to a group
+  Future<void> _addExistingToGroup(String group) async {
+    final notInGroup = _categories.where((c) => c.group != group).toList();
+    if (notInGroup.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All categories are already in this group.')),
+      );
+      return;
+    }
+    final picked = await showDialog<List<DefectCategory>>(
+      context: context,
+      builder: (ctx) {
+        final selected = <String>{};
+        return StatefulBuilder(builder: (ctx, setSt) => AlertDialog(
+          title: const Text('Add Existing Categories'),
+          content: SizedBox(
+            width: 440,
+            height: 400,
+            child: ListView(
+              children: notInGroup.map((c) => CheckboxListTile(
+                title: Text(c.name),
+                subtitle: Text('Currently: ${c.group}', style: const TextStyle(fontSize: 11)),
+                value: selected.contains(c.id),
+                onChanged: (v) => setSt(() => v! ? selected.add(c.id) : selected.remove(c.id)),
+              )).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: _blue, foregroundColor: Colors.white),
+              onPressed: () => Navigator.pop(ctx,
+                notInGroup.where((c) => selected.contains(c.id)).toList()),
+              child: const Text('Add Selected'),
+            ),
+          ],
+        ));
       },
     );
-
-    if (newCategory != null) {
+    if (picked != null && picked.isNotEmpty) {
       setState(() {
-        _categories.add(newCategory);
+        for (final c in picked) {
+          c.group = group;
+        }
       });
     }
+  }
+
+  Future<void> _editCategory(DefectCategory cat) async {
+    final nameCtrl = TextEditingController(text: cat.name);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Category'),
+        content: SizedBox(
+          width: 400,
+          child: TextField(
+            controller: nameCtrl,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Category name',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && nameCtrl.text.trim().isNotEmpty) {
+      setState(() {
+        cat.name = nameCtrl.text.trim();
+        cat.keywords = _autoKeywords(cat.name);
+      });
+    }
+  }
+
+  void _deleteCategory(DefectCategory cat) {
+    setState(() => _categories.remove(cat));
   }
 
   void _loadDefaultCategories() {
     setState(() {
       _categories = _getDefaultDefectCategories();
+      _selectedGroup = null;
     });
   }
 
-  void _deleteCategory(int index) {
-    setState(() {
-      _categories.removeAt(index);
-    });
+  // â”€â”€ Master categories tab â”€â”€
+  Widget _buildMasterTab() {
+    final q = _searchQuery;
+    final filtered = _categories.where((c) =>
+      q.isEmpty || c.name.toLowerCase().contains(q) || c.group.toLowerCase().contains(q)
+    ).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Add button row
+        Padding(
+          padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (_categories.isEmpty)
+                TextButton.icon(
+                  onPressed: _loadDefaultCategories,
+                  icon: const Icon(Icons.download_rounded),
+                  label: const Text('Load Defaults'),
+                ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _blue,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => _addNewCategory(initialGroup: 'General'),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Add New Category'),
+              ),
+            ],
+          ),
+        ),
+        // List
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(
+                  child: Text(
+                    q.isEmpty ? 'No categories yet. Click "Add New Category" or "Load Defaults".' : 'No results for "$q".',
+                    style: const TextStyle(color: Colors.grey),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              : ListView.separated(
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1, color: _divider),
+                  itemBuilder: (_, i) {
+                    final cat = filtered[i];
+                    return ListTile(
+                      dense: true,
+                      title: Text(cat.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                      subtitle: Text(
+                        cat.group,
+                        style: TextStyle(fontSize: 11, color: _blue.withValues(alpha: 0.8)),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, size: 17, color: Colors.grey),
+                            tooltip: 'Edit',
+                            onPressed: () => _editCategory(cat),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 17, color: Colors.redAccent),
+                            tooltip: 'Delete',
+                            onPressed: () => _deleteCategory(cat),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  // â”€â”€ Category Groups tab â”€â”€
+  Widget _buildGroupsTab() {
+    final groups = _groups;
+    // select first group by default
+    if (_selectedGroup == null && groups.isNotEmpty) {
+      _selectedGroup = groups.first;
+    }
+    if (_selectedGroup != null && !groups.contains(_selectedGroup)) {
+      _selectedGroup = groups.isNotEmpty ? groups.first : null;
+    }
+
+    final q = _searchQuery;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // â”€â”€ Left panel: group list â”€â”€
+        Container(
+          width: 230,
+          decoration: const BoxDecoration(
+            border: Border(right: BorderSide(color: _divider)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  children: [
+                    const Text('Category Groups',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const Spacer(),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(4),
+                      onTap: () async {
+                        final name = await _promptGroupName();
+                        if (name != null) {
+                          setState(() {
+                            // Create a placeholder category so the group appears
+                            // (groups are derived from categories, so we need at least one)
+                            _selectedGroup = name;
+                            // We don't auto-create a category; the group shows as empty
+                            // until the user adds one from the right panel.
+                            // We track "pending empty groups" with a ghost set.
+                            _pendingEmptyGroups.add(name);
+                          });
+                        }
+                      },
+                      child: const Icon(Icons.add, size: 20, color: Colors.black54),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: _divider),
+              // Group items
+              Expanded(
+                child: ListView(
+                  children: [
+                    ..._allGroupNames(groups).map((g) {
+                      final count = _categories.where((c) => c.group == g).length;
+                      final isSelected = _selectedGroup == g;
+                      final matchesSearch = q.isEmpty ||
+                          g.toLowerCase().contains(q) ||
+                          _categories.any((c) => c.group == g && c.name.toLowerCase().contains(q));
+                      if (!matchesSearch) return const SizedBox.shrink();
+                      return InkWell(
+                        onTap: () => setState(() => _selectedGroup = g),
+                        child: Container(
+                          color: isSelected ? _blue.withValues(alpha: 0.07) : null,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(g,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                          color: isSelected ? _blue : Colors.black87,
+                                        )),
+                                    Text('$count ${count == 1 ? "category" : "categories"}',
+                                        style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuButton<String>(
+                                icon: const Icon(Icons.more_vert, size: 16, color: Colors.grey),
+                                itemBuilder: (_) => [
+                                  const PopupMenuItem(value: 'rename', child: Text('Rename')),
+                                  const PopupMenuItem(value: 'delete', child: Text('Delete Group', style: TextStyle(color: Colors.red))),
+                                ],
+                                onSelected: (action) async {
+                                  if (action == 'rename') {
+                                    final newName = await _promptGroupName(initial: g);
+                                    if (newName != null && newName != g) {
+                                      setState(() {
+                                        for (final c in _categories) {
+                                          if (c.group == g) c.group = newName;
+                                        }
+                                        _pendingEmptyGroups.remove(g);
+                                        _pendingEmptyGroups.remove(newName);
+                                        if (_selectedGroup == g) _selectedGroup = newName;
+                                      });
+                                    }
+                                  } else if (action == 'delete') {
+                                    final catCount = _categories.where((c) => c.group == g).length;
+                                    String? deleteAction;
+                                    
+                                    if (catCount > 0) {
+                                      deleteAction = await showDialog<String>(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                          title: const Text('Delete Group'),
+                                          content: Text('This group contains $catCount category(ies). What would you like to do?'),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(ctx, 'move'),
+                                              child: const Text('Move to General'),
+                                            ),
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(ctx, 'delete'),
+                                              child: const Text('Delete All', style: TextStyle(color: Colors.red)),
+                                            ),
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(ctx),
+                                              child: const Text('Cancel'),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    } else {
+                                      // Empty group, just delete
+                                      deleteAction = 'delete';
+                                    }
+
+                                    if (deleteAction == 'move') {
+                                      setState(() {
+                                        for (final c in _categories) {
+                                          if (c.group == g) c.group = 'General';
+                                        }
+                                        _pendingEmptyGroups.remove(g);
+                                        if (_selectedGroup == g) _selectedGroup = null;
+                                      });
+                                    } else if (deleteAction == 'delete') {
+                                      setState(() {
+                                        _categories.removeWhere((c) => c.group == g);
+                                        _pendingEmptyGroups.remove(g);
+                                        if (_selectedGroup == g) _selectedGroup = null;
+                                      });
+                                    }
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // â”€â”€ Right panel: categories inside selected group â”€â”€
+        Expanded(
+          child: _selectedGroup == null
+              ? const Center(child: Text('Select or create a group', style: TextStyle(color: Colors.grey)))
+              : _buildGroupDetail(_selectedGroup!, q),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGroupDetail(String group, String q) {
+    final inGroup = _categories.where((c) {
+      if (c.group != group) return false;
+      if (q.isNotEmpty && !c.name.toLowerCase().contains(q)) return false;
+      return true;
+    }).toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Right panel header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+          child: Row(
+            children: [
+              Text(group,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+              const Spacer(),
+              // Add Existing
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  textStyle: const TextStyle(fontSize: 12),
+                ),
+                onPressed: () => _addExistingToGroup(group),
+                icon: const Icon(Icons.dynamic_feed_rounded, size: 16),
+                label: const Text('Add Existing'),
+              ),
+              const SizedBox(width: 8),
+              // Add New
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: _blue, foregroundColor: Colors.white),
+                onPressed: () => _addNewCategory(initialGroup: _selectedGroup!),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Add New Category'),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: _divider),
+        // Category list in group
+        Expanded(
+          child: inGroup.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No categories in this group yet.',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                )
+              : ListView.separated(
+                  itemCount: inGroup.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1, color: _divider),
+                  itemBuilder: (_, i) {
+                    final cat = inGroup[i];
+                    return ListTile(
+                      dense: true,
+                      title: Text(cat.name,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                      subtitle: cat.keywords.isNotEmpty
+                          ? Text(
+                              cat.keywords.join(', '),
+                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            )
+                          : null,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, size: 17, color: Colors.grey),
+                            tooltip: 'Edit',
+                            onPressed: () => _editCategory(cat),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 17, color: Colors.redAccent),
+                            tooltip: 'Remove from group (moves to General)',
+                            onPressed: () => setState(() => cat.group = 'General'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  // Track groups that have no categories yet (user created but hasn't added to)
+  final Set<String> _pendingEmptyGroups = {};
+
+  List<String> _allGroupNames(List<String> categoriesGroups) {
+    final all = {...categoriesGroups, ..._pendingEmptyGroups}.toList()..sort();
+    return all;
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Manage Defect Categories'),
-      content: SizedBox(
-        width: 700,
-        height: 500,
+    final isGroupsTab = _tabController.index == 1;
+    final searchHint = isGroupsTab
+        ? 'Search groups and grouped categories'
+        : 'Search master categories...';
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 60, vertical: 40),
+      child: SizedBox(
+        width: 960,
+        height: 640,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: _categories.isEmpty
-                  ? const Center(
-                      child: Text('No categories yet. Add one to get started.'),
-                    )
-                  : ListView.builder(
-                      itemCount: _categories.length,
-                      itemBuilder: (ctx, i) {
-                        final cat = _categories[i];
-                        return Card(
-                          margin: const EdgeInsets.symmetric(
-                            vertical: 4,
-                            horizontal: 0,
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: ListTile(
-                              title: Text(
-                                cat.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              subtitle: cat.keywords.isNotEmpty
-                                  ? Text(
-                                      'Keywords: ${cat.keywords.join(", ")}',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey,
-                                      ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    )
-                                  : null,
-                              leading: Container(
-                                width: 24,
-                                height: 24,
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.shade300,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(
-                                  Icons.delete,
-                                  color: Colors.red,
-                                ),
-                                onPressed: () => _deleteCategory(i),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+            // â”€â”€ Title bar â”€â”€
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 16, 0),
+              child: Row(
+                children: [
+                  const Text('Manage Defect Categories',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: _isSaving ? null : () => Navigator.pop(context),
+                  ),
+                ],
+              ),
             ),
-            const Divider(),
-            Wrap(
-              spacing: 8,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: _isSaving ? null : _loadDefaultCategories,
-                  icon: const Icon(Icons.download),
-                  label: const Text('Load Default Categories'),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _isSaving ? null : _addCategory,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Category'),
-                ),
+
+            // â”€â”€ Tabs â”€â”€
+            TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: 'Master Categories'),
+                Tab(text: 'Category Groups'),
               ],
+              labelColor: _blue,
+              unselectedLabelColor: Colors.grey,
+              indicatorColor: _blue,
+              indicatorWeight: 2.5,
+            ),
+            const Divider(height: 1, color: _divider),
+
+            // â”€â”€ Search bar (shared) â”€â”€
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: TextField(
+                controller: _searchCtrl,
+                decoration: InputDecoration(
+                  hintText: searchHint,
+                  prefixIcon: const Icon(Icons.search, size: 20, color: Colors.grey),
+                  filled: true,
+                  fillColor: const Color(0xFFF5F5F5),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: _divider),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: _divider),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: _blue, width: 1.5),
+                  ),
+                ),
+              ),
+            ),
+
+            // â”€â”€ Tab content â”€â”€
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildMasterTab(),
+                    _buildGroupsTab(),
+                  ],
+                ),
+              ),
+            ),
+
+            // â”€â”€ Bottom action bar â”€â”€
+            const Divider(height: 1, color: _divider),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  if (_categories.isEmpty)
+                    TextButton.icon(
+                      onPressed: _isSaving ? null : _loadDefaultCategories,
+                      icon: const Icon(Icons.download_rounded, size: 16),
+                      label: const Text('Load Defaults'),
+                    ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _isSaving ? null : () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _blue,
+                      foregroundColor: Colors.white,
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    ),
+                    onPressed: _isSaving
+                        ? null
+                        : () async {
+                            setState(() => _isSaving = true);
+                            try {
+                              final allGroups = _allGroupNames(_groups);
+                              await widget.onSave(_categories, allGroups);
+                              if (mounted) Navigator.pop(context);
+                            } finally {
+                              if (mounted) setState(() => _isSaving = false);
+                            }
+                          },
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text('Save Changes'),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _isSaving ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF2196F3),
-            foregroundColor: Colors.white,
-          ),
-          onPressed: _isSaving
-              ? null
-              : () async {
-                  setState(() => _isSaving = true);
-                  try {
-                    await widget.onSave(_categories);
-                    if (mounted) Navigator.pop(context);
-                  } finally {
-                    if (mounted) setState(() => _isSaving = false);
-                  }
-                },
-          child: _isSaving
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Save'),
-        ),
-      ],
     );
   }
 }

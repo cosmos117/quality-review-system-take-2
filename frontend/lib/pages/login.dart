@@ -34,7 +34,6 @@ class LoginController extends GetxController {
 
       // Preload projects for employees after navigation (non-blocking)
       if (!isAdmin) {
-        // Instant focus
         WidgetsBinding.instance.addPostFrameCallback((_) {
           auth.preloadEmployeeProjects();
         });
@@ -52,13 +51,74 @@ class LoginController extends GetxController {
 }
 
 // ---------- Login Screen ----------
-class LoginPage extends StatelessWidget {
+class LoginPage extends StatefulWidget {
   LoginPage({super.key});
 
-  final LoginController controller = Get.find<LoginController>();
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
 
-  final TextEditingController email = TextEditingController();
-  final TextEditingController password = TextEditingController();
+class _LoginPageState extends State<LoginPage> {
+  final LoginController controller = Get.find<LoginController>();
+  bool _obscurePassword = true;
+
+  // Teal color matching the reference image
+  static const Color _teal = Color(0xFF2A9D8F);
+
+  /// Builds a labelled text field that matches the reference screenshot:
+  ///  • Label text sits ABOVE the box
+  ///  • Teal outlined border (thicker when focused)
+  ///  • Hint text inside the box
+  ///  • Prefix icon in teal
+  Widget _buildField({
+    required String label,
+    required String hint,
+    required IconData prefixIcon,
+    required TextEditingController textController,
+    bool obscure = false,
+    Widget? suffix,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Label above the box ──
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF333333),
+          ),
+        ),
+        const SizedBox(height: 6),
+        // ── Text field ──
+        TextField(
+          controller: textController,
+          obscureText: obscure,
+          cursorColor: _teal,
+          style: const TextStyle(fontSize: 14),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(color: Color(0xFFAAAAAA), fontSize: 14),
+            prefixIcon: Icon(prefixIcon, color: _teal, size: 20),
+            suffixIcon: suffix,
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding:
+                const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFCCCCCC), width: 1.5),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: _teal, width: 2),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,18 +127,14 @@ class LoginPage extends StatelessWidget {
         color: Colors.white,
         child: Center(
           child: Container(
-            height: 500,
+            height: 520,
             width: MediaQuery.of(context).size.width / 3.3,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
               boxShadow: [
                 BoxShadow(
-                  color: const Color.fromARGB(
-                    255,
-                    0,
-                    59,
-                    236,
-                  ).withValues(alpha: 0.3),
+                  color: const Color.fromARGB(255, 0, 59, 236)
+                      .withValues(alpha: 0.3),
                   spreadRadius: 10,
                   blurRadius: 310,
                   offset: const Offset(0, 3),
@@ -88,69 +144,80 @@ class LoginPage extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(30),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 50),
-                  const Text(
-                    "Welcome Back",
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 45,
-                      fontWeight: FontWeight.w900,
+                  const SizedBox(height: 30),
+                  // ── Title ──
+                  const Center(
+                    child: Text(
+                      "Welcome Back",
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 45,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
-                  const Text(
-                    "Sign in to your account to continue",
-                    style: TextStyle(color: Color.fromARGB(255, 37, 37, 37)),
+                  const Center(
+                    child: Text(
+                      "Sign in to your account to continue",
+                      style: TextStyle(color: Color.fromARGB(255, 37, 37, 37)),
+                    ),
                   ),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 36),
 
-                  // --- Email Field ---
-                  TextField(
-                    controller: controller.emailController,
-                    cursorColor: Colors.blue,
-                    cursorHeight: 20,
-                    decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.email),
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      labelText: "Email",
-                      border: OutlineInputBorder(borderSide: BorderSide.none),
-                    ),
+                  // ── Email Field ──
+                  _buildField(
+                    label: 'Email',
+                    hint: 'Enter your email',
+                    prefixIcon: Icons.email_outlined,
+                    textController: controller.emailController,
                   ),
                   const SizedBox(height: 20),
-                  TextField(
-                    controller: controller.passwordController,
-                    cursorColor: Colors.blue,
-                    cursorHeight: 20,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.key),
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      labelText: "Password",
-                      border: OutlineInputBorder(borderSide: BorderSide.none),
+
+                  // ── Password Field ──
+                  _buildField(
+                    label: 'Password',
+                    hint: 'Enter your password',
+                    prefixIcon: Icons.lock_outline,
+                    textController: controller.passwordController,
+                    obscure: _obscurePassword,
+                    suffix: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        color: Colors.grey,
+                        size: 20,
+                      ),
+                      onPressed: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 36),
 
-                  // --- Login Button ---
+                  // ── Login Button ──
                   Obx(() {
                     if (controller.isLoading.value) {
-                      return const CircularProgressIndicator();
+                      return const Center(child: CircularProgressIndicator());
                     }
                     return GestureDetector(
                       onTap: controller.login,
                       child: Container(
-                        height: 42,
-                        width: MediaQuery.of(context).size.width / 3.1,
+                        height: 48,
+                        width: double.infinity,
                         decoration: BoxDecoration(
                           color: Colors.black,
-                          borderRadius: BorderRadius.circular(5),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Center(
                           child: Text(
                             "Login",
-                            style: TextStyle(color: Colors.white, fontSize: 20),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),

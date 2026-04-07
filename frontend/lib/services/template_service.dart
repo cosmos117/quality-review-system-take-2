@@ -1,4 +1,4 @@
-﻿import 'package:get/get.dart';
+import 'package:get/get.dart';
 import '../config/api_config.dart';
 import '../controllers/auth_controller.dart';
 import 'api_cache.dart';
@@ -447,6 +447,7 @@ class TemplateService {
   /// Update defect categories in template
   Future<void> updateDefectCategories(
     List<dynamic> categories, {
+    List<String>? categoryGroups,
     String? templateName,
   }) async {
     try {
@@ -454,6 +455,7 @@ class TemplateService {
 
       final body = {
         'defectCategories': categories.map((c) => c.toJson()).toList(),
+        'defectCategoryGroups': categoryGroups ?? [],
       };
 
       if (templateName != null && templateName.trim().isNotEmpty) {

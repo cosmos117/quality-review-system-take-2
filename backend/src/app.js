@@ -8,32 +8,52 @@ import logger from "./utils/logger.js";
 
 const app = express();
 
-// ── Security headers ──
 app.use(helmet());
 
 // ── CORS ──
-const corsOrigin = process.env.FRONTEND_URL
+// If FRONTEND_URL is set in .env, only allow those origins (comma-separated).
+// If not set, use a function that allows ANY private LAN address (192.168.x.x,
+// 10.x.x.x, 172.16-31.x.x) plus localhost. This is what makes LAN sharing work.
+const allowedOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(",").map((s) => s.trim())
-  : true; // Allow all in development when FRONTEND_URL is not set
+  : null;
+
+const corsOriginFn = (origin, callback) => {
+  // Allow requests with no origin (REST clients, mobile apps, Postman)
+  if (!origin) return callback(null, true);
+
+  // If a specific list is set, only allow those
+  if (allowedOrigins && allowedOrigins.length > 0) {
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error(`CORS: Origin ${origin} not allowed`));
+  }
+
+  // No list set → allow localhost and all private LAN subnets
+  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  const isLAN =
+    /^https?:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin) || // 192.168.x.x
+    /^https?:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin) || // 10.x.x.x
+    /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin); // 172.16-31.x.x
+
+  if (isLocalhost || isLAN) return callback(null, true);
+  return callback(new Error(`CORS: Origin ${origin} not allowed`));
+};
 
 app.use(
   cors({
-    origin: corsOrigin,
+    origin: corsOriginFn,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
-// ── Body parsers & cookies ──
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(cookieParser(process.env.COOKIE_SECRET));
 
-// ── Request logging ──
 app.use(requestLogger);
 
-// ── Health check ──
 app.get("/health", (req, res) => {
   res.json({ status: "ok", uptime: process.uptime() });
 });
@@ -55,14 +75,9 @@ import analyticsRoutes from "./routes/analytics.routes.js";
 import exportRoutes from "./routes/export.routes.js";
 import imagesRouter from "./routes/images.js";
 
-// ── Public routes (no auth) ──
-// Login & register are public inside userRouter; other user routes need auth
 app.use("/api/v1/users", userRouter);
-// Roles: read-only is public, mutations protected inside the router
 app.use("/api/v1/roles", roleRoutes);
 
-// ── Protected routes (auth required on every request) ──
-// Mount membership routes BEFORE project routes to avoid ":id" catching "members"
 app.use("/api/v1/projects", authMiddleware, projectMembershipRoutes);
 app.use("/api/v1/projects", authMiddleware, projectRoutes);
 app.use("/api/v1", authMiddleware, checklistRoutes);
@@ -77,7 +92,6 @@ app.use("/api/v1", authMiddleware, analyticsRoutes);
 app.use("/api/v1", authMiddleware, exportRoutes);
 app.use("/api/v1", authMiddleware, imagesRouter);
 
-// Global error handler - must be last
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500;
   const message = err.message || "Internal Server Error";
@@ -96,7 +110,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler - must be after all routes
 app.use((req, res) => {
   res.status(404).json({
     statusCode: 404,

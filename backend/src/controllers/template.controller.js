@@ -219,12 +219,13 @@ export const seedTemplate = asyncHandler(async (req, res) => {
 });
 
 export const updateDefectCategories = asyncHandler(async (req, res) => {
-  const { defectCategories } = req.body;
+  const { defectCategories, defectCategoryGroups } = req.body;
   if (!defectCategories || !Array.isArray(defectCategories))
     throw new ApiError(400, "defectCategories array is required");
   const template = await templateService.updateDefectCategories(
     defectCategories,
     req.user?._id,
+    defectCategoryGroups
   );
   return res
     .status(200)

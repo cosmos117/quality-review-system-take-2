@@ -225,6 +225,7 @@ model Template {
   isActive         Boolean  @default(true)
   stageNames       Json?
   defectCategories Json?
+  defectCategoryGroups Json?
   stageData        Json?
   modifiedBy       String?  @db.Char(24)
   createdAt        DateTime @default(now())
