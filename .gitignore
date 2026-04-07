@@ -49,3 +49,5 @@ backend/node_modules/
 backend/.env
 
 /generated/prisma
+node_modules/
+*.tmp*
