@@ -12,23 +12,17 @@ app.use(helmet());
 
 // ── CORS ──
 // If FRONTEND_URL is set in .env, only allow those origins (comma-separated).
-// If not set, use a function that allows ANY private LAN address (192.168.x.x,
-// 10.x.x.x, 172.16-31.x.x) plus localhost. This is what makes LAN sharing work.
-const allowedOrigins = process.env.FRONTEND_URL
-  ? process.env.FRONTEND_URL.split(",").map((s) => s.trim())
-  : null;
+const rawAllowedOrigins = process.env.FRONTEND_URL || "";
+const allowedOrigins = rawAllowedOrigins
+  .split(",")
+  .map((s) => s.trim())
+  .filter((s) => s.length > 0);
 
 const corsOriginFn = (origin, callback) => {
   // Allow requests with no origin (REST clients, mobile apps, Postman)
   if (!origin) return callback(null, true);
 
-  // If a specific list is set, only allow those
-  if (allowedOrigins && allowedOrigins.length > 0) {
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error(`CORS: Origin ${origin} not allowed`));
-  }
-
-  // No list set → allow localhost and all private LAN subnets
+  // 1. Always allow localhost and private LAN subnets
   const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
   const isLAN =
     /^https?:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin) || // 192.168.x.x
@@ -36,8 +30,17 @@ const corsOriginFn = (origin, callback) => {
     /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin); // 172.16-31.x.x
 
   if (isLocalhost || isLAN) return callback(null, true);
-  return callback(new Error(`CORS: Origin ${origin} not allowed`));
+
+  // 2. Allow if specific FRONTEND_URL origins are set
+  if (allowedOrigins.length > 0) {
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error(`CORS: Origin ${origin} not allowed by FRONTEND_URL`));
+  }
+
+  // 3. Fallback: Allow all origins during development/setup
+  return callback(null, true);
 };
+
 
 app.use(
   cors({
