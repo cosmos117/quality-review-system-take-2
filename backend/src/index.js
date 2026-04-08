@@ -1,6 +1,19 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+// EXIT HANDLERS (for logging crashes in Render)
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION! 💥 Shutting down...");
+  console.error(err.name, err.message, err.stack);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("UNHANDLED REJECTION! 💥 Shutting down...");
+  console.error(err.name, err.message);
+  process.exit(1);
+});
+
 import {app} from "./app.js";
 import connectDB from "./config/db.js";
 import logger from "./utils/logger.js";

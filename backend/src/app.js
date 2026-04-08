@@ -8,7 +8,7 @@ import logger from "./utils/logger.js";
 
 const app = express();
 
-app.use(helmet());
+// app.use(helmet()); // Temporarily disabled to debug Render connection issues
 
 // ── CORS ──
 // If FRONTEND_URL is set in .env, only allow those origins (comma-separated).
@@ -59,6 +59,10 @@ app.use(requestLogger);
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok", uptime: process.uptime() });
+});
+
+app.get("/", (req, res) => {
+  res.send("<h1>Backend is UP and Running!</h1>");
 });
 
 // ── Route imports ──
