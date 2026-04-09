@@ -6,15 +6,15 @@ import { newId } from "../utils/newId.js";
 const isValidStage = (stage) => /^stage\d{1,2}$/.test(stage);
 
 const parseJsonField = (field) => {
-    if (!field) return {};
-    if (typeof field === 'string') return JSON.parse(field);
-    return field;
+  if (!field) return {};
+  if (typeof field === 'string') return JSON.parse(field);
+  return field;
 };
 
 const parseJsonArray = (field) => {
-    if (!field) return [];
-    if (typeof field === 'string') return JSON.parse(field);
-    return field;
+  if (!field) return [];
+  if (typeof field === 'string') return JSON.parse(field);
+  return field;
 };
 
 async function ensureTemplateConsistency(template) {
@@ -148,7 +148,7 @@ export async function getTemplate(stage) {
       }
 
       const stageData = parseJsonField(template.stageData);
-      
+
       if (stage) {
         validateStage(stage);
         return {
@@ -264,7 +264,7 @@ function getDefaultCategories() {
     } else if (name.toLowerCase().includes('mesh')) {
       groupName = 'Meshing';
     }
-    
+
     return {
       _id: `cat_default_${i + 1}`,
       name,
@@ -315,7 +315,7 @@ export async function updateChecklistInTemplate(checklistId, stage, text, userId
   const template = await getTemplateSingleton();
   const stageData = parseJsonField(template.stageData);
   const checklist = findChecklist(stageData, stage, checklistId);
-  
+
   checklist.text = text.trim();
 
   const updatedTemplate = await prisma.template.update({
@@ -331,7 +331,7 @@ export async function deleteChecklistFromTemplate(checklistId, stage, userId) {
   validateStage(stage);
   const template = await getTemplateSingleton();
   const stageData = parseJsonField(template.stageData);
-  
+
   if (Array.isArray(stageData[stage])) {
     stageData[stage] = stageData[stage].filter(c => c._id !== checklistId);
   }
@@ -372,7 +372,7 @@ export async function updateCheckpointInTemplate(checkpointId, stage, checklistI
   const stageData = parseJsonField(template.stageData);
   const checklist = findChecklist(stageData, stage, checklistId);
   const checkpoint = checklist.checkpoints.find(item => item._id === checkpointId);
-  
+
   if (!checkpoint) throw new ApiError(404, "Checkpoint not found");
 
   checkpoint.text = text.trim();
@@ -439,7 +439,7 @@ export async function updateSectionInChecklist(checklistId, sectionId, stage, te
   const stageData = parseJsonField(template.stageData);
   const checklist = findChecklist(stageData, stage, checklistId);
   const section = findSection(checklist, sectionId);
-  
+
   section.text = text.trim();
 
   const updatedTemplate = await prisma.template.update({
@@ -641,7 +641,7 @@ export async function getAllStages() {
 
 export async function updateDefectCategories(defectCategories, userId, defectCategoryGroups) {
   const template = await getTemplateSingleton();
-  
+
   const mappedCategories = defectCategories.map((cat) => ({
     _id: cat._id || cat.id || newId(),  // ← preserve or generate _id
     name: cat.name,
@@ -652,10 +652,10 @@ export async function updateDefectCategories(defectCategories, userId, defectCat
 
   const updatedTemplate = await prisma.template.update({
     where: { id: template.id },
-    data: { 
-      defectCategories: mappedCategories, 
+    data: {
+      defectCategories: mappedCategories,
       defectCategoryGroups: defectCategoryGroups || [],
-      modifiedBy: userId 
+      modifiedBy: userId
     }
   });
 

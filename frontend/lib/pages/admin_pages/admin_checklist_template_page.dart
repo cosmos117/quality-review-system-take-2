@@ -82,8 +82,8 @@ class AdminChecklistTemplatePage
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF4CAF50),
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+                            textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
                           ),
                           onPressed: () async {
                             await Get.dialog(
