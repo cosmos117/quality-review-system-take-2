@@ -15,7 +15,7 @@ class AuthService {
     });
 
     // Extract token from response body (backend now includes it)
-    final data = (body is Map && body['data'] is Map)
+    final data = (body['data'] is Map)
         ? body['data'] as Map<String, dynamic>
         : <String, dynamic>{};
     String token = data['token']?.toString() ?? '';

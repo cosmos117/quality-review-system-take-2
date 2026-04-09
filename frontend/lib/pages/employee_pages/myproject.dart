@@ -530,19 +530,6 @@ class _MyProjectCardState extends State<_MyProjectCard> {
     }
   }
 
-  Color _getBorderColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'not started':
-        return Colors.amber.shade300;
-      case 'in progress':
-        return Colors.blue.shade300;
-      case 'completed':
-        return Colors.green.shade300;
-      default:
-        return Colors.blue.shade300;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final notifCtrl = Get.find<NotificationController>();

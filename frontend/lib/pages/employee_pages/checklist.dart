@@ -1100,7 +1100,6 @@ class ApprovalBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = approvalStatus?['status']?.toString() ?? 'none';
-    final match = compareStatus?['match'] == true;
     String text = 'Approval: $status';
     Color bg = Colors.grey.shade200;
 
@@ -1161,11 +1160,6 @@ class _SubmitBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final submitted = submissionInfo?['is_submitted'] == true;
     final submittedAt = submissionInfo?['submitted_at'];
-    final when = submittedAt != null
-        ? (submittedAt is DateTime
-              ? submittedAt.toString().split('.')[0]
-              : submittedAt.toString())
-        : null;
 
     // Check if executor has submitted (for reviewer to enable revert)
     final executorSubmitted = executorSubmissionInfo?['is_submitted'] == true;

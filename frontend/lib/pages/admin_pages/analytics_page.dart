@@ -6,8 +6,6 @@ import '../../../controllers/analytics_controller.dart';
 // -- Colour palette ------------------------------------------------------------
 
 const _kPrimary = Color(0xFF0F766E);
-const _kInfo = Color(0xFF0D9488);
-const _kAccent = Color(0xFF334155);
 const _kSuccess = Color(0xFF166534);
 const _kWarning = Color(0xFFF59E0B);
 const _kDanger = Color(0xFFB91C1C);
@@ -465,24 +463,6 @@ class _KpiCard extends StatelessWidget {
 
 // ── Chart row (two cards side by side) ───────────────────────────────────────
 
-class _ChartRow extends StatelessWidget {
-  final Widget left;
-  final Widget right;
-
-  const _ChartRow({required this.left, required this.right});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: left),
-        const SizedBox(width: 24),
-        Expanded(child: right),
-      ],
-    );
-  }
-}
 
 // ── Card wrapper ──────────────────────────────────────────────────────────────
 
@@ -821,86 +801,6 @@ class _DrByTeamLeaderChart extends StatelessWidget {
 
 // ── Reusable horizontal bar list ──────────────────────────────────────────────
 
-class _HorizontalBarList extends StatelessWidget {
-  final List<({String label, double value})> items;
-  final String Function(double) valueLabel;
-
-  const _HorizontalBarList({required this.items, required this.valueLabel});
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) return const _EmptyWidget();
-    final maxVal = items.map((e) => e.value).reduce((a, b) => a > b ? a : b);
-
-    return Column(
-      children: items.asMap().entries.map((entry) {
-        final idx = entry.key;
-        final item = entry.value;
-        final fraction = maxVal > 0
-            ? (item.value / maxVal).clamp(0.03, 1.0)
-            : 0.0;
-        final color = _kChartColors[idx % _kChartColors.length];
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 260,
-                child: Tooltip(
-                  message: item.label,
-                  child: Text(
-                    item.label,
-                    style: const TextStyle(fontSize: 12),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Stack(
-                  alignment: Alignment.centerLeft,
-                  children: [
-                    Container(
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    FractionallySizedBox(
-                      widthFactor: fraction,
-                      child: Container(
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 60,
-                child: Text(
-                  valueLabel(item.value),
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  textAlign: TextAlign.end,
-                ),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
 
 // ── Risk-colored horizontal bar list ──────────────────────────────────────────
 
@@ -1003,160 +903,9 @@ class _RiskColoredHorizontalBarList extends StatelessWidget {
 
 // ── Green-colored horizontal bar list ────────────────────────────────────────
 
-class _GreenColoredHorizontalBarList extends StatelessWidget {
-  final List<({String label, double value})> items;
-  final String Function(double) valueLabel;
-
-  const _GreenColoredHorizontalBarList({
-    required this.items,
-    required this.valueLabel,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) return const _EmptyWidget();
-    final maxVal = items.map((e) => e.value).reduce((a, b) => a > b ? a : b);
-
-    return Column(
-      children: items.asMap().entries.map((entry) {
-        final item = entry.value;
-        final fraction = maxVal > 0
-            ? (item.value / maxVal).clamp(0.03, 1.0)
-            : 0.0;
-        final color = _greenShadeByValue(item.value, maxVal);
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 160,
-                child: Tooltip(
-                  message: item.label,
-                  child: Text(
-                    item.label,
-                    style: const TextStyle(fontSize: 12),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Stack(
-                  alignment: Alignment.centerLeft,
-                  children: [
-                    Container(
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    FractionallySizedBox(
-                      widthFactor: fraction,
-                      child: Container(
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 60,
-                child: Text(
-                  valueLabel(item.value),
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                  ),
-                  textAlign: TextAlign.end,
-                ),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
 
 // ── Reusable vertical bar chart ───────────────────────────────────────────────
 
-class _VerticalBarChart extends StatelessWidget {
-  final List<({String label, double value})> items;
-  final String Function(double) valueLabel;
-
-  const _VerticalBarChart({required this.items, required this.valueLabel});
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) return const _EmptyWidget();
-    final maxVal = items.map((e) => e.value).reduce((a, b) => a > b ? a : b);
-    const chartHeight = 180.0;
-
-    return SizedBox(
-      height: chartHeight + 50,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: items.asMap().entries.map((entry) {
-          final idx = entry.key;
-          final item = entry.value;
-          final barH = maxVal > 0
-              ? (item.value / maxVal * chartHeight).clamp(4.0, chartHeight)
-              : 4.0;
-          final color = _kChartColors[idx % _kChartColors.length];
-
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text(
-                    valueLabel(item.value),
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: color,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    height: barH,
-                    decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(6),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Tooltip(
-                    message: item.label,
-                    child: Text(
-                      item.label,
-                      style: TextStyle(fontSize: 11, color: Colors.grey[700]),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 2,
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
 
 // ── Green-shaded vertical bar chart ──────────────────────────────────────────
 
@@ -1440,99 +1189,8 @@ class _DefectDetailsTableState extends State<_DefectDetailsTable> {
   }
 }
 
-class _TableHeaderCell extends StatelessWidget {
-  final String label;
-  final int flex;
-  const _TableHeaderCell(this.label, {this.flex = 1});
 
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      flex: flex,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        child: Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: Colors.black87,
-          ),
-        ),
-      ),
-    );
-  }
-}
 
-class _TableDataCell extends StatelessWidget {
-  final String text;
-  final int flex;
-  final int maxLines;
-  const _TableDataCell(this.text, {this.flex = 1, this.maxLines = 1});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      flex: flex,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        child: Text(
-          text.isEmpty ? '—' : text,
-          style: TextStyle(
-            fontSize: 12,
-            color: text.isEmpty ? Colors.grey : Colors.black87,
-          ),
-          overflow: TextOverflow.ellipsis,
-          maxLines: maxLines,
-        ),
-      ),
-    );
-  }
-}
-
-class _SeverityCell extends StatelessWidget {
-  final String severity;
-  const _SeverityCell(this.severity);
-
-  @override
-  Widget build(BuildContext context) {
-    if (severity.isEmpty) {
-      return const Expanded(
-        flex: 2,
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-          child: Text('—', style: TextStyle(fontSize: 12, color: Colors.grey)),
-        ),
-      );
-    }
-    return Expanded(
-      flex: 2,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: _severityColor(severity).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              severity,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: _severityColor(severity),
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ── Fixed-width cell widgets for horizontal scroll table ─────────────────────
 

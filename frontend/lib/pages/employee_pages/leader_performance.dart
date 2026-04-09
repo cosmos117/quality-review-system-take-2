@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -18,7 +18,6 @@ class LeaderPerformance extends StatefulWidget {
 class _LeaderPerformanceState extends State<LeaderPerformance> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
-  String _sortKey = 'defectRate';
   bool _ascending = false;
   List<Project> _cachedProjects = [];
   bool _isInitialLoad = true;

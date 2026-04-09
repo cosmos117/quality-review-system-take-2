@@ -1,5 +1,5 @@
 import prisma from "../config/prisma.js";
-import { deleteImagesByFileIds } from "../gridfs.js";
+import { deleteImagesByFileIds } from "../local_storage.js";
 import { parsePagination, paginatedResponse } from "../utils/paginate.js";
 import { ApiError } from "../utils/ApiError.js";
 import { getOrSet, keys, TTL, invalidateProjects, invalidateStages } from "../utils/cache.js";

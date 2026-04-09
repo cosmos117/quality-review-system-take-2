@@ -10,10 +10,10 @@ import {
   downloadImageById,
   deleteImageById,
   getFileMetadata,
-} from "../gridfs.js";
+} from "../local_storage.js";
 
 // GridFS initialization is deferred until the first request,
-// because Mongoose must be connected first (see gridfs.js).
+// because Mongoose must be connected first (see local_storage.js).
 // The init() function is idempotent and fast after the first call.
 let gridfsReady = false;
 async function ensureGridFS() {

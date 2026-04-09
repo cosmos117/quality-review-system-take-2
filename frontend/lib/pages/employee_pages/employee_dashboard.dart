@@ -141,13 +141,10 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
   Widget build(BuildContext context) {
     // Get screen dimensions for responsive sizing
     final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
 
     // Responsive sizing helpers
     double responsiveWidth(double baseWidth) =>
         screenWidth * (baseWidth / 1920);
-    double responsiveHeight(double baseHeight) =>
-        screenHeight * (baseHeight / 1080);
     double responsiveFontSize(double baseFontSize) =>
         screenWidth * (baseFontSize / 1920) + 8;
     double responsivePadding(double basePadding) =>
@@ -628,13 +625,6 @@ class _EmployeeProjectCard extends StatelessWidget {
         screenWidth * (basePadding / 1920);
 
     final projCtrl = Get.find<ProjectsController>();
-
-    final executor =
-        (project.status == 'In Progress' || project.status == 'Completed')
-        ? ((project.executor?.trim().isNotEmpty ?? false)
-              ? project.executor!.trim()
-              : '--')
-        : '--';
 
     return InkWell(
       onTap: () => Get.to(

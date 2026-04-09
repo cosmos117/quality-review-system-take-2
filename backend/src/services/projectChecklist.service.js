@@ -1,6 +1,6 @@
 import prisma from "../config/prisma.js";
 import logger from "../utils/logger.js";
-import { deleteImagesByFileIds } from "../gridfs.js";
+import { deleteImagesByFileIds } from "../local_storage.js";
 import { ApiError } from "../utils/ApiError.js";
 import { newId } from "../utils/newId.js";
 
