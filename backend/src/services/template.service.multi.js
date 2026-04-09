@@ -153,8 +153,10 @@ export async function saveTemplatePayload(templateName, displayName, description
   let defectCategories = [];
   if (Array.isArray(templateData.defectCategories)) {
     defectCategories = templateData.defectCategories.map((cat) => ({
+      _id: cat?._id || cat?.id || newId(),
       name: cat?.name,
       color: cat?.color || "#2196F3",
+      group: cat?.group || "General",
       keywords: Array.isArray(cat?.keywords) ? cat.keywords : [],
     }));
   }
@@ -193,8 +195,10 @@ export async function updateTemplatePayload(templateName, displayName, descripti
 
   if (Array.isArray(templateData.defectCategories)) {
     setObj.defectCategories = templateData.defectCategories.map((cat) => ({
+      _id: cat?._id || cat?.id || newId(),
       name: cat?.name,
       color: cat?.color || "#2196F3",
+      group: cat?.group || "General",
       keywords: Array.isArray(cat?.keywords) ? cat.keywords : [],
     }));
   }
@@ -284,7 +288,26 @@ export async function getTemplate(templateName, stage) {
       }
 
       const stageNames = parseJsonField(template.stageNames);
-      const defectCategories = parseJsonArray(template.defectCategories);
+      let defectCategories = parseJsonArray(template.defectCategories);
+
+      let catModified = false;
+      defectCategories = defectCategories.map((cat) => {
+        if (!cat._id && !cat.id) {
+          catModified = true;
+          return { ...cat, _id: newId() };
+        }
+        if (!cat._id && cat.id) {
+          return { ...cat, _id: cat.id };
+        }
+        return cat;
+      });
+
+      if (catModified) {
+        await prisma.template.update({
+          where: { id: template.id },
+          data: { defectCategories }
+        });
+      }
 
       return {
         _id: template.id,
@@ -717,8 +740,10 @@ export async function updateDefectCategories(templateName, defectCategories, use
   const template = await getTemplateByName(templateName);
   
   const mappedCategories = defectCategories.map((cat) => ({
+    _id: cat._id || cat.id || newId(),
     name: cat.name,
     color: cat.color || "#2196F3",
+    group: cat.group || "General",
     keywords: cat.keywords || [],
   }));
 

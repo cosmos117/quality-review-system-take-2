@@ -5,7 +5,10 @@ class SimpleHttp {
   String? accessToken;
 
   Future<Map<String, dynamic>> getJson(Uri uri) async {
-    final res = await http.get(uri, headers: _headers());
+    final res = await http.get(uri, headers: _headers()).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw Exception('Connection timed out. Please try again.'),
+    );
     final body = res.body;
     // Guard against HTML or non-JSON responses
     if (_looksLikeHtml(body)) {
@@ -29,7 +32,10 @@ class SimpleHttp {
     Map<String, dynamic> data,
   ) async {
     final payload = jsonEncode(data);
-    final res = await http.post(uri, headers: _headers(), body: payload);
+    final res = await http.post(uri, headers: _headers(), body: payload).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw Exception('Connection timed out. Please try again.'),
+    );
     final body = res.body;
     if (_looksLikeHtml(body)) {
       throw Exception(
@@ -52,7 +58,10 @@ class SimpleHttp {
     Map<String, dynamic> data,
   ) async {
     final payload = jsonEncode(data);
-    final res = await http.put(uri, headers: _headers(), body: payload);
+    final res = await http.put(uri, headers: _headers(), body: payload).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw Exception('Connection timed out. Please try again.'),
+    );
     final body = res.body;
     if (_looksLikeHtml(body)) {
       throw Exception(
@@ -75,7 +84,10 @@ class SimpleHttp {
     Map<String, dynamic> data,
   ) async {
     final payload = jsonEncode(data);
-    final res = await http.patch(uri, headers: _headers(), body: payload);
+    final res = await http.patch(uri, headers: _headers(), body: payload).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw Exception('Connection timed out. Please try again.'),
+    );
     final body = res.body;
     if (_looksLikeHtml(body)) {
       throw Exception(
@@ -94,7 +106,10 @@ class SimpleHttp {
   }
 
   Future<void> delete(Uri uri) async {
-    final res = await http.delete(uri, headers: _headers());
+    final res = await http.delete(uri, headers: _headers()).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw Exception('Connection timed out. Please try again.'),
+    );
     if (res.statusCode >= 400) {
       final body = res.body;
       if (_looksLikeHtml(body)) {
@@ -119,7 +134,10 @@ class SimpleHttp {
     final req = http.Request('DELETE', uri);
     req.headers.addAll(_headers());
     req.body = payload;
-    final streamedRes = await req.send();
+    final streamedRes = await req.send().timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw Exception('Connection timed out. Please try again.'),
+    );
     final res = await http.Response.fromStream(streamedRes);
     final body = res.body;
     if (_looksLikeHtml(body)) {
