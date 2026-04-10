@@ -82,8 +82,8 @@ class AdminChecklistTemplatePage
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF4CAF50),
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-                            textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
+                            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+                            textStyle: const TextStyle(fontSize: 19, fontWeight: FontWeight.normal),
                           ),
                           onPressed: () async {
                             await Get.dialog(
@@ -2047,8 +2047,9 @@ class _DefectCategoryManagerState extends State<_DefectCategoryManager>
     if (_selectedGroup == null && groups.isNotEmpty) {
       _selectedGroup = groups.first;
     }
-    if (_selectedGroup != null && !groups.contains(_selectedGroup)) {
-      _selectedGroup = groups.isNotEmpty ? groups.first : null;
+    final allGroupsForSearch = _allGroupNames(groups);
+    if (_selectedGroup != null && !allGroupsForSearch.contains(_selectedGroup)) {
+      _selectedGroup = allGroupsForSearch.isNotEmpty ? allGroupsForSearch.first : null;
     }
 
     final q = _searchQuery;
@@ -2266,8 +2267,9 @@ class _DefectCategoryManagerState extends State<_DefectCategoryManager>
           child: inGroup.isEmpty
               ? const Center(
                   child: Text(
-                    'No categories in this group yet.',
+                    'No categories in this group yet.\nAdd or move categories here using the buttons above.',
                     style: TextStyle(color: Colors.grey),
+                    textAlign: TextAlign.center,
                   ),
                 )
               : ListView.separated(
@@ -2279,14 +2281,7 @@ class _DefectCategoryManagerState extends State<_DefectCategoryManager>
                       dense: true,
                       title: Text(cat.name,
                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                      subtitle: cat.keywords.isNotEmpty
-                          ? Text(
-                              cat.keywords.join(', '),
-                              style: const TextStyle(fontSize: 11, color: Colors.grey),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            )
-                          : null,
+                      subtitle: null,
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -2297,8 +2292,8 @@ class _DefectCategoryManagerState extends State<_DefectCategoryManager>
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete_outline, size: 17, color: Colors.redAccent),
-                            tooltip: 'Remove from group (moves to General)',
-                            onPressed: () => setState(() => cat.group = 'General'),
+                            tooltip: 'Delete Category',
+                            onPressed: () => _deleteCategory(cat),
                           ),
                         ],
                       ),

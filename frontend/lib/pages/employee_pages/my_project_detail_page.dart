@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:quality_review/pages/employee_pages/questions_screen.dart';
+import 'questions_screen.dart';
 
 import '../../models/project.dart';
 import '../../models/project_membership.dart';
@@ -254,7 +254,7 @@ class _RoleCard extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
+                    color: Colors.white.withAlpha(20),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -538,6 +538,7 @@ class _ChecklistButton extends GetView<MyProjectDetailController> {
               reviewers: reviewers,
               executors: executors,
               initialPhase: 1,
+              templateName: controller.project.value.templateName ?? '',
             ),
           );
         },

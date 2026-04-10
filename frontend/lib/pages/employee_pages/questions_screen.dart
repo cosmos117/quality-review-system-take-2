@@ -19,6 +19,7 @@ class QuestionsScreen extends StatefulWidget {
   final List<String> executors;
   final int? initialPhase;
   final String? initialSubQuestion;
+  final String templateName;
 
   const QuestionsScreen({
     super.key,
@@ -29,6 +30,7 @@ class QuestionsScreen extends StatefulWidget {
     required this.executors,
     this.initialPhase,
     this.initialSubQuestion,
+    required this.templateName,
   });
 
   @override
@@ -229,7 +231,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       // Step 0: Load defect categories from template
       try {
         final templateService = Get.find<TemplateService>();
-        final template = await templateService.fetchTemplate();
+        final template = await templateService.fetchTemplate(templateName: widget.templateName);
         final cats = template['defectCategories'] as List<dynamic>? ?? [];
         _defectCategories = {};
         for (final cat in cats) {
@@ -373,7 +375,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       if (loadedChecklist.isEmpty) {
         try {
           final templateService = Get.find<TemplateService>();
-          final template = await templateService.fetchTemplate();
+          final template = await templateService.fetchTemplate(templateName: widget.templateName);
           final stageKey = 'stage$phase';
           final stageData = template[stageKey];
           if (stageData is List && stageData.isNotEmpty) {
@@ -395,7 +397,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         checklistCtrl.loadAnswers(widget.projectId, phase, 'reviewer'),
         _loadDefectRates().catchError((e) => null),
         _computeActivePhase().catchError((e) => null),
-      ]);
+      ]).timeout(const Duration(seconds: 30), onTimeout: () {
+        if (kDebugMode) print("Step 5 loading timed out");
+        return [];
+      });
 
       if (mounted) {
         setState(() {
