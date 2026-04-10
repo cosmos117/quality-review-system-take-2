@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:quality_review/pages/login.dart';
 import 'package:quality_review/pages/admin_pages/admin_main_layout.dart';
-import 'package:quality_review/pages/employee_pages/employee_main_layoutl.dart';
+import 'package:quality_review/pages/employee_pages/employee_main_layout.dart';
 import 'controllers/auth_controller.dart';
 import 'bindings/app_bindings.dart';
 

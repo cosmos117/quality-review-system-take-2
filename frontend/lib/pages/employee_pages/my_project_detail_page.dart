@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:quality_review/pages/employee_pages/questions_screen.dart';
 
@@ -466,7 +466,9 @@ class _ChecklistButton extends GetView<MyProjectDetailController> {
           if (Get.isRegistered<TemplateService>()) {
             final tmplSvc = Get.find<TemplateService>();
             try {
-              final tmpl = await tmplSvc.fetchTemplate();
+              final tmpl = await tmplSvc.fetchTemplate(
+                templateName: controller.project.value.templateName,
+              );
               final stageKeys =
                   tmpl.keys
                       .where((k) => k.toString().startsWith('stage'))

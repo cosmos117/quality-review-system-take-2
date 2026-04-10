@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:quality_review/components/admin_sidebar.dart';
+import 'package:quality_review/components/app_sidebar.dart';
 import 'package:quality_review/pages/admin_pages/admin_checklist_template_page.dart';
 import 'package:quality_review/pages/admin_pages/admin_dashboard_page.dart';
 import 'package:quality_review/pages/admin_pages/analytics_page.dart';
@@ -13,12 +13,14 @@ class AdminMainLayout extends StatelessWidget {
   AdminMainLayout({super.key});
 
   final RxInt _selectedIndex = 0.obs;
-  final pages = const [
-    AdminDashboardPage(),
-    EmployeePage(),
-    EmployeePerformancePage(),
-    AnalyticsPage(),
-    AdminChecklistTemplatePage(),
+  final RxBool _isCollapsed = false.obs;
+
+  final pages = [
+    const AdminDashboardPage(),
+    const EmployeePage(),
+    const EmployeePerformancePage(),
+    const AnalyticsPage(),
+    const AdminChecklistTemplatePage(),
   ];
 
   @override
@@ -26,51 +28,51 @@ class AdminMainLayout extends StatelessWidget {
     return Scaffold(
       body: Row(
         children: [
-          // Sidebar (left)
-          Container(
-            width: 250,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border.fromBorderSide(BorderSide(color: Colors.black12)),
-            ),
-            child: Column(
-              children: [
-                Expanded(
-                  child: Obx(
-                    () => AdminSidebar(
-                      selectedIndex: _selectedIndex.value,
-                      onItemSelected: (index) => _selectedIndex.value = index,
-                      onCreate: () {
-                        Get.snackbar(
-                          'Info',
-                          'Create New clicked',
-                          snackPosition: SnackPosition.BOTTOM,
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.logout),
-                      label: const Text('Logout'),
-                      onPressed: () async {
-                        await Get.find<AuthController>().logout();
-                        Get.offAll(() => LoginPage());
-                      },
-                    ),
-                  ),
-                ),
-              ],
+          // Collapsible Sidebar
+          Obx(() => AppSidebar(
+            isCollapsed: _isCollapsed.value,
+            selectedIndex: _selectedIndex.value,
+            onToggle: () => _isCollapsed.value = !_isCollapsed.value,
+            onLogout: () async {
+              await Get.find<AuthController>().logout();
+              Get.offAll(() => LoginPage());
+            },
+            items: [
+              SidebarNavItem(
+                icon: Icons.grid_view_rounded,
+                label: "Dashboard",
+                onTap: () => _selectedIndex.value = 0,
+              ),
+              SidebarNavItem(
+                icon: Icons.people_alt_rounded,
+                label: "Employees",
+                onTap: () => _selectedIndex.value = 1,
+              ),
+              SidebarNavItem(
+                icon: Icons.trending_up_rounded,
+                label: "Performance",
+                onTap: () => _selectedIndex.value = 2,
+              ),
+              SidebarNavItem(
+                icon: Icons.analytics_rounded,
+                label: "Analytics",
+                onTap: () => _selectedIndex.value = 3,
+              ),
+              SidebarNavItem(
+                icon: Icons.rule_folder_rounded,
+                label: "Templates",
+                onTap: () => _selectedIndex.value = 4,
+              ),
+            ],
+          )),
+
+          // Main Content
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 24), // Compensate for removed top bar
+              child: Obx(() => pages[_selectedIndex.value]),
             ),
           ),
-
-          // Main Content (right)
-          Expanded(child: Obx(() => pages[_selectedIndex.value])),
         ],
       ),
     );

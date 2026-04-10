@@ -34,6 +34,16 @@ class _PhaseOverviewWidgetState extends State<PhaseOverviewWidget> {
     _loadPhaseData();
   }
 
+  @override
+  void didUpdateWidget(PhaseOverviewWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.project.id != widget.project.id ||
+        oldWidget.project.status != widget.project.status ||
+        oldWidget.project.templateName != widget.project.templateName) {
+      _loadPhaseData();
+    }
+  }
+
   Future<void> _loadPhaseData() async {
     setState(() => _loading = true);
     try {

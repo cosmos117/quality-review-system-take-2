@@ -3,6 +3,10 @@ import logger from "../utils/logger.js";
 import { deleteImagesByFileIds } from "../local_storage.js";
 import { ApiError } from "../utils/ApiError.js";
 import { newId } from "../utils/newId.js";
+import { 
+  calculateDefectCount, 
+  calculateIterationDefectRates 
+} from "./defectUtility.service.js";
 
 const parseJsonField = (field) => {
     if (!field) return [];
@@ -134,96 +138,6 @@ const findQuestionInGroup = (group, questionId) => {
   return { question: null, section: null };
 };
 
-const calculateDefectCount = (group) => {
-  let defectCount = 0;
-  for (const question of group.questions || []) {
-    if (question.executorAnswer && question.reviewerAnswer && question.executorAnswer !== question.reviewerAnswer) {
-      defectCount++;
-    }
-  }
-  for (const section of group.sections || []) {
-    for (const question of section.questions || []) {
-      if (question.executorAnswer && question.reviewerAnswer && question.executorAnswer !== question.reviewerAnswer) {
-        defectCount++;
-      }
-    }
-  }
-  return defectCount;
-};
-
-const calculateCurrentMismatches = (groups) => {
-  let totalQuestions = 0;
-  let totalDefects = 0;
-
-  groups.forEach((group) => {
-    if (group.questions && Array.isArray(group.questions)) {
-      group.questions.forEach((q) => {
-        totalQuestions++;
-        const exAns = q.executorAnswer;
-        const revAns = q.reviewerAnswer;
-        if (exAns !== null && exAns !== undefined && revAns !== null && revAns !== undefined && exAns !== revAns) {
-          totalDefects++;
-        }
-      });
-    }
-    if (group.sections && Array.isArray(group.sections)) {
-      group.sections.forEach((section) => {
-        if (section.questions && Array.isArray(section.questions)) {
-          section.questions.forEach((q) => {
-            totalQuestions++;
-            const exAns = q.executorAnswer;
-            const revAns = q.reviewerAnswer;
-            if (exAns !== null && exAns !== undefined && revAns !== null && revAns !== undefined && exAns !== revAns) {
-              totalDefects++;
-            }
-          });
-        }
-      });
-    }
-  });
-
-  return { totalQuestions, totalDefects };
-};
-
-const calculateIterationDefectRates = (checklist) => {
-  const iterationRates = [];
-  let previousIterationDefects = 0;
-  
-  const iterations = parseJsonField(checklist.iterations) || [];
-
-  for (let i = 0; i < iterations.length; i++) {
-    const iteration = iterations[i];
-    let totalQuestions = 0;
-    let cumulativeDefects = 0;
-
-    (iteration.groups || []).forEach((group) => {
-      cumulativeDefects += group.defectCount || 0;
-      if (group.questions && Array.isArray(group.questions)) {
-        totalQuestions += group.questions.length;
-      }
-      if (group.sections && Array.isArray(group.sections)) {
-        group.sections.forEach((section) => {
-          if (section.questions && Array.isArray(section.questions)) {
-            totalQuestions += section.questions.length;
-          }
-        });
-      }
-    });
-
-    const newDefectsInIteration = cumulativeDefects - previousIterationDefects;
-    previousIterationDefects = cumulativeDefects;
-
-    const defectRate =
-      totalQuestions > 0
-        ? parseFloat(((newDefectsInIteration / totalQuestions) * 100).toFixed(2))
-        : 0;
-
-    iterationRates.push(defectRate > 100 ? 100 : defectRate);
-  }
-
-  return iterationRates;
-};
-
 export const getProjectChecklist = async (projectId, stageId) => {
   const stageDoc = await prisma.stage.findUnique({
     where: { id: stageId, project_id: projectId },
@@ -234,7 +148,7 @@ export const getProjectChecklist = async (projectId, stageId) => {
 
   const checklist = await ensureProjectChecklist({ projectId, stageDoc: { ...stageDoc, _id: stageDoc.id } });
 
-  const checklistObj = { ...checklist };
+  const checklistObj = checklist.toJSON ? checklist.toJSON() : { ...checklist };
   const groups = parseJsonField(checklistObj.groups);
   
   checklistObj.groups = groups.map((group) => {
@@ -242,9 +156,14 @@ export const getProjectChecklist = async (projectId, stageId) => {
     return { ...group, currentDefects };
   });
   
-  checklistObj.iterations = parseJsonField(checklistObj.iterations) || [];
+  const iterations = parseJsonField(checklistObj.iterations) || [];
+  const iterationStats = calculateIterationDefectRates(iterations, groups);
 
-  return checklistObj;
+  return {
+    ...checklistObj,
+    iterations: iterationStats.iterations,
+    currentIterationStats: iterationStats.current
+  };
 };
 
 export const updateExecutorAnswer = async (projectId, stageId, groupId, questionId, { answer, remark, images, categoryId, severity }, userId) => {
@@ -453,63 +372,55 @@ export const getOverallDefectRate = async (projectId) => {
 
   const checklistMap = new Map(checklists.map((c) => [c.stageId, c]));
 
-  let grandTotalQuestions = 0;
-  let grandTotalDefects = 0;
+  let projectTotalQuestions = 0;
+  let projectTotalDefects = 0;
   const phaseBreakdown = [];
-  let sumOfAllIterationDefectRates = 0;
-  let totalIterationsAcrossAllPhases = 0;
-  const numberOfPhases = stages.length;
 
   for (const stage of stages) {
     const checklist = checklistMap.get(stage.id);
+    if (!checklist) continue;
 
-    if (checklist) {
-      let totalQuestionsInPhase = 0;
-      const groups = parseJsonField(checklist.groups) || [];
+    let stageTotalQuestions = 0;
+    let stageTotalDefectsFound = 0;
 
-      groups.forEach((group) => {
-        if (group.questions && Array.isArray(group.questions)) {
-          totalQuestionsInPhase += group.questions.length;
-        }
-        if (group.sections && Array.isArray(group.sections)) {
-          group.sections.forEach((section) => {
-            if (section.questions && Array.isArray(section.questions)) {
-              totalQuestionsInPhase += section.questions.length;
-            }
-          });
-        }
-      });
+    const groups = parseJsonField(checklist.groups) || [];
 
-      const currentMismatches = calculateCurrentMismatches(groups);
-      const totalDefectsInPhase = currentMismatches.totalDefects;
+    // 1. Add current mismatches to total defects found in this phase
+    const currentMismatches = calculateCurrentMismatches(groups);
+    stageTotalDefectsFound += currentMismatches.totalDefects;
+    stageTotalQuestions += currentMismatches.totalQuestions;
 
-      grandTotalQuestions += totalQuestionsInPhase;
-      grandTotalDefects += totalDefectsInPhase;
+    // 2. Add historical defects from iterations
+    const iterations = parseJsonField(checklist.iterations);
+    const iterationStats = calculateIterationDefectRates(iterations, groups);
+    
+    const totalHistoricalDefectsInPhase = iterationStats.totalCumulativeDefects;
 
-      const phaseDefectRate = totalQuestionsInPhase > 0
-        ? parseFloat(((totalDefectsInPhase / totalQuestionsInPhase) * 100).toFixed(2))
-        : 0;
+    stageTotalDefectsFound = totalHistoricalDefectsInPhase + currentMismatches.totalDefects;
+    projectTotalDefects += stageTotalDefectsFound;
 
-      const cappedPhaseDefectRate = phaseDefectRate > 100 ? 100 : phaseDefectRate;
-
-      phaseBreakdown.push({
-        phase: stage.stage_key,
-        stageName: stage.stage_name,
-        totalQuestions: totalQuestionsInPhase,
-        totalDefects: totalDefectsInPhase,
-        defectRate: cappedPhaseDefectRate,
-      });
-
-      const iterationRates = calculateIterationDefectRates(checklist);
-
-      iterationRates.forEach((rate) => {
-        sumOfAllIterationDefectRates += rate;
-        totalIterationsAcrossAllPhases += 1;
-      });
-    }
+    // Use current questions count as the base for the phase
+    const currentQuestionCount = currentMismatches.totalQuestions;
+    
+    phaseBreakdown.push({
+      phase: stage.stage_key,
+      stageName: stage.stage_name,
+      currentTotalQuestions: currentQuestionCount,
+      currentDefects: currentMismatches.totalDefects,
+      historicalCumulativeDefects: totalHistoricalDefectsInPhase,
+      totalDefectsFoundInPhase: stageTotalDefectsFound
+    });
   }
 
-  let overallDefectRate = parseFloat(sumOfAllIterationDefectRates.toFixed(2));
+  // Calculate projectTotalQuestions as the sum of unique questions across all COMPLETED/ACTIVE stages
+  projectTotalQuestions = phaseBreakdown.reduce((acc, p) => acc + p.currentTotalQuestions, 0);
+
+  let overallDefectRate = projectTotalQuestions > 0
+    ? parseFloat(((projectTotalDefects / projectTotalQuestions) * 100).toFixed(2))
+    : 0;
+
+  // Cap at 100% just in case re-rejections blow it up
+  if (overallDefectRate > 100) overallDefectRate = 100;
 
   await prisma.project.update({
     where: { id: projectId },
@@ -518,13 +429,8 @@ export const getOverallDefectRate = async (projectId) => {
 
   return {
     overallDefectRate,
-    totalQuestions: grandTotalQuestions,
-    totalDefects: grandTotalDefects,
-    phaseBreakdown,
-    calculationDetails: {
-      sumOfAllIterationDefectRates,
-      totalIterationsAcrossAllPhases,
-      numberOfPhases,
-    },
+    totalQuestions: projectTotalQuestions,
+    totalDefects: projectTotalDefects,
+    phaseBreakdown
   };
 };

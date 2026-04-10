@@ -58,6 +58,12 @@ class ProjectDetailInfo extends StatelessWidget {
                       ? project.executor!.trim()
                       : '--',
                 ),
+                DetailRow(
+                  label: 'Checklist\nTemplate',
+                  value: (project.templateName?.trim().isNotEmpty ?? false)
+                      ? project.templateName!.trim()
+                      : 'None Assigned',
+                ),
               ],
             ),
           ),
@@ -103,9 +109,10 @@ class DetailRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 120,
+            width: 150,
             child: Text(
               label,
               style: const TextStyle(fontWeight: FontWeight.w600),

@@ -1,5 +1,6 @@
 import prisma from "../config/prisma.js";
-import { ensureProjectChecklist } from "./projectChecklist.service.js";
+import { ensureProjectChecklist, getOverallDefectRate } from "./projectChecklist.service.js";
+import { calculateCurrentMismatches, accumulateDefectsForChecklistGroups } from "./defectUtility.service.js";
 import { ApiError } from "../utils/ApiError.js";
 import logger from "../utils/logger.js";
 import { newId } from "../utils/newId.js";
@@ -10,41 +11,7 @@ const parseJsonField = (field) => {
     return field;
 };
 
-const calculateCurrentMismatches = (group) => {
-  let mismatchCount = 0;
-  for (const question of group.questions || []) {
-    if (
-      question.executorAnswer &&
-      question.reviewerAnswer &&
-      question.executorAnswer !== question.reviewerAnswer
-    ) {
-      mismatchCount++;
-    }
-  }
-  for (const section of group.sections || []) {
-    for (const question of section.questions || []) {
-      if (
-        question.executorAnswer &&
-        question.reviewerAnswer &&
-        question.executorAnswer !== question.reviewerAnswer
-      ) {
-        mismatchCount++;
-      }
-    }
-  }
-  return mismatchCount;
-};
-
-export const accumulateDefectsForChecklistGroups = (groups) => {
-  let totalNewDefects = 0;
-  for (const group of groups) {
-    const currentMismatches = calculateCurrentMismatches(group);
-    const existingDefectCount = group.defectCount || 0;
-    group.defectCount = existingDefectCount + currentMismatches;
-    totalNewDefects += currentMismatches;
-  }
-  return totalNewDefects;
-};
+// Removed local calculation functions in favor of defectUtility imports
 
 export const getChecklistAnswers = async (projectId, phaseNum, normalizedRole) => {
   const stageKey = `stage${phaseNum}`;
@@ -231,6 +198,11 @@ export const saveChecklistAnswers = async (projectId, phaseNum, normalizedRole, 
     data: { groups }
   });
 
+  // Trigger project-wide defect rate refresh in background
+  getOverallDefectRate(projectId).catch(err => {
+    logger.error(`Failed to refresh overall defect rate for project ${projectId}: ${err.message}`);
+  });
+
   return {
     saved_count: savedAnswers.length,
     total_attempted: Object.keys(answers).length,
@@ -310,6 +282,11 @@ export const submitChecklistAnswers = async (projectId, phaseNum, normalizedRole
   if (totalNewDefects > 0) {
     responseData.defects_added = totalNewDefects;
   }
+
+  // Trigger project-wide defect rate refresh in background
+  getOverallDefectRate(projectId).catch(err => {
+    logger.error(`Failed to refresh overall defect rate for project ${projectId}: ${err.message}`);
+  });
 
   return responseData;
 };

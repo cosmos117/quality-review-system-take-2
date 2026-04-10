@@ -1,4 +1,4 @@
-﻿/// Hierarchical checklist execution widget for ProjectChecklist structure.
+/// Hierarchical checklist execution widget for ProjectChecklist structure.
 /// This widget handles role-based editing (Executor, Reviewer, TeamLeader) and renders
 /// the hierarchical structure: Group â†’ Sections (optional) â†’ Questions.
 ///
@@ -352,7 +352,7 @@ class _ProjectChecklistExecutionWidgetState
                     ),
                   ),
                   child: Text(
-                    'Defects: $currentGroupDefects',
+                    'Mismatches: $currentGroupDefects',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,

@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:get/get.dart';
 import '../../services/http_client.dart';
@@ -84,6 +84,15 @@ class ChecklistController extends GetxService {
     return Map<String, Map<String, dynamic>>.from(
       _cache[projectId]?[phase]?[role] ?? {},
     );
+  }
+
+  /// Get a direct reference to role sheet (for high-performance build-time lookups)
+  Map<String, dynamic> getRoleSheetReference(
+    String projectId,
+    int phase,
+    String role,
+  ) {
+    return _cache[projectId]?[phase]?[role] ?? {};
   }
 
   /// Set/update a single answer and save to backend

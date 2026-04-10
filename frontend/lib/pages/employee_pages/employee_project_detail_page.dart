@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../../models/project.dart';
 import '../../controllers/team_controller.dart';
@@ -11,6 +12,8 @@ import '../../models/role.dart';
 import '../../models/project_membership.dart';
 import '../../widgets/phase_overview_widget.dart';
 import '../../components/shimmer_loading.dart';
+import '../../services/project_checklist_service.dart';
+import '../../services/iteration_service.dart';
 
 class EmployeeProjectDetailPage extends StatefulWidget {
   final Project project;
@@ -35,6 +38,12 @@ class _EmployeeProjectDetailsPageState
   List<ProjectMembership> _teamLeaders = [];
   List<ProjectMembership> _executors = [];
   List<ProjectMembership> _reviewers = [];
+  
+  // Defect metrics
+  double _overallDefectRate = 0.0;
+  double _currentIterationRate = 0.0;
+  int _loopbackCount = 0;
+  bool _loadingMetrics = true;
 
   @override
   void initState() {
@@ -51,6 +60,7 @@ class _EmployeeProjectDetailsPageState
   Future<void> _initializeData() async {
     await _fetchLatestProjectData();
     await _loadAssignments();
+    await _loadDefectMetrics();
     if (mounted) {
       setState(() => _isLoading = false);
     }
@@ -110,6 +120,27 @@ class _EmployeeProjectDetailsPageState
     }
   }
 
+  Future<void> _loadDefectMetrics() async {
+    if (!mounted) return;
+    setState(() => _loadingMetrics = true);
+    try {
+      final checklistService = Get.find<ProjectChecklistService>();
+      final overallData = await checklistService.getOverallDefectRate(widget.project.id);
+      
+      if (mounted) {
+        setState(() {
+          _overallDefectRate = (overallData['overallDefectRate'] ?? 0.0).toDouble();
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) print("Error loading metrics: $e");
+    } finally {
+      if (mounted) {
+        setState(() => _loadingMetrics = false);
+      }
+    }
+  }
+
   ProjectsController get _projectsCtrl => Get.find<ProjectsController>();
   TeamController get _teamCtrl => Get.find<TeamController>();
   ProjectDetailsController _details() => _detailsCtrl;
@@ -148,6 +179,25 @@ class _EmployeeProjectDetailsPageState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (!_loadingMetrics)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 24.0),
+                        child: Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            _buildMetricBox(
+                              'Overall Defect Rate',
+                              '${_overallDefectRate.toStringAsFixed(2)}%',
+                              Colors.blue.shade50,
+                              Colors.blue.shade700,
+                              Icons.assessment_outlined,
+                            ),
+                            // We hide the iteration wise boxes here as they are phase-specific,
+                            // but Overall is most important for the detail view.
+                          ],
+                        ),
+                      ),
                     Text(
                       'Project Details',
                       style: Theme.of(context).textTheme.headlineSmall,
@@ -181,6 +231,12 @@ class _EmployeeProjectDetailsPageState
                                       false)
                                   ? details.project.executor!.trim()
                                   : '--',
+                            ),
+                            _row(
+                              'Checklist\nTemplate',
+                              (details.project.templateName?.trim().isNotEmpty ?? false)
+                                  ? details.project.templateName!.trim()
+                                  : 'None Assigned',
                             ),
                             const Divider(height: 24),
                             _buildReviewApplicableToggle(details),
@@ -494,17 +550,60 @@ class _EmployeeProjectDetailsPageState
 
   Widget _row(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 120,
             child: Text(
               label,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
           Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricBox(String label, String value, Color bgColor, Color iconColor, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: iconColor.withOpacity(0.3), width: 1.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: iconColor, size: 20),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade700,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ),
         ],
       ),
     );

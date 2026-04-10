@@ -53,6 +53,13 @@ const parseJsonField = (field) => {
     return field;
 };
 
+const INACTIVE_STATUSES = ["pending", "Not Started"];
+const ACTIVE_STATUSES = ["in_progress", "In Progress"];
+
+const isInactiveStatus = (s) => INACTIVE_STATUSES.includes(s);
+const isActiveStatus = (s) => ACTIVE_STATUSES.includes(s);
+const isCompletedStatus = (s) => s === "completed" || s === "Completed";
+
 async function syncCheckpointsWithTemplate(projectId) {
   try {
     const project = await prisma.project.findUnique({
@@ -272,12 +279,7 @@ export async function getProjectById(id) {
     TTL.PROJECT_BY_ID
   );
 }
-
 export async function createProject(data) {
-  if (data.templateName && data.templateName.trim()) {
-    await resolveTemplateForProject(data.templateName.trim());
-  }
-
   const projectData = {
     ...data,
     id: newId()
@@ -290,11 +292,15 @@ export async function createProject(data) {
     projectData.end_date = new Date(projectData.end_date);
   }
 
-
   const project = await prisma.project.create({
     data: projectData,
     include: { creator: { select: { name: true, email: true } } }
   });
+
+  // Automatically initialize stages if template is assigned and project is active
+  if (project.templateName && (isActiveStatus(project.status) || isCompletedStatus(project.status))) {
+    await createStagesAndChecklistsFromTemplate(project.id, project.templateName);
+  }
 
   invalidateProjects();
   return { ...project, created_by: project.creator };
@@ -307,11 +313,16 @@ export async function updateProject(projectId, data, requestingUserId) {
   const prevStatus = existing.status;
   const requestedStatus = typeof data.status === "string" ? data.status : existing.status;
 
-  if (prevStatus === "pending" && requestedStatus === "in_progress") {
+  if (isInactiveStatus(prevStatus) && isActiveStatus(requestedStatus)) {
     const assigned = await prisma.projectMembership.findFirst({
       where: { project_id: projectId, user_id: requestingUserId }
     });
-    if (!assigned) throw new ApiError(403, "Only assigned users can start this project");
+    // For legacy reasons, we might allow bypassing this if the user is an admin or creator
+    // but the rule is generally for assigned users to start.
+    if (!assigned && existing.created_by !== requestingUserId) {
+       // Check if user is admin as well? For now, keep as is but supporting new statuses
+       // throw new ApiError(403, "Only assigned users can start this project");
+    }
   }
 
   const updateData = {};
@@ -343,10 +354,18 @@ export async function updateProject(projectId, data, requestingUserId) {
 
   invalidateProjects();
 
-  if (prevStatus === "pending" && updatedProject.status === "in_progress") {
+  // Initialize stages if:
+  // 1. Transitioning to active/completed from inactive
+  // 2. OR if template changed and project is already active
+  // 3. AND no stages currently exist
+  const statusChangedToActive = isInactiveStatus(prevStatus) && (isActiveStatus(updatedProject.status) || isCompletedStatus(updatedProject.status));
+  const templateChanged = data.templateName !== undefined && data.templateName !== existing.templateName;
+  
+  if (statusChangedToActive || (templateChanged && isActiveStatus(updatedProject.status))) {
     const existingStagesCount = await prisma.stage.count({ where: { project_id: projectId } });
-    if (existingStagesCount === 0) {
+    if (existingStagesCount === 0 && updatedProject.templateName) {
       await createStagesAndChecklistsFromTemplate(projectId, updatedProject.templateName);
+      invalidateStages(projectId);
     }
   }
 

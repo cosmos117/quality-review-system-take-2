@@ -1,5 +1,5 @@
 import prisma from "../config/prisma.js";
-import { accumulateDefectsForChecklistGroups } from "./checklistAnswer.service.js";
+import { accumulateDefectsForChecklistGroups } from "./defectUtility.service.js";
 import logger from "../utils/logger.js";
 import { ApiError } from "../utils/ApiError.js";
 import { newId } from "../utils/newId.js";
@@ -10,6 +10,8 @@ const parseJsonField = (field) => {
     return field;
 };
 
+import { areAnswersDifferent } from "./defectUtility.service.js";
+
 function answersMatch(execAns, revAns) {
   const execKeys = Object.keys(execAns);
   const revKeys = Object.keys(revAns);
@@ -18,7 +20,8 @@ function answersMatch(execAns, revAns) {
   for (const k of commonKeys) {
     const e = execAns[k] || {};
     const r = revAns[k] || {};
-    if ((e.answer || null) !== (r.answer || null)) return false;
+    // Use normalized comparison from utility
+    if (areAnswersDifferent(e.answer, r.answer)) return false;
   }
   return true;
 }

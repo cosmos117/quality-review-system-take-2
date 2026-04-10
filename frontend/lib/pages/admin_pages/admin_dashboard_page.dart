@@ -217,13 +217,17 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: responsivePadding(16),
+                runSpacing: responsivePadding(16),
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Text(
                     'Welcome Back!',
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
-                  Spacer(),
+                  const SizedBox(width: 24),
                   ElevatedButton.icon(
                     onPressed: showCreateDialog,
                     icon: Icon(Icons.add, size: responsiveFontSize(8)),
@@ -240,119 +244,119 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   ),
                   SizedBox(width: responsivePadding(12)),
 
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      final res = await FilePicker.platform.pickFiles(
-                        type: FileType.custom,
-                        allowedExtensions: const ['xlsx', 'xlsm', 'xls'],
-                        withData: true,
-                      );
-                      if (res == null || res.files.isEmpty) return;
-                      final bytes = res.files.first.bytes;
-                      if (bytes == null) return;
-                      final importer = ExcelImportService();
-                      final projects = importer.parse(bytes);
-
-                      // Build existing uniqueness index: projectNo, internalOrderNo, title
-                      final existingKeys = <String>{};
-                      String norm(String s) => s.trim().toLowerCase();
-                      void addKeys(Project p) {
-                        final t = norm(p.title);
-                        if (t.isNotEmpty) existingKeys.add('title:$t');
-                        final pn = (p.projectNo ?? '').trim();
-                        if (pn.isNotEmpty) existingKeys.add('no:${norm(pn)}');
-                        final io = (p.internalOrderNo ?? '').trim();
-                        if (io.isNotEmpty) existingKeys.add('io:${norm(io)}');
-                      }
-
-                      for (final p in projCtrl.projects) {
-                        addKeys(p);
-                      }
-
-                      // Track duplicates within the same import batch as well
-                      final seenImportKeys = <String>{};
-                      int imported = 0;
-                      int skipped = 0;
-
-                      for (final p in projects) {
-                        final keys = <String>{};
-                        final t = norm(p.title);
-                        if (t.isNotEmpty) keys.add('title:$t');
-                        final pn = (p.projectNo ?? '').trim();
-                        if (pn.isNotEmpty) keys.add('no:${norm(pn)}');
-                        final io = (p.internalOrderNo ?? '').trim();
-                        if (io.isNotEmpty) keys.add('io:${norm(io)}');
-
-                        final isDup = keys.any(
-                          (k) =>
-                              existingKeys.contains(k) ||
-                              seenImportKeys.contains(k),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        final res = await FilePicker.platform.pickFiles(
+                          type: FileType.custom,
+                          allowedExtensions: const ['xlsx', 'xlsm', 'xls'],
+                          withData: true,
                         );
-                        if (isDup) {
-                          skipped++;
-                          continue;
-                        }
-                        try {
-                          await projCtrl.createProjectRemote(p);
-                          imported++;
-                          seenImportKeys.addAll(keys);
-                        } catch (e) {
-                          // ignore per-item errors but don't count as imported
-                        }
-                      }
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Imported $imported, skipped $skipped duplicate(s).',
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                    icon: Icon(Icons.file_upload, size: responsiveFontSize(8)),
-                    label: Text(
-                      'Import from Excel',
-                      style: TextStyle(fontSize: responsiveFontSize(6)),
-                    ),
-                  ),
-                  SizedBox(width: responsivePadding(12)),
+                        if (res == null || res.files.isEmpty) return;
+                        final bytes = res.files.first.bytes;
+                        if (bytes == null) return;
+                        final importer = ExcelImportService();
+                        final projects = importer.parse(bytes);
 
-                  // Export Master Excel Button
-                  Obx(() {
-                    final exportCtrl = Get.find<ExportController>();
-                    return ElevatedButton.icon(
-                      onPressed: exportCtrl.isExporting.value
-                          ? null
-                          : () async {
-                              await exportCtrl.exportMasterExcel();
-                            },
-                      icon: exportCtrl.isExporting.value
-                          ? SizedBox(
-                              width: responsiveFontSize(8),
-                              height: responsiveFontSize(8),
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
+                        // Build existing uniqueness index: projectNo, internalOrderNo, title
+                        final existingKeys = <String>{};
+                        String norm(String s) => s.trim().toLowerCase();
+                        void addKeys(Project p) {
+                          final t = norm(p.title);
+                          if (t.isNotEmpty) existingKeys.add('title:$t');
+                          final pn = (p.projectNo ?? '').trim();
+                          if (pn.isNotEmpty) existingKeys.add('no:${norm(pn)}');
+                          final io = (p.internalOrderNo ?? '').trim();
+                          if (io.isNotEmpty) existingKeys.add('io:${norm(io)}');
+                        }
+
+                        for (final p in projCtrl.projects) {
+                          addKeys(p);
+                        }
+
+                        // Track duplicates within the same import batch as well
+                        final seenImportKeys = <String>{};
+                        int imported = 0;
+                        int skipped = 0;
+
+                        for (final p in projects) {
+                          final keys = <String>{};
+                          final t = norm(p.title);
+                          if (t.isNotEmpty) keys.add('title:$t');
+                          final pn = (p.projectNo ?? '').trim();
+                          if (pn.isNotEmpty) keys.add('no:${norm(pn)}');
+                          final io = (p.internalOrderNo ?? '').trim();
+                          if (io.isNotEmpty) keys.add('io:${norm(io)}');
+
+                          final isDup = keys.any(
+                            (k) =>
+                                existingKeys.contains(k) ||
+                                seenImportKeys.contains(k),
+                          );
+                          if (isDup) {
+                            skipped++;
+                            continue;
+                          }
+                          try {
+                            await projCtrl.createProjectRemote(p);
+                            imported++;
+                            seenImportKeys.addAll(keys);
+                          } catch (e) {
+                            // ignore per-item errors but don't count as imported
+                          }
+                        }
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Imported $imported, skipped $skipped duplicate(s).',
                               ),
-                            )
-                          : Icon(Icons.download, size: responsiveFontSize(8)),
+                            ),
+                          );
+                        }
+                      },
+                      icon: Icon(Icons.file_upload, size: responsiveFontSize(8)),
                       label: Text(
-                        exportCtrl.isExporting.value
-                            ? 'Exporting...'
-                            : 'Export Master Excel',
+                        'Import from Excel',
                         style: TextStyle(fontSize: responsiveFontSize(6)),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green[600],
-                        padding: EdgeInsets.symmetric(
-                          horizontal: responsivePadding(16),
-                          vertical: responsivePadding(12),
+                    ),
+                    SizedBox(width: responsivePadding(12)),
+
+                    // Export Master Excel Button
+                    Obx(() {
+                      final exportCtrl = Get.find<ExportController>();
+                      return ElevatedButton.icon(
+                        onPressed: exportCtrl.isExporting.value
+                            ? null
+                            : () async {
+                                await exportCtrl.exportMasterExcel();
+                              },
+                        icon: exportCtrl.isExporting.value
+                            ? SizedBox(
+                                width: responsiveFontSize(8),
+                                height: responsiveFontSize(8),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              )
+                            : Icon(Icons.download, size: responsiveFontSize(8)),
+                        label: Text(
+                          exportCtrl.isExporting.value
+                              ? 'Exporting...'
+                              : 'Export Master Excel',
+                          style: TextStyle(fontSize: responsiveFontSize(6)),
                         ),
-                      ),
-                    );
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green[600],
+                          padding: EdgeInsets.symmetric(
+                            horizontal: responsivePadding(16),
+                            vertical: responsivePadding(12),
+                          ),
+                        ),
+                      );
                   }),
                 ],
               ),
@@ -493,7 +497,10 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               SizedBox(height: responsivePadding(16)),
               // Status filter chips
               Obx(
-                () => Row(
+                () => Wrap(
+                  spacing: responsivePadding(12),
+                  runSpacing: responsivePadding(12),
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(
                       'Filter by Status:',
@@ -503,13 +510,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                         color: Colors.black87,
                       ),
                     ),
-                    SizedBox(width: responsivePadding(12)),
                     _buildFilterChip(ui, 'Not Started'),
-                    SizedBox(width: responsivePadding(8)),
                     _buildFilterChip(ui, 'In Progress'),
-                    SizedBox(width: responsivePadding(8)),
                     _buildFilterChip(ui, 'Completed'),
-                    const Spacer(),
                     if (ui.selectedStatuses.isNotEmpty)
                       TextButton.icon(
                         onPressed: ui.clearFilters,

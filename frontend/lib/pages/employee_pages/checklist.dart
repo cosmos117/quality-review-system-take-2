@@ -299,6 +299,7 @@ class RoleColumn extends StatelessWidget {
   final Map<String, dynamic>? Function(String?)? getCategoryInfo;
   final List<Map<String, dynamic>>
   availableCategories; // Added: for category assignment
+  final List<dynamic> iterations; // Added: shared iteration data to avoid redundant per-card fetches
   final Function(String checkpointId, String? categoryId, {String? severity})?
   onCategoryAssigned; // Added: callback for category assignment
 
@@ -320,6 +321,7 @@ class RoleColumn extends StatelessWidget {
     required this.onExpand,
     required this.onAnswer,
     required this.onSubmit,
+    this.iterations = const [],
     this.stageId,
     this.onRevert,
     this.isCurrentUserReviewer = false,
@@ -722,42 +724,43 @@ class RoleColumn extends StatelessWidget {
                                                 ),
                                               ],
                                             ),
-                                          SubQuestionCard(
-                                            key: ValueKey("${role}_$key"),
-                                            subQuestion: text,
-                                            editable: canEdit,
-                                            role: role,
-                                            initialData:
-                                                answers[key] ??
-                                                checklistCtrl.getAnswers(
-                                                  projectId,
-                                                  phase,
-                                                  role,
-                                                  key,
-                                                ),
-                                            onAnswer: (ans) => canEdit
-                                                ? onAnswer(key, ans)
-                                                : null,
-                                            highlight: highlightSubs.contains(
-                                              key,
+                                            SubQuestionCard(
+                                              key: ValueKey("${role}_$key"),
+                                              subQuestion: text,
+                                              editable: canEdit,
+                                              role: role,
+                                              initialData:
+                                                  answers[key] ??
+                                                  checklistCtrl.getAnswers(
+                                                    projectId,
+                                                    phase,
+                                                    role,
+                                                    key,
+                                                  ),
+                                              onAnswer: (ans) => canEdit
+                                                  ? onAnswer(key, ans)
+                                                  : null,
+                                              highlight: highlightSubs.contains(
+                                                key,
+                                              ),
+                                              categoryInfo: getCategoryInfo?.call(
+                                                sub['categoryId'],
+                                              ),
+                                              checkpointId: key,
+                                              selectedCategoryId:
+                                                  selectedDefectCategory[key],
+                                              selectedSeverity:
+                                                  selectedDefectSeverity[key],
+                                              availableCategories:
+                                                  availableCategories,
+                                              onCategoryAssigned: canEdit
+                                                  ? onCategoryAssigned
+                                                  : null,
+                                              projectId: projectId,
+                                              stageId: stageId,
+                                              questionId: key,
+                                              iterations: iterations, // Pass shared iterations down
                                             ),
-                                            categoryInfo: getCategoryInfo?.call(
-                                              sub['categoryId'],
-                                            ),
-                                            checkpointId: key,
-                                            selectedCategoryId:
-                                                selectedDefectCategory[key],
-                                            selectedSeverity:
-                                                selectedDefectSeverity[key],
-                                            availableCategories:
-                                                availableCategories,
-                                            onCategoryAssigned: canEdit
-                                                ? onCategoryAssigned
-                                                : null,
-                                            projectId: projectId,
-                                            stageId: stageId,
-                                            questionId: key,
-                                          ),
                                         ],
                                       ),
                                     ),
@@ -795,9 +798,10 @@ class RoleColumn extends StatelessWidget {
     String role,
   ) {
     // Quickly fetch both role sheets once instead of per sub-question
-    final thisRoleSheet = checklistCtrl.getRoleSheet(projectId, phase, role);
+    // Use cached references from the controller instead of creating new Map.from() copies
+    final thisRoleSheet = checklistCtrl.getRoleSheetReference(projectId, phase, role);
     final otherRole = role == 'executor' ? 'reviewer' : 'executor';
-    final otherRoleSheet = checklistCtrl.getRoleSheet(
+    final otherRoleSheet = checklistCtrl.getRoleSheetReference(
       projectId,
       phase,
       otherRole,
@@ -808,14 +812,19 @@ class RoleColumn extends StatelessWidget {
       final key = (sub['id']?.isNotEmpty == true ? sub['id'] : sub['text'])!;
 
       // Get answers from merged sources (local map priority over cache)
-      final a = answers[key]?['answer'] ?? thisRoleSheet[key]?['answer'];
-      final b = otherAnswers[key]?['answer'] ?? otherRoleSheet[key]?['answer'];
+      final aMap = answers[key] ?? thisRoleSheet[key];
+      final bMap = otherAnswers[key] ?? otherRoleSheet[key];
+      
+      final a = aMap?['answer'];
+      final b = bMap?['answer'];
 
       // Only show as different if BOTH have provided answers AND they differ
       if (a == null || b == null) continue;
 
-      final aStr = (a is String ? a.trim().toLowerCase() : a);
-      final bStr = (b is String ? b.trim().toLowerCase() : b);
+      if (a == b) continue;
+      
+      final aStr = (a is String ? a.trim().toLowerCase() : a.toString().toLowerCase());
+      final bStr = (b is String ? b.trim().toLowerCase() : b.toString().toLowerCase());
 
       if (aStr != bStr) return true; // Found a difference
     }
@@ -838,7 +847,7 @@ class _DefectChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        'Defects: $defectCount',
+        'Mismatches: $defectCount',
         style: const TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.bold,
@@ -1242,6 +1251,8 @@ class SubQuestionCard extends StatefulWidget {
   final String? stageId; // Added: for fetching iterations
   final String? questionId; // Added: the MongoDB _id of this question
 
+  final List<dynamic> iterations; // Added: shared iteration history
+
   const SubQuestionCard({
     super.key,
     required this.subQuestion,
@@ -1259,6 +1270,7 @@ class SubQuestionCard extends StatefulWidget {
     this.projectId,
     this.stageId,
     this.questionId,
+    this.iterations = const [],
   });
 
   @override
@@ -1295,40 +1307,15 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
   @override
   void initState() {
     super.initState();
-
-    if (kDebugMode && widget.role == 'reviewer') {}
-
-    // Initialize category and severity from widget props first
-    // Convert empty strings to null for dropdown compatibility
-    selectedCategory =
-        (widget.selectedCategoryId == null ||
-            widget.selectedCategoryId!.isEmpty)
-        ? null
-        : widget.selectedCategoryId;
-    selectedSeverity =
-        (widget.selectedSeverity == null || widget.selectedSeverity!.isEmpty)
-        ? null
-        : widget.selectedSeverity;
-
-    // Then initialize data (which may override if initialData has values)
     _initializeData();
 
-    // Validate that selectedCategory exists in availableCategories
-    if (selectedCategory != null && widget.role == 'reviewer') {
-      final categoryIds = widget.availableCategories
-          .map((cat) => (cat['_id'] ?? '').toString())
-          .where((id) => id.isNotEmpty)
-          .toSet();
-      if (!categoryIds.contains(selectedCategory)) {
-        if (kDebugMode) {}
-        selectedCategory = null;
-      }
-    }
-
-    // Load iterations if we have the necessary IDs
-    if (widget.projectId != null && widget.stageId != null) {
-      _loadIterations();
-    }
+    // Initialize iterations from prop instead of fetching
+    _iterations = List<Map<String, dynamic>>.from(widget.iterations);
+    
+    // Attempt to determine current iteration number if not provided in data
+    _currentIteration = _iterations.isNotEmpty 
+        ? _iterations.map((it) => (it['iterationNumber'] as int? ?? 0)).fold(0, (max, v) => v > max ? v : max)
+        : 1;
 
     if (kDebugMode && widget.role == 'reviewer') {}
 
@@ -1386,41 +1373,9 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     }
   }
 
+  // Redundant network fetch removed in favor of shared iterations prop
   Future<void> _loadIterations() async {
-    if (widget.projectId == null ||
-        widget.stageId == null ||
-        widget.questionId == null) {
-      return;
-    }
-
-    // Prevent concurrent loads
-    if (_loadingIterations) return;
-    setState(() => _loadingIterations = true);
-
-    try {
-      final iterationService = IterationService();
-      final result = await iterationService.getIterations(
-        widget.projectId!,
-        widget.stageId!,
-      );
-
-      if (mounted) {
-        setState(() {
-          _iterations = List<Map<String, dynamic>>.from(
-            result['iterations'] ?? [],
-          );
-          _currentIteration = result['currentIteration'] ?? 1;
-          _loadingIterations = false;
-        });
-
-        if (kDebugMode) {}
-      }
-    } catch (e) {
-      if (kDebugMode) {}
-      if (mounted) {
-        setState(() => _loadingIterations = false);
-      }
-    }
+    return;
   }
 
   void _viewIteration(int iterationNumber) {

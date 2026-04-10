@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:quality_review/components/admin_dialog.dart';
@@ -197,6 +197,12 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
                                       false)
                                   ? details.project.executor!.trim()
                                   : '--',
+                            ),
+                            _row(
+                              'Checklist\nTemplate',
+                              (details.project.templateName?.trim().isNotEmpty ?? false)
+                                  ? details.project.templateName!.trim()
+                                  : 'None Assigned',
                             ),
                             const Divider(height: 24),
                             _buildReviewApplicableToggle(details),
@@ -818,9 +824,10 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 120,
+            width: 150,
             child: Text(
               label,
               style: const TextStyle(fontWeight: FontWeight.w600),
