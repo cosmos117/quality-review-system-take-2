@@ -14,6 +14,8 @@ class TemplateService {
 
   static const String _baseUrl = '${ApiConfig.baseUrl}/templates';
   static const String _libraryBaseUrl = '${ApiConfig.baseUrl}/template-library';
+  static const String _globalDefectCategoriesUrl = '${ApiConfig.baseUrl}/defect-categories';
+
 
   /// Ensure token is set from current user
   void _ensureToken() {
@@ -444,32 +446,44 @@ class TemplateService {
     }
   }
 
-  /// Update defect categories in template
+  /// Fetch global defect categories and groups
+  Future<Map<String, dynamic>> fetchGlobalDefectCategories({
+    bool forceRefresh = false,
+  }) async {
+    return _cache.get('defect-categories:global', () async {
+      try {
+        _ensureToken();
+        final response = await http.getJson(Uri.parse(_globalDefectCategoriesUrl));
+        return response['data'] as Map<String, dynamic>? ?? response;
+      } catch (e) {
+        throw Exception('Error fetching global defect categories: $e');
+      }
+    }, forceRefresh: forceRefresh);
+  }
+
+  /// Update global defect categories
   Future<void> updateDefectCategories(
     List<dynamic> categories, {
     List<String>? categoryGroups,
+    @Deprecated('templateName is no longer used as defect categories are now global')
     String? templateName,
   }) async {
     try {
       _ensureToken();
 
       final body = {
-        'defectCategories': categories.map((c) => c.toJson()).toList(),
-        'defectCategoryGroups': categoryGroups ?? [],
+        'categories': categories.map((c) => c.toJson()).toList(),
+        'groups': categoryGroups ?? [],
       };
 
-      if (templateName != null && templateName.trim().isNotEmpty) {
-        final root = _templateRoot(templateName);
-        await http.putJson(Uri.parse('$root/categories'), body);
-      } else {
-        await http.patchJson(Uri.parse('$_baseUrl/defect-categories'), body);
-      }
+      await http.patchJson(Uri.parse(_globalDefectCategoriesUrl), body);
 
       _cache.clear();
     } catch (e) {
-      throw Exception('Error updating defect categories: $e');
+      throw Exception('Error updating global defect categories: $e');
     }
   }
+
 
   /// Add a section to a checklist group in the template
   /// [checklistId] is the MongoDB _id of the checklist (group)

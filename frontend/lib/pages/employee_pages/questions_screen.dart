@@ -65,6 +65,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   Map<String, String> _checkpointIdMap =
       {}; // Cache: subQuestion text/id -> checkpoint ID (for fast lookup)
 
+  // Safety flag to prevent concurrent data loading
+  bool _isCurrentlyLoadingChecklist = false;
+  // Hard timer that force-clears the spinner if loading hangs
+  Timer? _loadingTimer;
+
   // Defect tracking and category state
   Map<String, int> _defectsByChecklist = {};
   Map<String, int> _checkpointsByChecklist =
@@ -87,7 +92,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   // Defect rate tracking
   double _overallDefectRate = 0.0;
   List<Map<String, dynamic>> _iterationsWithRates = [];
-  List<dynamic> _historicalIterationsFull = []; // Stores full group snapshots for iterations
+  List<dynamic> _historicalIterationsFull =
+      []; // Stores full group snapshots for iterations
   Map<String, dynamic>? _currentIterationStats;
   int? _selectedIterationNumber;
   List<DropdownMenuItem<int>> _cachedDropdownItems = [];
@@ -110,8 +116,50 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     _loadChecklistData();
   }
 
+  @override
+  void dispose() {
+    // Cancel hard safety timer
+    _loadingTimer?.cancel();
+    _loadingTimer = null;
+    // Reset loading guard
+    _isCurrentlyLoadingChecklist = false;
+    super.dispose();
+  }
+
   List<Map<String, dynamic>> _getAvailableCategories() {
     return _defectCategories.values.toList();
+  }
+
+  /// Loads defect categories in the background without blocking the checklist.
+  /// Safe to call multiple times — subsequent calls are deduplicated by ApiCache.
+  void _loadDefectCategoriesInBackground() {
+    Future(() async {
+      try {
+        if (!Get.isRegistered<TemplateService>()) return;
+        final templateService = Get.find<TemplateService>();
+        final defectSettings = await templateService
+            .fetchGlobalDefectCategories();
+        if (!mounted) return;
+        final cats = defectSettings['categories'] as List<dynamic>? ?? [];
+        final newCategories = <String, Map<String, dynamic>>{};
+        for (final cat in cats) {
+          if (cat is Map<String, dynamic>) {
+            final id = ((cat['_id'] ?? cat['id'] ?? '') as Object).toString();
+            if (id.isNotEmpty) {
+              final normalised = Map<String, dynamic>.from(cat);
+              normalised['_id'] = id;
+              newCategories[id] = normalised;
+            }
+          }
+        }
+        if (mounted && newCategories.isNotEmpty) {
+          setState(() => _defectCategories = newCategories);
+        }
+      } catch (e) {
+        if (kDebugMode)
+          print("!!! [Background] Defect Category Load Error: $e");
+      }
+    });
   }
 
   Map<String, dynamic>? _getCategoryInfo(String? categoryId) {
@@ -213,6 +261,67 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
   Future<void> _loadChecklistData() async {
     if (!mounted) return;
+    // If already loading, don't start another one
+    if (_isCurrentlyLoadingChecklist) {
+      if (kDebugMode)
+        print(">>> [QuestionsScreen] Already loading, skipping duplicate call");
+      return;
+    }
+
+    _isCurrentlyLoadingChecklist = true;
+    if (kDebugMode)
+      print(">>> [QuestionsScreen] Starting load for phase $_selectedPhase");
+
+    // Cancel any existing safety timer
+    _loadingTimer?.cancel();
+
+    // Start a HARD 20-second timer that forces the spinner off no matter what
+    // This is more reliable than Future.timeout in Flutter web
+    _loadingTimer = Timer(const Duration(seconds: 20), () {
+      if (kDebugMode)
+        print(
+          "!!! [QuestionsScreen] HARD TIMER FIRED — force dismissing spinner",
+        );
+      if (mounted) {
+        setState(() {
+          _isLoadingData = false;
+          _isLoadingQuestions = false;
+          if (_errorMessage == null) {
+            _errorMessage = "Loading timed out. Tap refresh to try again.";
+          }
+        });
+      }
+      _isCurrentlyLoadingChecklist = false;
+    });
+
+    try {
+      await _loadChecklistDataInternal();
+    } catch (e) {
+      if (kDebugMode) print("!!! [QuestionsScreen] ERROR: $e");
+      if (mounted) {
+        setState(() {
+          _errorMessage = "Failed to load. Tap refresh to try again.";
+        });
+      }
+    } finally {
+      // Cancel the hard timer since we completed normally
+      _loadingTimer?.cancel();
+      _loadingTimer = null;
+      // Always dismiss spinner
+      if (mounted) {
+        setState(() {
+          _isLoadingData = false;
+          _isLoadingQuestions = false;
+        });
+      }
+      _isCurrentlyLoadingChecklist = false;
+      if (kDebugMode) print("<<< [QuestionsScreen] Load complete");
+    }
+  }
+
+  /// Internal logic for loading checklist data, called by the guarded _loadChecklistData
+  Future<void> _loadChecklistDataInternal() async {
+    if (!mounted) return;
 
     setState(() {
       _isLoadingData = true;
@@ -225,32 +334,20 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       _selectedDefectSeverity.clear();
     });
 
+    // Fire-and-forget: load defect categories in background (they're only needed for reviewer defect assignment)
+    // This MUST NOT block the checklist from loading
+    _loadDefectCategoriesInBackground();
+
     int phase = _selectedPhase;
 
     try {
-      // Step 0: Load defect categories from template
-      try {
-        final templateService = Get.find<TemplateService>();
-        final template = await templateService.fetchTemplate(templateName: widget.templateName);
-        final cats = template['defectCategories'] as List<dynamic>? ?? [];
-        _defectCategories = {};
-        for (final cat in cats) {
-          if (cat is Map<String, dynamic>) {
-            final id = ((cat['_id'] ?? cat['id'] ?? '') as Object).toString();
-            if (id.isNotEmpty) {
-              final normalised = Map<String, dynamic>.from(cat);
-              normalised['_id'] = id;
-              _defectCategories[id] = normalised;
-            }
-          }
-        }
-      } catch (e) {
-        if (kDebugMode) print("Defect Category Load Error: $e");
-      }
-
       // Step 1: Fetch stages
+      if (kDebugMode) print("--- [QuestionsScreen] Step 1: Fetching Stages");
       final stageService = Get.find<StageService>();
-      final stages = await stageService.listStages(widget.projectId, forceRefresh: true);
+      final stages = await stageService.listStages(
+        widget.projectId,
+        forceRefresh: true,
+      );
 
       int discoveredMaxActual = 1;
       final discoveredPhaseNumbers = <int>{};
@@ -262,7 +359,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         final stageKey = (s['stage_key'] ?? '').toString();
         stageMap[stageKey] = {'name': name, ...s};
 
-        final match = RegExp(r'stage(\d+)', caseSensitive: false).firstMatch(stageKey);
+        final match = RegExp(
+          r'stage(\d+)',
+          caseSensitive: false,
+        ).firstMatch(stageKey);
         if (match != null) {
           final p = int.tryParse(match.group(1) ?? '') ?? 0;
           if (p > discoveredMaxActual) discoveredMaxActual = p;
@@ -282,12 +382,16 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         setState(() {
           _stageMap = stageMap;
           _maxActualPhase = discoveredMaxActual;
-          _availablePhaseNumbers = availablePhases.isEmpty ? [1] : availablePhases;
+          _availablePhaseNumbers = availablePhases.isEmpty
+              ? [1]
+              : availablePhases;
           _conflictCounters.clear();
           _conflictCounters.addAll(conflictCountersMap);
 
           if (!_availablePhaseNumbers.contains(_selectedPhase)) {
-            _selectedPhase = _availablePhaseNumbers.isEmpty ? 1 : _availablePhaseNumbers.first;
+            _selectedPhase = _availablePhaseNumbers.isEmpty
+                ? 1
+                : _availablePhaseNumbers.first;
           }
         });
       }
@@ -295,7 +399,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       phase = _selectedPhase;
 
       if (stages.isEmpty) {
-        throw Exception('No stages/checklists found. Ensure the template exists and the project is started.');
+        throw Exception(
+          'No stages/checklists found. Ensure the template exists and the project is started.',
+        );
       }
 
       final expectedStageKey = 'stage$phase';
@@ -305,20 +411,26 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       });
 
       if (stage == null) {
-        throw Exception('No stage found for Phase $phase (looking for $expectedStageKey).');
+        throw Exception(
+          'No stage found for Phase $phase (looking for $expectedStageKey).',
+        );
       }
 
       final stageId = (stage['_id'] ?? '').toString();
       _currentStageId = stageId;
 
+      // Step 3: Fetch Checklist
+      if (kDebugMode) print("--- [QuestionsScreen] Step 3: Fetching Checklist");
       List<Question> loadedChecklist = [];
       try {
         final projectChecklistService = Get.find<ProjectChecklistService>();
-        final projectChecklistData = await projectChecklistService.fetchChecklist(widget.projectId, stageId);
+        final projectChecklistData = await projectChecklistService
+            .fetchChecklist(widget.projectId, stageId);
 
-        _historicalIterationsFull = projectChecklistData['iterations'] as List<dynamic>? ?? [];
+        _historicalIterationsFull =
+            projectChecklistData['iterations'] as List<dynamic>? ?? [];
         final groups = projectChecklistData['groups'] as List<dynamic>? ?? [];
-        
+
         if (groups.isNotEmpty) {
           loadedChecklist = Question.fromProjectChecklistGroups(groups);
           int totalDefects = 0;
@@ -334,27 +446,33 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
               if (q is! Map<String, dynamic>) continue;
               final questionId = (q['_id'] ?? '').toString();
               if (questionId.isEmpty) continue;
-              final reviewerResp = q['reviewerResponse'] as Map<String, dynamic>? ?? {};
+              final reviewerResp =
+                  q['reviewerResponse'] as Map<String, dynamic>? ?? {};
               final defectCatId = (reviewerResp['categoryId'] ?? '').toString();
               if (defectCatId.isNotEmpty) {
                 defectCategories[questionId] = defectCatId;
-                defectSeverities[questionId] = (reviewerResp['severity'] ?? '').toString();
+                defectSeverities[questionId] = (reviewerResp['severity'] ?? '')
+                    .toString();
               }
             }
 
             final sections = group['sections'] as List<dynamic>? ?? [];
             for (final section in sections) {
               if (section is! Map<String, dynamic>) continue;
-              final sectionQuestions = section['questions'] as List<dynamic>? ?? [];
+              final sectionQuestions =
+                  section['questions'] as List<dynamic>? ?? [];
               for (final q in sectionQuestions) {
                 if (q is! Map<String, dynamic>) continue;
                 final questionId = (q['_id'] ?? '').toString();
                 if (questionId.isEmpty) continue;
-                final reviewerResp = q['reviewerResponse'] as Map<String, dynamic>? ?? {};
-                final defectCatId = (reviewerResp['categoryId'] ?? '').toString();
+                final reviewerResp =
+                    q['reviewerResponse'] as Map<String, dynamic>? ?? {};
+                final defectCatId = (reviewerResp['categoryId'] ?? '')
+                    .toString();
                 if (defectCatId.isNotEmpty) {
                   defectCategories[questionId] = defectCatId;
-                  defectSeverities[questionId] = (reviewerResp['severity'] ?? '').toString();
+                  defectSeverities[questionId] =
+                      (reviewerResp['severity'] ?? '').toString();
                 }
               }
             }
@@ -369,19 +487,26 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           }
         }
       } catch (e) {
-        if (kDebugMode) print("ProjectChecklist Fetch Error: $e");
+        if (kDebugMode) print("!!! ProjectChecklist Fetch Error: $e");
       }
 
+      // Step 4: Fallback to template
       if (loadedChecklist.isEmpty) {
+        if (kDebugMode)
+          print("--- [QuestionsScreen] Step 4: Fallback to Template");
         try {
           final templateService = Get.find<TemplateService>();
-          final template = await templateService.fetchTemplate(templateName: widget.templateName);
+          final template = await templateService.fetchTemplate(
+            templateName: widget.templateName,
+          );
           final stageKey = 'stage$phase';
           final stageData = template[stageKey];
           if (stageData is List && stageData.isNotEmpty) {
             loadedChecklist = _questionsFromTemplateStage(stageData);
           }
-        } catch (e) {}
+        } catch (e) {
+          if (kDebugMode) print("!!! Template Fallback Error: $e");
+        }
       }
 
       if (mounted) {
@@ -391,55 +516,78 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         _buildCheckpointIdMap();
       }
 
-      // Step 5: Load answers and rates in parallel
+      // Step 5: Only await critical answer loads; kick off non-critical work in background
+      if (kDebugMode)
+        print(
+          "--- [QuestionsScreen] Step 5: Loading answers + kicking off background tasks",
+        );
+
+      // Fire-and-forget the non-critical tasks (they update UI when ready without blocking)
+      _loadDefectRates().catchError((_) {});
+      _computeActivePhase().catchError((_) {});
+
+      // Only await the critical answer loads (each has a 15s HTTP timeout built-in)
       await Future.wait([
         checklistCtrl.loadAnswers(widget.projectId, phase, 'executor'),
         checklistCtrl.loadAnswers(widget.projectId, phase, 'reviewer'),
-        _loadDefectRates().catchError((e) => null),
-        _computeActivePhase().catchError((e) => null),
-      ]).timeout(const Duration(seconds: 30), onTimeout: () {
-        if (kDebugMode) print("Step 5 loading timed out");
-        return [];
-      });
+      ]).timeout(
+        const Duration(seconds: 18),
+        onTimeout: () {
+          if (kDebugMode) print("!!! Step 5 answer loading timed out");
+          return [];
+        },
+      );
 
       if (mounted) {
+        final executorSheet = checklistCtrl.getRoleSheet(
+          widget.projectId,
+          phase,
+          'executor',
+        );
+        final reviewerSheet = checklistCtrl.getRoleSheet(
+          widget.projectId,
+          phase,
+          'reviewer',
+        );
         setState(() {
           executorAnswers.clear();
-          executorAnswers.addAll(checklistCtrl.getRoleSheet(widget.projectId, phase, 'executor'));
+          executorAnswers.addAll(executorSheet);
           reviewerAnswers.clear();
-          reviewerAnswers.addAll(checklistCtrl.getRoleSheet(widget.projectId, phase, 'reviewer'));
+          reviewerAnswers.addAll(reviewerSheet);
         });
       }
 
       _recomputeDefects();
     } catch (e) {
-      if (kDebugMode) print("Error in _loadChecklistData: $e");
+      if (kDebugMode) print("!!! Error in _loadChecklistData: $e");
       if (mounted) {
         setState(() {
           _errorMessage = e.toString();
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingData = false;
-          _isLoadingQuestions = false;
         });
       }
     }
 
     // Step 6: Initial scroll/expand
     if (widget.initialSubQuestion != null && mounted) {
+      if (kDebugMode)
+        print("--- [QuestionsScreen] Step 6: Initial Sub-Question Focus");
       final target = widget.initialSubQuestion!;
-      final idx = checklist.indexWhere((q) => q.subQuestions.any((s) => s['text'] == target || s['id'] == target));
+      final idx = checklist.indexWhere(
+        (q) =>
+            q.subQuestions.any((s) => s['text'] == target || s['id'] == target),
+      );
       if (idx != -1) {
-        final matched = checklist[idx].subQuestions.firstWhere((s) => s['text'] == target || s['id'] == target);
+        final matched = checklist[idx].subQuestions.firstWhere(
+          (s) => s['text'] == target || s['id'] == target,
+        );
         final key = (matched['id'] ?? matched['text'])!;
-        setState(() {
-          executorExpanded.add(idx);
-          reviewerExpanded.add(idx);
-          _highlightSubs.add(key);
-        });
+        if (mounted) {
+          setState(() {
+            executorExpanded.add(idx);
+            reviewerExpanded.add(idx);
+            _highlightSubs.add(key);
+          });
+        }
         Future.delayed(const Duration(seconds: 2), () {
           if (mounted) setState(() => _highlightSubs.remove(key));
         });
@@ -492,7 +640,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           );
 
         // Auto-select current iteration if none selected
-        if (_selectedIterationNumber == null && _currentIterationStats != null) {
+        if (_selectedIterationNumber == null &&
+            _currentIterationStats != null) {
           _selectedIterationNumber = _currentIterationStats!['iterationNumber'];
         }
 
@@ -670,7 +819,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       // Check if it's the current active iteration
       if (_currentIterationStats != null &&
           iterationNumber == _currentIterationStats!['iterationNumber']) {
-        // Current iteration: Just reload the latest answers as normal
+        // Current iteration: reset guard and reload
+        _isCurrentlyLoadingChecklist = false;
         _loadChecklistData();
         return;
       }
@@ -825,9 +975,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           ..sort();
     int active = availablePhases.first;
     bool allPhasesCompleted = false;
+
+    // ── Step A: Fetch approval statuses with a hard timeout ──────────────────
     try {
-      // Fetch statuses for the actual available phases only
-      // Force refresh to always get latest approval status
       final statusFutures = availablePhases
           .map(
             (phaseNum) => _approvalService
@@ -835,14 +985,24 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                 .catchError((_) => null),
           )
           .toList();
-      final statuses = await Future.wait(statusFutures);
+      // Hard 10s timeout — never block the whole page waiting for approval status
+      final statuses = await Future.wait(statusFutures).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          if (kDebugMode)
+            print('!!! [_computeActivePhase] status fetch timed out');
+          return List<Map<String, dynamic>?>.filled(
+            availablePhases.length,
+            null,
+          );
+        },
+      );
 
       bool allApproved = true;
       for (int i = 0; i < statuses.length; i++) {
         final status = statuses[i];
         final phaseNum = availablePhases[i];
         if (status != null && status['status'] == 'approved') {
-          // Move active phase to the next available phase.
           if (i + 1 < availablePhases.length) {
             active = availablePhases[i + 1];
           } else {
@@ -854,12 +1014,12 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           break;
         }
       }
-
       if (allApproved) {
         allPhasesCompleted = true;
         active = availablePhases.last;
       }
     } catch (_) {}
+
     if (!mounted) return;
     setState(() {
       _isProjectCompleted = allPhasesCompleted;
@@ -885,41 +1045,55 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         _selectedPhase = _availablePhaseNumbers.first;
       }
     });
-    // Refresh approval/compare for the currently selected phase in parallel with forced refresh
-    // Also load revert counts for all phases to keep loopback counters updated
-    final revertCountFutures = availablePhases
-        .map(
-          (phaseNum) => _approvalService
-              .getRevertCount(widget.projectId, phaseNum, forceRefresh: true)
-              .then((count) => MapEntry(phaseNum, count as int))
-              .catchError((_) => MapEntry(phaseNum, 0)),
-        )
-        .toList();
 
-    final revertResults = await Future.wait(revertCountFutures);
-
-    if (mounted) {
-      setState(() {
-        for (final entry in revertResults) {
-          _loopbackCounters[entry.key] = entry.value;
+    // ── Step B: Revert counts — fire-and-forget with timeout ─────────────────
+    Future(() async {
+      try {
+        final revertCountFutures = availablePhases
+            .map(
+              (phaseNum) => _approvalService
+                  .getRevertCount(
+                    widget.projectId,
+                    phaseNum,
+                    forceRefresh: true,
+                  )
+                  .then((count) => MapEntry(phaseNum, count as int))
+                  .catchError((_) => MapEntry(phaseNum, 0)),
+            )
+            .toList();
+        final revertResults = await Future.wait(revertCountFutures).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => <MapEntry<int, int>>[],
+        );
+        if (mounted) {
+          setState(() {
+            for (final entry in revertResults) {
+              _loopbackCounters[entry.key] = entry.value;
+            }
+          });
         }
-      });
-    }
+      } catch (_) {}
+    });
 
-    await Future.wait([
-      _approvalService
-          .compare(widget.projectId, _selectedPhase)
-          .then((status) {
-            if (mounted) setState(() => _compareStatus = status);
-          })
-          .catchError((_) {}),
-      _approvalService
-          .getStatus(widget.projectId, _selectedPhase, forceRefresh: true)
-          .then((appr) {
-            if (mounted) setState(() => _approvalStatus = appr);
-          })
-          .catchError((_) {}),
-    ]);
+    // ── Step C: Compare + approval status — fire-and-forget with timeout ─────
+    Future(() async {
+      try {
+        await Future.wait([
+          _approvalService
+              .compare(widget.projectId, _selectedPhase)
+              .then((status) {
+                if (mounted) setState(() => _compareStatus = status);
+              })
+              .catchError((_) {}),
+          _approvalService
+              .getStatus(widget.projectId, _selectedPhase, forceRefresh: true)
+              .then((appr) {
+                if (mounted) setState(() => _approvalStatus = appr);
+              })
+              .catchError((_) {}),
+        ]).timeout(const Duration(seconds: 10), onTimeout: () => []);
+      } catch (_) {}
+    });
   }
 
   @override
@@ -1132,15 +1306,20 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         ],
       ),
       body: _isLoadingData
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Loading checklist data...'),
-                ],
-              ),
+          ? Stack(
+              children: [
+                // Allow taps to reach the AppBar's back button while loading
+                const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Loading checklist data...'),
+                    ],
+                  ),
+                ),
+              ],
             )
           : SafeArea(
               child: Column(

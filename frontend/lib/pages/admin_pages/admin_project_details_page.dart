@@ -335,8 +335,6 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
     String title = current.title;
     DateTime started = current.started;
     String priority = current.priority;
-    String status = current.status;
-    String? executor = current.executor;
     String? templateName = current.templateName;
     String description = current.description ?? '';
     List<Map<String, dynamic>> templateOptions = [];
@@ -350,14 +348,7 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
     }
 
     const allowedPriorities = ['High', 'Medium', 'Low'];
-    const allowedStatuses = ['In Progress', 'Completed', 'Not Started'];
     if (!allowedPriorities.contains(priority)) priority = 'Medium';
-    if (!allowedStatuses.contains(status)) status = 'Not Started';
-    executor = (executor != null && executor.trim().isNotEmpty)
-        ? executor.trim()
-        : null;
-    final executorNames = _executorNames();
-    if (executor != null && !executorNames.contains(executor)) executor = null;
 
     await showAdminDialog(
       context,
@@ -426,28 +417,6 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              initialValue: status,
-              items: const [
-                'In Progress',
-                'Completed',
-                'Not Started',
-              ].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-              onChanged: (v) => status = v ?? status,
-              decoration: const InputDecoration(labelText: 'Status *'),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: executor,
-              items: executorNames
-                  .map((n) => DropdownMenuItem(value: n, child: Text(n)))
-                  .toList(),
-              onChanged: (v) => executor = v,
-              decoration: const InputDecoration(
-                labelText: 'Executor (optional)',
-              ),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
               initialValue: templateName,
               isExpanded: true,
               items: [
@@ -513,10 +482,8 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
                         title: title,
                         started: started,
                         priority: priority,
-                        status: status,
-                        executor: (executor == null || executor!.isEmpty)
-                            ? null
-                            : executor,
+                        status: current.status,
+                        executor: current.executor,
                         templateName: templateName,
                         description: description,
                       );

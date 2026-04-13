@@ -3,19 +3,36 @@ import logger from "../utils/logger.js";
 import { deleteImagesByFileIds } from "../local_storage.js";
 import { ApiError } from "../utils/ApiError.js";
 import { newId } from "../utils/newId.js";
-import { 
-  calculateDefectCount, 
-  calculateIterationDefectRates 
-} from "./defectUtility.service.js";
+import { calculateDefectCount } from "./defectUtility.service.js";
 
 const parseJsonField = (field) => {
-    if (!field) return [];
-    if (typeof field === 'string') return JSON.parse(field);
-    return field;
+  if (!field) return [];
+  if (typeof field === "string") return JSON.parse(field);
+  return field;
 };
 
 export const allowedExecutorAnswers = ["Yes", "No", "NA", null];
 export const allowedReviewerStatuses = ["Approved", "Rejected", null];
+
+export const updateProjectStatusToInProgress = async (projectId) => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { status: true },
+  });
+
+  if (project && project.status === "Not Started") {
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { status: "In Progress" },
+    });
+    // Invalidate project cache so the UI reflects the change
+    import("../utils/cache.js")
+      .then((cache) => {
+        if (cache.invalidateProjects) cache.invalidateProjects();
+      })
+      .catch(() => {});
+  }
+};
 
 export const inferStageKey = (stageName = "") => {
   const lower = stageName.toLowerCase();
@@ -70,13 +87,15 @@ export const mapTemplateToGroups = (stageTemplates = []) => {
 
 export const ensureProjectChecklist = async ({ projectId, stageDoc }) => {
   const existing = await prisma.projectChecklist.findUnique({
-    where: { projectId_stageId: { projectId, stageId: stageDoc._id || stageDoc.id } }
+    where: {
+      projectId_stageId: { projectId, stageId: stageDoc._id || stageDoc.id },
+    },
   });
   if (existing) return existing;
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { templateName: true }
+    select: { templateName: true },
   });
 
   if (!project) throw new ApiError(404, "Project not found");
@@ -84,31 +103,37 @@ export const ensureProjectChecklist = async ({ projectId, stageDoc }) => {
   let template = null;
   if (project.templateName && project.templateName.trim()) {
     template = await prisma.template.findFirst({
-      where: { templateName: project.templateName.trim(), isActive: true }
+      where: { templateName: project.templateName.trim(), isActive: true },
     });
   }
 
   if (!template) {
     template = await prisma.template.findFirst({
       where: { OR: [{ templateName: null }, { templateName: "" }] },
-      orderBy: { createdAt: "asc" }
+      orderBy: { createdAt: "asc" },
     });
   }
 
   if (!template) {
     template = await prisma.template.findFirst({
-      orderBy: { createdAt: "asc" }
+      orderBy: { createdAt: "asc" },
     });
   }
 
-  if (!template) throw new ApiError(404, "Template not found. Please create a template first.");
+  if (!template)
+    throw new ApiError(
+      404,
+      "Template not found. Please create a template first.",
+    );
 
-  const stageKey = stageDoc.stage_key || inferStageKey(stageDoc.stage_name) || "stage1";
-  
-  const stageData = typeof template.stageData === 'string' 
-    ? JSON.parse(template.stageData) 
-    : (template.stageData || {});
-    
+  const stageKey =
+    stageDoc.stage_key || inferStageKey(stageDoc.stage_name) || "stage1";
+
+  const stageData =
+    typeof template.stageData === "string"
+      ? JSON.parse(template.stageData)
+      : template.stageData || {};
+
   const groups = mapTemplateToGroups(stageData[stageKey] || []);
 
   const created = await prisma.projectChecklist.create({
@@ -117,20 +142,20 @@ export const ensureProjectChecklist = async ({ projectId, stageDoc }) => {
       projectId,
       stageId: stageDoc._id || stageDoc.id,
       stage: stageDoc.stage_name,
-      groups
-    }
+      groups,
+    },
   });
 
   return created;
 };
 
 const findQuestionInGroup = (group, questionId) => {
-  const direct = (group.questions || []).find(q => q._id === questionId);
+  const direct = (group.questions || []).find((q) => q._id === questionId);
   if (direct) {
     return { question: direct, section: null };
   }
   for (const section of group.sections || []) {
-    const nested = (section.questions || []).find(q => q._id === questionId);
+    const nested = (section.questions || []).find((q) => q._id === questionId);
     if (nested) {
       return { question: nested, section };
     }
@@ -141,34 +166,47 @@ const findQuestionInGroup = (group, questionId) => {
 export const getProjectChecklist = async (projectId, stageId) => {
   const stageDoc = await prisma.stage.findUnique({
     where: { id: stageId, project_id: projectId },
-    select: { id: true, stage_name: true, stage_key: true }
+    select: { id: true, stage_name: true, stage_key: true },
   });
 
   if (!stageDoc) throw new ApiError(404, "Stage not found for this project");
 
-  const checklist = await ensureProjectChecklist({ projectId, stageDoc: { ...stageDoc, _id: stageDoc.id } });
+  const checklist = await ensureProjectChecklist({
+    projectId,
+    stageDoc: { ...stageDoc, _id: stageDoc.id },
+  });
 
   const checklistObj = checklist.toJSON ? checklist.toJSON() : { ...checklist };
   const groups = parseJsonField(checklistObj.groups);
-  
+
   checklistObj.groups = groups.map((group) => {
     const currentDefects = calculateDefectCount(group);
     return { ...group, currentDefects };
   });
-  
+
   const iterations = parseJsonField(checklistObj.iterations) || [];
-  const iterationStats = calculateIterationDefectRates(iterations, groups);
+  const lightweightIterations = iterations.map((iter, idx) => ({
+    iterationNumber: iter?.iterationNumber || idx + 1,
+    revertedAt: iter?.revertedAt || null,
+    revertNotes: iter?.revertNotes || null,
+  }));
 
   return {
     ...checklistObj,
-    iterations: iterationStats.iterations,
-    currentIterationStats: iterationStats.current
+    iterations: lightweightIterations,
   };
 };
 
-export const updateExecutorAnswer = async (projectId, stageId, groupId, questionId, { answer, remark, images, categoryId, severity }, userId) => {
+export const updateExecutorAnswer = async (
+  projectId,
+  stageId,
+  groupId,
+  questionId,
+  { answer, remark, images, categoryId, severity },
+  userId,
+) => {
   const checklist = await prisma.projectChecklist.findUnique({
-    where: { projectId_stageId: { projectId, stageId } }
+    where: { projectId_stageId: { projectId, stageId } },
   });
 
   if (!checklist) {
@@ -176,7 +214,9 @@ export const updateExecutorAnswer = async (projectId, stageId, groupId, question
   }
 
   const groups = parseJsonField(checklist.groups);
-  const group = groups.find(g => g._id === groupId || groups.indexOf(g).toString() === groupId);
+  const group = groups.find(
+    (g) => g._id === groupId || groups.indexOf(g).toString() === groupId,
+  );
 
   if (!group) throw new ApiError(404, "Checklist group not found");
 
@@ -192,19 +232,20 @@ export const updateExecutorAnswer = async (projectId, stageId, groupId, question
 
   if (answer !== undefined) question.executorAnswer = answer;
   if (remark !== undefined) question.executorRemark = remark || "";
-  if (images !== undefined) question.executorImages = Array.isArray(images) ? images : [];
+  if (images !== undefined)
+    question.executorImages = Array.isArray(images) ? images : [];
   if (categoryId !== undefined) question.categoryId = categoryId || "";
   if (severity !== undefined) question.severity = severity || "";
 
-  if(!question.answeredBy) question.answeredBy = {};
-  if(!question.answeredAt) question.answeredAt = {};
+  if (!question.answeredBy) question.answeredBy = {};
+  if (!question.answeredAt) question.answeredAt = {};
 
   question.answeredBy.executor = userId;
   question.answeredAt.executor = new Date().toISOString();
 
   await prisma.projectChecklist.update({
     where: { id: checklist.id },
-    data: { groups }
+    data: { groups },
   });
 
   if (imagesToDelete.length > 0) {
@@ -213,18 +254,30 @@ export const updateExecutorAnswer = async (projectId, stageId, groupId, question
     } catch (_) {}
   }
 
+  // Trigger automated status transition
+  await updateProjectStatusToInProgress(projectId);
+
   return group;
 };
 
-export const updateReviewerStatus = async (projectId, stageId, groupId, questionId, { answer, status, remark, images, categoryId, severity }, userId) => {
+export const updateReviewerStatus = async (
+  projectId,
+  stageId,
+  groupId,
+  questionId,
+  { answer, status, remark, images, categoryId, severity },
+  userId,
+) => {
   const checklist = await prisma.projectChecklist.findUnique({
-    where: { projectId_stageId: { projectId, stageId } }
+    where: { projectId_stageId: { projectId, stageId } },
   });
 
   if (!checklist) throw new ApiError(404, "Checklist not found");
 
   const groups = parseJsonField(checklist.groups);
-  const group = groups.find(g => g._id === groupId || groups.indexOf(g).toString() === groupId);
+  const group = groups.find(
+    (g) => g._id === groupId || groups.indexOf(g).toString() === groupId,
+  );
 
   if (!group) throw new ApiError(404, "Checklist group not found");
 
@@ -241,19 +294,20 @@ export const updateReviewerStatus = async (projectId, stageId, groupId, question
   if (answer !== undefined) question.reviewerAnswer = answer;
   if (status !== undefined) question.reviewerStatus = status;
   if (remark !== undefined) question.reviewerRemark = remark || "";
-  if (images !== undefined) question.reviewerImages = Array.isArray(images) ? images : [];
+  if (images !== undefined)
+    question.reviewerImages = Array.isArray(images) ? images : [];
   if (categoryId !== undefined) question.categoryId = categoryId || "";
   if (severity !== undefined) question.severity = severity || "";
 
-  if(!question.answeredBy) question.answeredBy = {};
-  if(!question.answeredAt) question.answeredAt = {};
-  
+  if (!question.answeredBy) question.answeredBy = {};
+  if (!question.answeredAt) question.answeredAt = {};
+
   question.answeredBy.reviewer = userId;
   question.answeredAt.reviewer = new Date().toISOString();
 
   await prisma.projectChecklist.update({
     where: { id: checklist.id },
-    data: { groups }
+    data: { groups },
   });
 
   if (imagesToDelete.length > 0) {
@@ -262,12 +316,15 @@ export const updateReviewerStatus = async (projectId, stageId, groupId, question
     } catch (_) {}
   }
 
+  // Trigger automated status transition
+  await updateProjectStatusToInProgress(projectId);
+
   return group;
 };
 
 export const getChecklistIterations = async (projectId, stageId) => {
   const checklist = await prisma.projectChecklist.findUnique({
-    where: { projectId_stageId: { projectId, stageId } }
+    where: { projectId_stageId: { projectId, stageId } },
   });
 
   if (!checklist) {
@@ -287,13 +344,13 @@ export const getDefectRatesPerIteration = async (projectId, phaseNum) => {
   const stageKey = `stage${phaseNum}`;
   const stage = await prisma.stage.findFirst({
     where: { project_id: projectId, stage_key: stageKey },
-    select: { id: true }
+    select: { id: true },
   });
 
   if (!stage) return { iterations: [], currentDefectRate: 0 };
 
   const checklist = await prisma.projectChecklist.findUnique({
-    where: { projectId_stageId: { projectId, stageId: stage.id } }
+    where: { projectId_stageId: { projectId, stageId: stage.id } },
   });
 
   if (!checklist) return { iterations: [], currentDefectRate: 0 };
@@ -325,9 +382,12 @@ export const getDefectRatesPerIteration = async (projectId, phaseNum) => {
     const newDefectsInIteration = cumulativeDefects - previousIterationDefects;
     previousIterationDefects = cumulativeDefects;
 
-    const defectRate = totalQuestions > 0
-      ? parseFloat(((newDefectsInIteration / totalQuestions) * 100).toFixed(2))
-      : 0;
+    const defectRate =
+      totalQuestions > 0
+        ? parseFloat(
+            ((newDefectsInIteration / totalQuestions) * 100).toFixed(2),
+          )
+        : 0;
 
     iterationsWithRates.push({
       iterationNumber: iteration.iterationNumber,
@@ -340,9 +400,16 @@ export const getDefectRatesPerIteration = async (projectId, phaseNum) => {
   }
 
   const currentMismatchStats = calculateCurrentMismatches(groups);
-  const currentDefectRate = currentMismatchStats.totalQuestions > 0
-    ? parseFloat(((currentMismatchStats.totalDefects / currentMismatchStats.totalQuestions) * 100).toFixed(2))
-    : 0;
+  const currentDefectRate =
+    currentMismatchStats.totalQuestions > 0
+      ? parseFloat(
+          (
+            (currentMismatchStats.totalDefects /
+              currentMismatchStats.totalQuestions) *
+            100
+          ).toFixed(2),
+        )
+      : 0;
 
   return {
     iterations: iterationsWithRates,
@@ -358,16 +425,21 @@ export const getDefectRatesPerIteration = async (projectId, phaseNum) => {
 export const getOverallDefectRate = async (projectId) => {
   const stages = await prisma.stage.findMany({
     where: { project_id: projectId },
-    select: { id: true, stage_key: true, stage_name: true }
+    select: { id: true, stage_key: true, stage_name: true },
   });
 
   if (!stages || stages.length === 0) {
-    return { overallDefectRate: 0, totalQuestions: 0, totalDefects: 0, phaseBreakdown: [] };
+    return {
+      overallDefectRate: 0,
+      totalQuestions: 0,
+      totalDefects: 0,
+      phaseBreakdown: [],
+    };
   }
 
   const stageIds = stages.map((s) => s.id);
   const checklists = await prisma.projectChecklist.findMany({
-    where: { projectId, stageId: { in: stageIds } }
+    where: { projectId, stageId: { in: stageIds } },
   });
 
   const checklistMap = new Map(checklists.map((c) => [c.stageId, c]));
@@ -393,44 +465,51 @@ export const getOverallDefectRate = async (projectId) => {
     // 2. Add historical defects from iterations
     const iterations = parseJsonField(checklist.iterations);
     const iterationStats = calculateIterationDefectRates(iterations, groups);
-    
+
     const totalHistoricalDefectsInPhase = iterationStats.totalCumulativeDefects;
 
-    stageTotalDefectsFound = totalHistoricalDefectsInPhase + currentMismatches.totalDefects;
+    stageTotalDefectsFound =
+      totalHistoricalDefectsInPhase + currentMismatches.totalDefects;
     projectTotalDefects += stageTotalDefectsFound;
 
     // Use current questions count as the base for the phase
     const currentQuestionCount = currentMismatches.totalQuestions;
-    
+
     phaseBreakdown.push({
       phase: stage.stage_key,
       stageName: stage.stage_name,
       currentTotalQuestions: currentQuestionCount,
       currentDefects: currentMismatches.totalDefects,
       historicalCumulativeDefects: totalHistoricalDefectsInPhase,
-      totalDefectsFoundInPhase: stageTotalDefectsFound
+      totalDefectsFoundInPhase: stageTotalDefectsFound,
     });
   }
 
   // Calculate projectTotalQuestions as the sum of unique questions across all COMPLETED/ACTIVE stages
-  projectTotalQuestions = phaseBreakdown.reduce((acc, p) => acc + p.currentTotalQuestions, 0);
+  projectTotalQuestions = phaseBreakdown.reduce(
+    (acc, p) => acc + p.currentTotalQuestions,
+    0,
+  );
 
-  let overallDefectRate = projectTotalQuestions > 0
-    ? parseFloat(((projectTotalDefects / projectTotalQuestions) * 100).toFixed(2))
-    : 0;
+  let overallDefectRate =
+    projectTotalQuestions > 0
+      ? parseFloat(
+          ((projectTotalDefects / projectTotalQuestions) * 100).toFixed(2),
+        )
+      : 0;
 
   // Cap at 100% just in case re-rejections blow it up
   if (overallDefectRate > 100) overallDefectRate = 100;
 
   await prisma.project.update({
     where: { id: projectId },
-    data: { overallDefectRate }
+    data: { overallDefectRate },
   });
 
   return {
     overallDefectRate,
     totalQuestions: projectTotalQuestions,
     totalDefects: projectTotalDefects,
-    phaseBreakdown
+    phaseBreakdown,
   };
 };

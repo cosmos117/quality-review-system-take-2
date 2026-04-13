@@ -251,3 +251,18 @@ model ProjectChecklist {
   @@index([projectId])
   @@index([stageId])
 }
+
+model GlobalDefectCategory {
+  id        String   @id @db.Char(24)
+  name      String
+  group     String   @default("General")
+  keywords  Json?    // Array of strings
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GlobalDefectCategorySettings {
+  id                   String   @id @db.Char(24)
+  defectCategoryGroups Json?    // Array of strings
+  updatedAt            DateTime @updatedAt
+}

@@ -81,6 +81,8 @@ import checkpointRoutes from "./routes/checkpoint.routes.js";
 import analyticsRoutes from "./routes/analytics.routes.js";
 import exportRoutes from "./routes/export.routes.js";
 import imagesRouter from "./routes/images.js";
+import defectCategoryRoutes from "./routes/defect_category_routes.js";
+
 
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/roles", roleRoutes);
@@ -97,7 +99,9 @@ app.use("/api/v1/template-library", authMiddleware, templateMultiRoutes);
 app.use("/api/v1", authMiddleware, checkpointRoutes);
 app.use("/api/v1", authMiddleware, analyticsRoutes);
 app.use("/api/v1", authMiddleware, exportRoutes);
-app.use("/api/v1", authMiddleware, imagesRouter);
+app.use("/api/v1/", authMiddleware, imagesRouter);
+app.use("/api/v1/defect-categories", authMiddleware, defectCategoryRoutes);
+
 
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500;

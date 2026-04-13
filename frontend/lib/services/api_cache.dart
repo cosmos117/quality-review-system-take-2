@@ -24,6 +24,9 @@ class ApiCache {
   }) async {
     if (forceRefresh) {
       _entries.remove(key);
+      // Also cancel any in-flight request for this key when force refreshing
+      // so we don't use stale data from an already-running fetch
+      _inFlight.remove(key);
     }
 
     // Return cached value if still valid
@@ -33,8 +36,12 @@ class ApiCache {
     }
 
     // Deduplicate: if the same key is already being fetched, wait for it
+    // Add a safety timeout so we never deadlock on a stuck loader
     if (_inFlight.containsKey(key)) {
-      return await _inFlight[key]!.future as T;
+      return await _inFlight[key]!.future.timeout(
+        const Duration(seconds: 20),
+        onTimeout: () => throw Exception('Cache in-flight request timed out: $key'),
+      ) as T;
     }
 
     final completer = Completer<T>();

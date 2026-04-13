@@ -22,6 +22,9 @@ class AdminChecklistTemplateController extends GetxController {
   // Track current tab index to preserve it across reloads
   final RxInt currentTabIndex = 0.obs;
 
+  // Recursion guard for error handling
+  bool _isReloading = false;
+
   // Show all phase tabs
   List<int> get visiblePhaseIndexes => List.generate(phases.length, (i) => i);
 
@@ -225,26 +228,35 @@ class AdminChecklistTemplateController extends GetxController {
         );
       }
 
+      // Load defect categories and groups GLOBALLY instead of from the template
+      final defectSettings = await templateService.fetchGlobalDefectCategories(
+        forceRefresh: true,
+      );
+      
       final parsedCategories = _parseDefectCategories(
-        templateData['defectCategories'] ?? [],
+        defectSettings['categories'] ?? [],
       );
 
       phases.value = newPhases;
       defectCategories.value = parsedCategories;
-      defectCategoryGroups.value = _ensureList(templateData['defectCategoryGroups'])
+      defectCategoryGroups.value = _ensureList(defectSettings['groups'])
           .map((e) => e.toString())
           .toList();
 
       if (defectCategories.isEmpty || defectCategories.length <= 4) {
-        defectCategories.value = _getDefaultDefectCategories();
-        // Persist defaults to backend
-        await templateService.updateDefectCategories(
-          defectCategories.toList(),
-          templateName: selectedTemplateName.value,
-        );
+        // ... (preserving logic but potentially updating it to be global)
+        // Actually, seed logic is now in the backend, but we'll keep it as a fallback
+        if (defectCategories.isEmpty) {
+           defectCategories.value = _getDefaultDefectCategories();
+            await templateService.updateDefectCategories(
+              defectCategories.toList(),
+              categoryGroups: defectCategoryGroups.toList(),
+            );
+        }
       }
 
       isLoading.value = false;
+      _isReloading = false; // Reset on success
     } catch (e) {
       if (e.toString().contains('Template not found')) {
         if (selectedTemplateName.value != null) {
@@ -254,16 +266,27 @@ class AdminChecklistTemplateController extends GetxController {
           return;
         }
 
+        // Recursion guard: Only attempt one auto-create/load retry
+        if (_isReloading) {
+          errorMessage.value = 'Failed to create and load template: $e';
+          isLoading.value = false;
+          _isReloading = false;
+          return;
+        }
+
         try {
+          _isReloading = true;
           await templateService.createOrUpdateTemplate();
           await loadTemplate(templateName: selectedTemplateName.value);
         } catch (createError) {
           errorMessage.value = 'Failed to create template: $createError';
           isLoading.value = false;
+          _isReloading = false;
         }
       } else {
         errorMessage.value = 'Error loading template: $e';
         isLoading.value = false;
+        _isReloading = false;
       }
     }
   }
@@ -273,7 +296,6 @@ class AdminChecklistTemplateController extends GetxController {
       await templateService.updateDefectCategories(
         updated,
         categoryGroups: groups ?? defectCategoryGroups.toList(),
-        templateName: selectedTemplateName.value,
       );
       defectCategories.value = updated;
       if (groups != null) defectCategoryGroups.value = groups;
@@ -382,7 +404,7 @@ class AdminChecklistTemplateController extends GetxController {
     return stageData
         .map((checklistData) {
           if (checklistData is! Map<String, dynamic>) return null;
-          final id = (checklistData['_id'] ?? '').toString();
+          final id = (checklistData['_id'] ?? checklistData['id'] ?? '').toString();
           final text = (checklistData['text'] ?? '').toString();
           final checkpointsData = _ensureList(checklistData['checkpoints']);
           final sectionsData = _ensureList(checklistData['sections']);
@@ -391,7 +413,7 @@ class AdminChecklistTemplateController extends GetxController {
               .map((cpData) {
                 if (cpData is! Map<String, dynamic>) return null;
                 return TemplateQuestion(
-                  id: (cpData['_id'] ?? '').toString(),
+                  id: (cpData['_id'] ?? cpData['id'] ?? '').toString(),
                   text: (cpData['text'] ?? '').toString(),
                 );
               })
@@ -401,7 +423,7 @@ class AdminChecklistTemplateController extends GetxController {
           final sections = sectionsData
               .map((sectionData) {
                 if (sectionData is! Map<String, dynamic>) return null;
-                final sectionId = (sectionData['_id'] ?? '').toString();
+                final sectionId = (sectionData['_id'] ?? sectionData['id'] ?? '').toString();
                 final sectionText = (sectionData['text'] ?? '').toString();
                 final sectionCheckpoints = _ensureList(
                   sectionData['checkpoints'],
@@ -411,7 +433,7 @@ class AdminChecklistTemplateController extends GetxController {
                     .map((cpData) {
                       if (cpData is! Map<String, dynamic>) return null;
                       return TemplateQuestion(
-                        id: (cpData['_id'] ?? '').toString(),
+                        id: (cpData['_id'] ?? cpData['id'] ?? '').toString(),
                         text: (cpData['text'] ?? '').toString(),
                       );
                     })
@@ -451,8 +473,15 @@ class AdminChecklistTemplateController extends GetxController {
     return list
         .map((catData) {
           if (catData is! Map<String, dynamic>) return null;
+          
+          // Try multiple ID fields, fallback to a unique local ID if all missing
+          String parsedId = (catData['id'] ?? catData['_id'] ?? '').toString();
+          if (parsedId.isEmpty) {
+            parsedId = 'temp_cat_${DateTime.now().microsecondsSinceEpoch}_${list.indexOf(catData)}';
+          }
+
           return DefectCategory(
-            id: (catData['_id'] ?? '').toString(),
+            id: parsedId,
             name: (catData['name'] ?? '').toString(),
             group: (catData['group'] ?? 'General').toString(),
             keywords:
