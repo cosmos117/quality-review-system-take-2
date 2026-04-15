@@ -84,7 +84,13 @@ export const calculateIterationDefectRates = (iterations, currentGroups) => {
   // Process historical iterations
   for (let i = 0; i < safeIterations.length; i++) {
     const iter = safeIterations[i];
+    
+    // Skip null/undefined iterations only
+    if (!iter) continue;
+    
     const groups = parseJsonField(iter.groups);
+    
+    // Calculate stats even if groups is empty (will result in 0 defects)
     const stats = calculateCurrentMismatches(groups);
     
     // In historical iterations, these were the "new" defects that caused the revert

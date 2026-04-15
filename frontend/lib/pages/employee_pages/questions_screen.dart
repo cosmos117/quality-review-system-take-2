@@ -96,7 +96,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       []; // Stores full group snapshots for iterations
   Map<String, dynamic>? _currentIterationStats;
   int? _selectedIterationNumber;
-  List<DropdownMenuItem<int>> _cachedDropdownItems = [];
+  List<DropdownMenuItem<int?>> _cachedDropdownItems = [];
 
   // Persisted reviewer submission summary per phase
   final Map<int, Map<String, dynamic>> _reviewerSubmissionSummaries = {};
@@ -617,12 +617,27 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       setState(() {
         // Parse iterations data
         final iterations = iterationData['iterations'] as List<dynamic>? ?? [];
+        
+        debugPrint('DEBUG: Received ${iterations.length} total iterations from backend');
+        if (iterations.isNotEmpty) {
+          for (var i = 0; i < iterations.length; i++) {
+            final iter = iterations[i];
+            if (iter is Map<String, dynamic>) {
+              final iterNum = iter['iterationNumber'];
+              final groups = iter['groups'] as List<dynamic>? ?? [];
+              debugPrint('  Iteration $iterNum: ${groups.length} groups, defectRate=${iter['defectRate']}');
+            }
+          }
+        }
 
-        // Deduplicate iterations by iteration number
+        // Collect all iterations - don't filter
         final Map<int, Map<String, dynamic>> uniqueIterations = {};
         for (final iter in iterations) {
           if (iter is! Map<String, dynamic>) continue;
-          final iterNum = iter['iterationNumber'] ?? 0;
+          
+          final iterNum = iter['iterationNumber'] as int?;
+          if (iterNum == null || iterNum == 0) continue; // Skip invalid iteration numbers
+          
           uniqueIterations[iterNum] = {
             'iterationNumber': iterNum,
             'defectRate': (iter['defectRate'] ?? 0.0).toDouble(),
@@ -638,14 +653,14 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
               a['iterationNumber'] as int,
             ),
           );
+        
+        debugPrint('DEBUG: After dedup: ${_iterationsWithRates.length} iterations available for dropdown');
 
-        // Auto-select current iteration if none selected
-        if (_selectedIterationNumber == null &&
-            _currentIterationStats != null) {
-          _selectedIterationNumber = _currentIterationStats!['iterationNumber'];
-        }
+        // Parse overall defect rate
+        _overallDefectRate = (overallData['overallDefectRate'] ?? 0.0)
+            .toDouble();
 
-        // Parse current iteration data
+        // Parse current iteration data FIRST (before rebuilding dropdown)
         final current = iterationData['current'];
         if (current != null && current is Map<String, dynamic>) {
           _currentIterationStats = {
@@ -656,62 +671,87 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           };
         }
 
-        // Parse overall defect rate
-        _overallDefectRate = (overallData['overallDefectRate'] ?? 0.0)
-            .toDouble();
+        debugPrint('DEBUG: Selected iteration = $_selectedIterationNumber, current = ${_currentIterationStats?['iterationNumber']}');
 
+        // Rebuild dropdown items NOW (with both current and iterations available)
+        _rebuildDropdownItems();
+        
         // Initialize selected iteration to current iteration if not set
         if (_selectedIterationNumber == null &&
             _currentIterationStats != null) {
           _selectedIterationNumber =
               _currentIterationStats!['iterationNumber'] as int;
         }
-
-        // Rebuild dropdown items
-        _rebuildDropdownItems();
       });
     } catch (e) {
       // Silently fail - don't disrupt the UI
     }
   }
 
+  // Get a valid dropdown value that exists in the items list
+  int? _getValidDropdownValue() {
+    if (_cachedDropdownItems.isEmpty) {
+      return null;
+    }
+    
+    // Check if selected value exists in items
+    final validValues = _cachedDropdownItems.map((item) => item.value).toList();
+    
+    if (_selectedIterationNumber != null && validValues.contains(_selectedIterationNumber)) {
+      return _selectedIterationNumber;
+    }
+    
+    // Return first valid value if selected is invalid
+    return validValues.isNotEmpty ? validValues.first : null;
+  }
+
   // Build dropdown items for iteration selector with proper deduplication
   void _rebuildDropdownItems() {
-    // Collect all unique iteration numbers and their labels
     final Map<int, String> iterationMap = {};
 
     // Add current iteration first if it exists
     if (_currentIterationStats != null) {
       final currentNum = _currentIterationStats!['iterationNumber'] as int;
-      iterationMap[currentNum] = 'Current ($currentNum)';
+      if (currentNum != 0 && currentNum != null) {
+        iterationMap[currentNum] = 'Current ($currentNum)';
+      }
     }
 
-    // Add previous iterations (will not override if already exists)
+    // Add previous iterations - skip if already added as current
     for (final iter in _iterationsWithRates) {
-      final iterNum = iter['iterationNumber'] as int;
+      final iterNum = iter['iterationNumber'] as int?;
+      if (iterNum == null || iterNum == 0) continue;
+      
+      // Don't override current iteration label
       if (!iterationMap.containsKey(iterNum)) {
         iterationMap[iterNum] = 'Iteration $iterNum';
       }
     }
 
-    // Build dropdown items from the map (guaranteed unique by Map keys)
-    _cachedDropdownItems = iterationMap.entries.map((entry) {
-      return DropdownMenuItem<int>(
-        value: entry.key,
-        child: Text(entry.value, style: const TextStyle(fontSize: 13)),
+    // Sort by iteration number descending
+    final sortedKeys = iterationMap.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    // Build dropdown items - guaranteed unique
+    _cachedDropdownItems = sortedKeys.map((key) {
+      return DropdownMenuItem<int?>(
+        value: key,
+        child: Text(iterationMap[key]!, style: const TextStyle(fontSize: 13)),
       );
     }).toList();
 
-    // Debug logging
+    debugPrint('DEBUG: Rebuilt dropdown with ${_cachedDropdownItems.length} items: ${sortedKeys.join(", ")}');
 
-    // Validate _selectedIterationNumber is in the items
-    if (_selectedIterationNumber != null && _cachedDropdownItems.isNotEmpty) {
-      final hasSelectedValue = _cachedDropdownItems.any(
-        (item) => item.value == _selectedIterationNumber,
-      );
-      if (!hasSelectedValue) {
-        _selectedIterationNumber = _cachedDropdownItems.first.value;
+    // Ensure selected value is in the dropdown
+    if (_cachedDropdownItems.isNotEmpty) {
+      final validValues = _cachedDropdownItems.map((item) => item.value).toList();
+      
+      // If current selection is not valid, select the first (current) one
+      if (!validValues.contains(_selectedIterationNumber)) {
+        _selectedIterationNumber = validValues.first;
+        debugPrint('DEBUG: Updated selection to $_selectedIterationNumber (was invalid)');
       }
+    } else {
+      _selectedIterationNumber = null;
     }
   }
 
@@ -1587,16 +1627,14 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                                       color: Colors.orange.shade300,
                                     ),
                                   ),
-                                  child: DropdownButton<int>(
-                                    value: _cachedDropdownItems.isEmpty
-                                        ? null
-                                        : _selectedIterationNumber,
+                                  child: DropdownButton<int?>(
+                                    value: _getValidDropdownValue(),
                                     underline: const SizedBox(),
                                     isDense: true,
                                     items: _cachedDropdownItems.isNotEmpty
                                         ? _cachedDropdownItems
                                         : [
-                                            const DropdownMenuItem<int>(
+                                            const DropdownMenuItem<int?>(
                                               value: null,
                                               child: Text(
                                                 'No iterations',

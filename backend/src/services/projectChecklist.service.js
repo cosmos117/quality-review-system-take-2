@@ -3,7 +3,7 @@ import logger from "../utils/logger.js";
 import { deleteImagesByFileIds } from "../local_storage.js";
 import { ApiError } from "../utils/ApiError.js";
 import { newId } from "../utils/newId.js";
-import { calculateDefectCount } from "./defectUtility.service.js";
+import { calculateDefectCount, calculateCurrentMismatches, calculateIterationDefectRates } from "./defectUtility.service.js";
 
 const parseJsonField = (field) => {
   if (!field) return [];
@@ -13,6 +13,43 @@ const parseJsonField = (field) => {
 
 export const allowedExecutorAnswers = ["Yes", "No", "NA", null];
 export const allowedReviewerStatuses = ["Approved", "Rejected", null];
+
+// Sanitize question data to fix any invalid values
+export const sanitizeQuestion = (question) => {
+  if (!question) return question;
+  
+  // Fix invalid executorAnswer
+  if (question.executorAnswer && !allowedExecutorAnswers.includes(question.executorAnswer)) {
+    question.executorAnswer = null;
+  }
+  
+  // Fix invalid reviewerStatus
+  if (question.reviewerStatus && !allowedReviewerStatuses.includes(question.reviewerStatus)) {
+    question.reviewerStatus = null;
+  }
+  
+  return question;
+};
+
+// Sanitize all groups recursively
+export const sanitizeGroups = (groups) => {
+  if (!Array.isArray(groups)) return groups;
+  
+  return groups.map((group) => {
+    if (group.questions && Array.isArray(group.questions)) {
+      group.questions = group.questions.map(sanitizeQuestion);
+    }
+    if (group.sections && Array.isArray(group.sections)) {
+      group.sections = group.sections.map((section) => {
+        if (section.questions && Array.isArray(section.questions)) {
+          section.questions = section.questions.map(sanitizeQuestion);
+        }
+        return section;
+      });
+    }
+    return group;
+  });
+};
 
 export const updateProjectStatusToInProgress = async (projectId) => {
   const project = await prisma.project.findUnique({
@@ -177,23 +214,40 @@ export const getProjectChecklist = async (projectId, stageId) => {
   });
 
   const checklistObj = checklist.toJSON ? checklist.toJSON() : { ...checklist };
-  const groups = parseJsonField(checklistObj.groups);
+  let groups = parseJsonField(checklistObj.groups);
+  
+  // Sanitize current groups - fix any invalid data in the database
+  groups = sanitizeGroups(groups);
 
   checklistObj.groups = groups.map((group) => {
     const currentDefects = calculateDefectCount(group);
     return { ...group, currentDefects };
   });
 
-  const iterations = parseJsonField(checklistObj.iterations) || [];
-  const lightweightIterations = iterations.map((iter, idx) => ({
-    iterationNumber: iter?.iterationNumber || idx + 1,
-    revertedAt: iter?.revertedAt || null,
-    revertNotes: iter?.revertNotes || null,
-  }));
+  let iterations = parseJsonField(checklistObj.iterations) || [];
+  
+  // Sanitize all iterations - fix any invalid data in the database
+  iterations = iterations.map((iteration) => {
+    if (iteration.groups) {
+      iteration.groups = sanitizeGroups(iteration.groups);
+    }
+    return iteration;
+  });
+  
+  logger.info(`[getProjectChecklist] Returning ${iterations.length} iterations for project ${projectId}, stage ${stageId}`);
+  
+  // Log each iteration to debug
+  for (let i = 0; i < iterations.length; i++) {
+    const iter = iterations[i];
+    logger.info(`[getProjectChecklist]   Iteration ${i}: num=${iter?.iterationNumber}, groups=${Array.isArray(iter?.groups) ? iter.groups.length : 'N/A'}`);
+  }
+  if (iterations.length > 0) {
+    logger.info(`[getProjectChecklist] First iteration structure: ${JSON.stringify(iterations[0]).substring(0, 300)}`);
+  }
 
   return {
     ...checklistObj,
-    iterations: lightweightIterations,
+    iterations: iterations,
   };
 };
 
@@ -230,7 +284,13 @@ export const updateExecutorAnswer = async (
     imagesToDelete = oldImages.filter((oldImg) => !newImages.includes(oldImg));
   }
 
-  if (answer !== undefined) question.executorAnswer = answer;
+  if (answer !== undefined) {
+    // Validate answer is in allowed list
+    if (!allowedExecutorAnswers.includes(answer)) {
+      throw new ApiError(400, `Invalid executorAnswer: ${answer}. Must be one of: Yes, No, NA, or null`);
+    }
+    question.executorAnswer = answer;
+  }
   if (remark !== undefined) question.executorRemark = remark || "";
   if (images !== undefined)
     question.executorImages = Array.isArray(images) ? images : [];
@@ -292,7 +352,13 @@ export const updateReviewerStatus = async (
   }
 
   if (answer !== undefined) question.reviewerAnswer = answer;
-  if (status !== undefined) question.reviewerStatus = status;
+  if (status !== undefined) {
+    // Validate status is in allowed list
+    if (!allowedReviewerStatuses.includes(status)) {
+      throw new ApiError(400, `Invalid reviewerStatus: ${status}. Must be one of: ${allowedReviewerStatuses.map(s => s === null ? 'null' : s).join(', ')}`);
+    }
+    question.reviewerStatus = status;
+  }
   if (remark !== undefined) question.reviewerRemark = remark || "";
   if (images !== undefined)
     question.reviewerImages = Array.isArray(images) ? images : [];

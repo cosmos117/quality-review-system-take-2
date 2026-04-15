@@ -1278,6 +1278,11 @@ class SubQuestionCard extends StatefulWidget {
 }
 
 class _SubQuestionCardState extends State<SubQuestionCard> {
+  static const Set<String> _allowedSeverityValues = {
+    'Critical',
+    'Non-Critical',
+  };
+
   String? selectedOption;
   String? selectedCategory; // Added: for category assignment
   String? selectedSeverity; // Added: for severity assignment
@@ -1293,6 +1298,61 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
   int _selectedIterationNumber =
       0; // 0 means current, 1+ means viewing past iteration
   bool _loadingIterations = false;
+
+  int _parseIterationNumber(dynamic rawValue) {
+    if (rawValue is int) return rawValue;
+    if (rawValue is num) return rawValue.toInt();
+    if (rawValue == null) return 0;
+    return int.tryParse(rawValue.toString()) ?? 0;
+  }
+
+  List<Map<String, dynamic>> _deduplicateIterations(List<dynamic> rawIterations) {
+    final byNumber = <int, Map<String, dynamic>>{};
+    for (final item in rawIterations) {
+      if (item is! Map<String, dynamic>) continue;
+      final number = _parseIterationNumber(item['iterationNumber']);
+      if (number <= 0) continue;
+      byNumber[number] = item;
+    }
+
+    final sorted = byNumber.values.toList()
+      ..sort(
+        (a, b) =>
+            ((b['iterationNumber'] as int?) ?? 0).compareTo(
+              (a['iterationNumber'] as int?) ?? 0,
+            ),
+      );
+    return sorted;
+  }
+
+  List<Map<String, dynamic>> _deduplicateCategories(
+    List<Map<String, dynamic>> categories,
+  ) {
+    final byId = <String, Map<String, dynamic>>{};
+    for (final cat in categories) {
+      final id = (cat['_id'] ?? cat['id'] ?? '').toString();
+      if (id.isEmpty) continue;
+      byId[id] = cat;
+    }
+    return byId.values.toList();
+  }
+
+  String? _normalizeCategoryValue(
+    String? value,
+    List<Map<String, dynamic>> categories,
+  ) {
+    if (value == null || value.isEmpty) return null;
+    final validIds = categories
+        .map((c) => (c['_id'] ?? c['id'] ?? '').toString())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    return validIds.contains(value) ? value : null;
+  }
+
+  String? _normalizeSeverityValue(String? value) {
+    if (value == null || value.isEmpty) return null;
+    return _allowedSeverityValues.contains(value) ? value : null;
+  }
 
   Map<String, String> get _authHeaders {
     if (Get.isRegistered<AuthController>()) {
@@ -1310,11 +1370,13 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     _initializeData();
 
     // Initialize iterations from prop instead of fetching
-    _iterations = List<Map<String, dynamic>>.from(widget.iterations);
+    _iterations = _deduplicateIterations(widget.iterations);
     
     // Attempt to determine current iteration number if not provided in data
     _currentIteration = _iterations.isNotEmpty 
-        ? _iterations.map((it) => (it['iterationNumber'] as int? ?? 0)).fold(0, (max, v) => v > max ? v : max)
+      ? _iterations
+        .map((it) => _parseIterationNumber(it['iterationNumber']))
+        .fold(0, (max, v) => v > max ? v : max)
         : 1;
 
     if (kDebugMode && widget.role == 'reviewer') {}
@@ -1334,17 +1396,78 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
           widget.selectedSeverity != oldWidget.selectedSeverity) {}
     }
 
-    // Sync category and severity from parent when they change
-    if (widget.selectedCategoryId != oldWidget.selectedCategoryId) {
-      setState(() => selectedCategory = widget.selectedCategoryId);
+    // Keep historical selection stable while viewing past iterations.
+    // Parent rebuilds should only sync current-iteration values.
+    if (_selectedIterationNumber == 0) {
+      if (widget.selectedCategoryId != oldWidget.selectedCategoryId) {
+        final next = widget.selectedCategoryId;
+        setState(
+          () => selectedCategory = (next == null || next.isEmpty) ? null : next,
+        );
+      }
+      if (widget.selectedSeverity != oldWidget.selectedSeverity) {
+        setState(
+          () => selectedSeverity = _normalizeSeverityValue(widget.selectedSeverity),
+        );
+      }
     }
-    if (widget.selectedSeverity != oldWidget.selectedSeverity) {
-      setState(() => selectedSeverity = widget.selectedSeverity);
+
+    if (!listEquals(widget.iterations, oldWidget.iterations)) {
+      final nextIterations = _deduplicateIterations(widget.iterations);
+      setState(() {
+        _iterations = nextIterations;
+        _currentIteration = _iterations.isNotEmpty
+            ? _iterations
+                .map((it) => _parseIterationNumber(it['iterationNumber']))
+                .fold(0, (max, v) => v > max ? v : max)
+            : 1;
+        if (_selectedIterationNumber > 0 &&
+            !_iterations.any(
+              (it) =>
+                  _parseIterationNumber(it['iterationNumber']) ==
+                  _selectedIterationNumber,
+            )) {
+          _selectedIterationNumber = 0;
+        }
+      });
     }
     // Re-initialize if initialData changed
-    if (widget.initialData != oldWidget.initialData) {
+    if (_selectedIterationNumber == 0 && widget.initialData != oldWidget.initialData) {
       _initializeData();
     }
+  }
+
+  Map<String, dynamic>? _findQuestionInIterationByText(
+    Map<String, dynamic> iteration,
+    String questionText,
+  ) {
+    final target = questionText.trim().toLowerCase();
+    if (target.isEmpty) return null;
+
+    final groups = iteration['groups'] as List<dynamic>? ?? [];
+    for (final group in groups) {
+      if (group is! Map<String, dynamic>) continue;
+
+      final questions = group['questions'] as List<dynamic>? ?? [];
+      for (final q in questions) {
+        if (q is! Map<String, dynamic>) continue;
+        final text = (q['text'] ?? '').toString().trim().toLowerCase();
+        if (text == target) return q;
+      }
+
+      final sections = group['sections'] as List<dynamic>? ?? [];
+      for (final section in sections) {
+        if (section is! Map<String, dynamic>) continue;
+        final sectionQuestions = section['questions'] as List<dynamic>? ?? [];
+        for (final q in sectionQuestions) {
+          if (q is! Map<String, dynamic>) continue;
+          final text = (q['text'] ?? '').toString().trim().toLowerCase();
+          if (text == target) return q;
+        }
+      }
+    }
+
+    return null;
   }
 
   void _initializeData() {
@@ -1358,18 +1481,26 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       // Extract categoryId and severity from initialData for reviewer role
       // Prefer initialData over widget props
       if (widget.role == 'reviewer') {
-        final catId = (widget.initialData!['categoryId'] ?? '').toString();
-        if (catId.isNotEmpty) {
-          selectedCategory = catId;
-          if (kDebugMode) {}
-        }
+        final initialCat = (widget.initialData!['categoryId'] ?? '').toString();
+        final propCat = (widget.selectedCategoryId ?? '').toString();
+        final resolvedCat = initialCat.isNotEmpty
+            ? initialCat
+            : (propCat.isNotEmpty ? propCat : '');
+        selectedCategory = resolvedCat.isEmpty ? null : resolvedCat;
 
-        final sev = (widget.initialData!['severity'] ?? '').toString();
-        if (sev.isNotEmpty) {
-          selectedSeverity = sev;
-          if (kDebugMode) {}
-        }
+        final initialSev = (widget.initialData!['severity'] ?? '').toString();
+        final propSev = (widget.selectedSeverity ?? '').toString();
+        final resolvedSev = initialSev.isNotEmpty
+            ? initialSev
+            : (propSev.isNotEmpty ? propSev : '');
+        selectedSeverity = _normalizeSeverityValue(
+          resolvedSev.isEmpty ? null : resolvedSev,
+        );
       }
+    } else if (widget.role == 'reviewer') {
+      final propCat = widget.selectedCategoryId;
+      selectedCategory = (propCat == null || propCat.isEmpty) ? null : propCat;
+      selectedSeverity = _normalizeSeverityValue(widget.selectedSeverity);
     }
   }
 
@@ -1390,7 +1521,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
 
     // Find the iteration
     final iteration = _iterations.firstWhere(
-      (it) => it['iterationNumber'] == iterationNumber,
+      (it) => _parseIterationNumber(it['iterationNumber']) == iterationNumber,
       orElse: () => {},
     );
 
@@ -1398,10 +1529,17 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
 
     // Find this question in the iteration
     final iterationService = IterationService();
-    final questionData = iterationService.findQuestionInIteration(
-      iteration,
-      widget.questionId!,
-    );
+    Map<String, dynamic>? questionData;
+    final currentQuestionId = widget.questionId;
+
+    if (currentQuestionId != null && currentQuestionId.isNotEmpty) {
+      questionData = iterationService.findQuestionInIteration(
+        iteration,
+        currentQuestionId,
+      );
+    }
+
+    questionData ??= _findQuestionInIterationByText(iteration, widget.subQuestion);
 
     if (questionData == null) {
       if (kDebugMode) {}
@@ -1436,7 +1574,9 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
         final catId = answers['categoryId']?.toString();
         selectedCategory = (catId == null || catId.isEmpty) ? null : catId;
         final sev = answers['severity']?.toString();
-        selectedSeverity = (sev == null || sev.isEmpty) ? null : sev;
+        selectedSeverity = _normalizeSeverityValue(
+          (sev == null || sev.isEmpty) ? null : sev,
+        );
       }
     });
 
@@ -1535,6 +1675,13 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
   @override
   Widget build(BuildContext context) {
     // final currentCat = _currentSelectedCategory();
+    final dedupedCategories = _deduplicateCategories(widget.availableCategories);
+    final safeCategoryValue = _normalizeCategoryValue(
+      selectedCategory,
+      dedupedCategories,
+    );
+    final safeSeverityValue = _normalizeSeverityValue(selectedSeverity);
+
     final base = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1834,7 +1981,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: selectedCategory,
+                    value: safeCategoryValue,
                     isExpanded: true,
                     decoration: InputDecoration(
                       filled: true,
@@ -1852,7 +1999,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                       const DropdownMenuItem(value: null, child: Text('None')),
                       ...() {
                         final groups = <String, List<Map<String, dynamic>>>{};
-                        for (final cat in widget.availableCategories) {
+                        for (final cat in dedupedCategories) {
                           final g = (cat['group'] ?? 'General').toString();
                           groups.putIfAbsent(g, () => []).add(cat);
                         }
@@ -1925,7 +2072,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: selectedSeverity,
+                    value: safeSeverityValue,
                     isExpanded: true,
                     decoration: InputDecoration(
                       filled: true,

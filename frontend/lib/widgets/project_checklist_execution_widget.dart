@@ -596,7 +596,9 @@ class _QuestionTileState extends State<_QuestionTile> {
             children: [
               // Answer dropdown
               DropdownButton<String?>(
-                value: widget.question.executorAnswer,
+                value: ['Yes', 'No', 'NA'].contains(widget.question.executorAnswer)
+                    ? widget.question.executorAnswer
+                    : null,
                 items: [null, 'Yes', 'No', 'NA']
                     .map(
                       (value) => DropdownMenuItem(
@@ -705,7 +707,9 @@ class _QuestionTileState extends State<_QuestionTile> {
             children: [
               // Status dropdown
               DropdownButton<String?>(
-                value: widget.question.reviewerStatus,
+                value: ['Approved', 'Rejected'].contains(widget.question.reviewerStatus)
+                    ? widget.question.reviewerStatus
+                    : null,
                 items: [null, 'Approved', 'Rejected']
                     .map(
                       (value) => DropdownMenuItem(
