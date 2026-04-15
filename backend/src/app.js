@@ -2,11 +2,16 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import helmet from "helmet";
+import path from "path";
+import { fileURLToPath } from "url";
 import authMiddleware from "./middleware/auth.Middleware.js";
 import requestLogger from "./middleware/requestLogger.js";
 import logger from "./utils/logger.js";
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsRoot = path.join(__dirname, "..", "uploads");
 
 // app.use(helmet()); // Temporarily disabled to debug Render connection issues
 
@@ -23,24 +28,29 @@ const corsOriginFn = (origin, callback) => {
   if (!origin) return callback(null, true);
 
   // 1. Always allow localhost and private LAN subnets
-  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(
+    origin,
+  );
   const isLAN =
     /^https?:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin) || // 192.168.x.x
     /^https?:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin) || // 10.x.x.x
-    /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin); // 172.16-31.x.x
+    /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(
+      origin,
+    ); // 172.16-31.x.x
 
   if (isLocalhost || isLAN) return callback(null, true);
 
   // 2. Allow if specific FRONTEND_URL origins are set
   if (allowedOrigins.length > 0) {
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error(`CORS: Origin ${origin} not allowed by FRONTEND_URL`));
+    return callback(
+      new Error(`CORS: Origin ${origin} not allowed by FRONTEND_URL`),
+    );
   }
 
   // 3. Fallback: Allow all origins during development/setup
   return callback(null, true);
 };
-
 
 app.use(
   cors({
@@ -54,6 +64,9 @@ app.use(
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(cookieParser(process.env.COOKIE_SECRET));
+
+// Public URL for uploaded checklist images.
+app.use("/uploads", express.static(uploadsRoot));
 
 app.use(requestLogger);
 
@@ -83,7 +96,6 @@ import exportRoutes from "./routes/export.routes.js";
 import imagesRouter from "./routes/images.js";
 import defectCategoryRoutes from "./routes/defect_category_routes.js";
 
-
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/roles", roleRoutes);
 
@@ -101,7 +113,6 @@ app.use("/api/v1", authMiddleware, analyticsRoutes);
 app.use("/api/v1", authMiddleware, exportRoutes);
 app.use("/api/v1/", authMiddleware, imagesRouter);
 app.use("/api/v1/defect-categories", authMiddleware, defectCategoryRoutes);
-
 
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500;

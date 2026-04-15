@@ -299,7 +299,8 @@ class RoleColumn extends StatelessWidget {
   final Map<String, dynamic>? Function(String?)? getCategoryInfo;
   final List<Map<String, dynamic>>
   availableCategories; // Added: for category assignment
-  final List<dynamic> iterations; // Added: shared iteration data to avoid redundant per-card fetches
+  final List<dynamic>
+  iterations; // Added: shared iteration data to avoid redundant per-card fetches
   final Function(String checkpointId, String? categoryId, {String? severity})?
   onCategoryAssigned; // Added: callback for category assignment
 
@@ -403,7 +404,8 @@ class RoleColumn extends StatelessWidget {
               itemBuilder: (context, index) {
                 final q = checklist[index];
                 // sub is Map<String,String>
-                String subKey(Map<String, String> s) => (s['id']?.isNotEmpty == true ? s['id'] : s['text'])!;
+                String subKey(Map<String, String> s) =>
+                    (s['id']?.isNotEmpty == true ? s['id'] : s['text'])!;
                 String subText(Map<String, String> s) => (s['text'] ?? '');
 
                 // OPTIMIZED: Pre-calculate differs once and cache it
@@ -724,43 +726,44 @@ class RoleColumn extends StatelessWidget {
                                                 ),
                                               ],
                                             ),
-                                            SubQuestionCard(
-                                              key: ValueKey("${role}_$key"),
-                                              subQuestion: text,
-                                              editable: canEdit,
-                                              role: role,
-                                              initialData:
-                                                  answers[key] ??
-                                                  checklistCtrl.getAnswers(
-                                                    projectId,
-                                                    phase,
-                                                    role,
-                                                    key,
-                                                  ),
-                                              onAnswer: (ans) => canEdit
-                                                  ? onAnswer(key, ans)
-                                                  : null,
-                                              highlight: highlightSubs.contains(
-                                                key,
-                                              ),
-                                              categoryInfo: getCategoryInfo?.call(
-                                                sub['categoryId'],
-                                              ),
-                                              checkpointId: key,
-                                              selectedCategoryId:
-                                                  selectedDefectCategory[key],
-                                              selectedSeverity:
-                                                  selectedDefectSeverity[key],
-                                              availableCategories:
-                                                  availableCategories,
-                                              onCategoryAssigned: canEdit
-                                                  ? onCategoryAssigned
-                                                  : null,
-                                              projectId: projectId,
-                                              stageId: stageId,
-                                              questionId: key,
-                                              iterations: iterations, // Pass shared iterations down
+                                          SubQuestionCard(
+                                            key: ValueKey("${role}_$key"),
+                                            subQuestion: text,
+                                            editable: canEdit,
+                                            role: role,
+                                            initialData:
+                                                answers[key] ??
+                                                checklistCtrl.getAnswers(
+                                                  projectId,
+                                                  phase,
+                                                  role,
+                                                  key,
+                                                ),
+                                            onAnswer: (ans) => canEdit
+                                                ? onAnswer(key, ans)
+                                                : null,
+                                            highlight: highlightSubs.contains(
+                                              key,
                                             ),
+                                            categoryInfo: getCategoryInfo?.call(
+                                              sub['categoryId'],
+                                            ),
+                                            checkpointId: key,
+                                            selectedCategoryId:
+                                                selectedDefectCategory[key],
+                                            selectedSeverity:
+                                                selectedDefectSeverity[key],
+                                            availableCategories:
+                                                availableCategories,
+                                            onCategoryAssigned: canEdit
+                                                ? onCategoryAssigned
+                                                : null,
+                                            projectId: projectId,
+                                            stageId: stageId,
+                                            questionId: key,
+                                            iterations:
+                                                iterations, // Pass shared iterations down
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -799,7 +802,11 @@ class RoleColumn extends StatelessWidget {
   ) {
     // Quickly fetch both role sheets once instead of per sub-question
     // Use cached references from the controller instead of creating new Map.from() copies
-    final thisRoleSheet = checklistCtrl.getRoleSheetReference(projectId, phase, role);
+    final thisRoleSheet = checklistCtrl.getRoleSheetReference(
+      projectId,
+      phase,
+      role,
+    );
     final otherRole = role == 'executor' ? 'reviewer' : 'executor';
     final otherRoleSheet = checklistCtrl.getRoleSheetReference(
       projectId,
@@ -814,7 +821,7 @@ class RoleColumn extends StatelessWidget {
       // Get answers from merged sources (local map priority over cache)
       final aMap = answers[key] ?? thisRoleSheet[key];
       final bMap = otherAnswers[key] ?? otherRoleSheet[key];
-      
+
       final a = aMap?['answer'];
       final b = bMap?['answer'];
 
@@ -822,9 +829,13 @@ class RoleColumn extends StatelessWidget {
       if (a == null || b == null) continue;
 
       if (a == b) continue;
-      
-      final aStr = (a is String ? a.trim().toLowerCase() : a.toString().toLowerCase());
-      final bStr = (b is String ? b.trim().toLowerCase() : b.toString().toLowerCase());
+
+      final aStr = (a is String
+          ? a.trim().toLowerCase()
+          : a.toString().toLowerCase());
+      final bStr = (b is String
+          ? b.trim().toLowerCase()
+          : b.toString().toLowerCase());
 
       if (aStr != bStr) return true; // Found a difference
     }
@@ -1306,7 +1317,9 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     return int.tryParse(rawValue.toString()) ?? 0;
   }
 
-  List<Map<String, dynamic>> _deduplicateIterations(List<dynamic> rawIterations) {
+  List<Map<String, dynamic>> _deduplicateIterations(
+    List<dynamic> rawIterations,
+  ) {
     final byNumber = <int, Map<String, dynamic>>{};
     for (final item in rawIterations) {
       if (item is! Map<String, dynamic>) continue;
@@ -1317,10 +1330,9 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
 
     final sorted = byNumber.values.toList()
       ..sort(
-        (a, b) =>
-            ((b['iterationNumber'] as int?) ?? 0).compareTo(
-              (a['iterationNumber'] as int?) ?? 0,
-            ),
+        (a, b) => ((b['iterationNumber'] as int?) ?? 0).compareTo(
+          (a['iterationNumber'] as int?) ?? 0,
+        ),
       );
     return sorted;
   }
@@ -1371,12 +1383,12 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
 
     // Initialize iterations from prop instead of fetching
     _iterations = _deduplicateIterations(widget.iterations);
-    
+
     // Attempt to determine current iteration number if not provided in data
-    _currentIteration = _iterations.isNotEmpty 
-      ? _iterations
-        .map((it) => _parseIterationNumber(it['iterationNumber']))
-        .fold(0, (max, v) => v > max ? v : max)
+    _currentIteration = _iterations.isNotEmpty
+        ? _iterations
+              .map((it) => _parseIterationNumber(it['iterationNumber']))
+              .fold(0, (max, v) => v > max ? v : max)
         : 1;
 
     if (kDebugMode && widget.role == 'reviewer') {}
@@ -1407,7 +1419,9 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       }
       if (widget.selectedSeverity != oldWidget.selectedSeverity) {
         setState(
-          () => selectedSeverity = _normalizeSeverityValue(widget.selectedSeverity),
+          () => selectedSeverity = _normalizeSeverityValue(
+            widget.selectedSeverity,
+          ),
         );
       }
     }
@@ -1418,8 +1432,8 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
         _iterations = nextIterations;
         _currentIteration = _iterations.isNotEmpty
             ? _iterations
-                .map((it) => _parseIterationNumber(it['iterationNumber']))
-                .fold(0, (max, v) => v > max ? v : max)
+                  .map((it) => _parseIterationNumber(it['iterationNumber']))
+                  .fold(0, (max, v) => v > max ? v : max)
             : 1;
         if (_selectedIterationNumber > 0 &&
             !_iterations.any(
@@ -1432,7 +1446,8 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       });
     }
     // Re-initialize if initialData changed
-    if (_selectedIterationNumber == 0 && widget.initialData != oldWidget.initialData) {
+    if (_selectedIterationNumber == 0 &&
+        widget.initialData != oldWidget.initialData) {
       _initializeData();
     }
   }
@@ -1539,7 +1554,10 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       );
     }
 
-    questionData ??= _findQuestionInIterationByText(iteration, widget.subQuestion);
+    questionData ??= _findQuestionInIterationByText(
+      iteration,
+      widget.subQuestion,
+    );
 
     if (questionData == null) {
       if (kDebugMode) {}
@@ -1619,16 +1637,31 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
         // Upload each selected image to backend GridFS, associated by questionId and role
         final uploaded = <Map<String, dynamic>>[];
         int failedCount = 0;
+        String? firstFailureReason;
         for (final f in result.files) {
           if (f.bytes == null) continue;
           try {
+            final effectiveQuestionId =
+                (widget.checkpointId ?? widget.subQuestion).toString();
             final req = http.MultipartRequest(
               'POST',
               Uri.parse(
-                '$_imageBaseUrl/images/${widget.checkpointId ?? widget.subQuestion}?role=${widget.role}',
+                '$_imageBaseUrl/images/$effectiveQuestionId?role=${widget.role}',
               ),
             );
             req.headers.addAll(_authHeaders);
+            req.fields['question_id'] = effectiveQuestionId;
+            if (widget.projectId != null && widget.projectId!.isNotEmpty) {
+              req.fields['project_id'] = widget.projectId!;
+            }
+            // stageId is sent as checklist_id; backend resolves to projectChecklist id.
+            if (widget.stageId != null && widget.stageId!.isNotEmpty) {
+              req.fields['checklist_id'] = widget.stageId!;
+            }
+            if (selectedCategory != null && selectedCategory!.isNotEmpty) {
+              req.fields['defect_id'] = selectedCategory!;
+            }
+            req.fields['role'] = widget.role;
             req.files.add(
               http.MultipartFile.fromBytes('image', f.bytes!, filename: f.name),
             );
@@ -1641,9 +1674,22 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                 'filename': data['filename'],
               });
             } else {
+              if (firstFailureReason == null) {
+                String reason = 'Upload failed (HTTP ${resp.statusCode})';
+                try {
+                  final body = jsonDecode(resp.body);
+                  if (body is Map<String, dynamic>) {
+                    final apiMsg = (body['error'] ?? body['message'] ?? '')
+                        .toString();
+                    if (apiMsg.isNotEmpty) reason = apiMsg;
+                  }
+                } catch (_) {}
+                firstFailureReason = reason;
+              }
               failedCount++;
             }
-          } catch (_) {
+          } catch (e) {
+            firstFailureReason ??= e.toString();
             failedCount++;
           }
         }
@@ -1654,7 +1700,11 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
         if (failedCount > 0 && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('$failedCount image(s) failed to upload'),
+              content: Text(
+                firstFailureReason == null
+                    ? '$failedCount image(s) failed to upload'
+                    : '$failedCount image(s) failed to upload: $firstFailureReason',
+              ),
               backgroundColor: Colors.red,
             ),
           );
@@ -1675,7 +1725,9 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
   @override
   Widget build(BuildContext context) {
     // final currentCat = _currentSelectedCategory();
-    final dedupedCategories = _deduplicateCategories(widget.availableCategories);
+    final dedupedCategories = _deduplicateCategories(
+      widget.availableCategories,
+    );
     final safeCategoryValue = _normalizeCategoryValue(
       selectedCategory,
       dedupedCategories,
@@ -1950,11 +2002,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (isSelected) ...[
-                        const Icon(
-                          Icons.check,
-                          size: 14,
-                          color: Colors.white,
-                        ),
+                        const Icon(Icons.check, size: 14, color: Colors.white),
                         const SizedBox(width: 4),
                       ],
                       Text(
@@ -2009,42 +2057,58 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
 
                         for (final g in sortedGroups) {
                           // HEADER (Disabled)
-                          items.add(DropdownMenuItem<String>(
-                            enabled: false,
-                            value: 'HEADER_$g', // Unique dummy value
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              decoration: const BoxDecoration(
-                                border: Border(bottom: BorderSide(color: Colors.black12)),
-                              ),
-                              child: Text(
-                                g.toUpperCase(),
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blueAccent,
-                                  letterSpacing: 1.0,
+                          items.add(
+                            DropdownMenuItem<String>(
+                              enabled: false,
+                              value: 'HEADER_$g', // Unique dummy value
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
+                                decoration: const BoxDecoration(
+                                  border: Border(
+                                    bottom: BorderSide(color: Colors.black12),
+                                  ),
+                                ),
+                                child: Text(
+                                  g.toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blueAccent,
+                                    letterSpacing: 1.0,
+                                  ),
                                 ),
                               ),
                             ),
-                          ));
+                          );
 
                           // CATEGORIES in this group
-                          final sortedCats = groups[g]!..sort((a, b) =>
-                              (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString()));
-                          
+                          final sortedCats = groups[g]!
+                            ..sort(
+                              (a, b) => (a['name'] ?? '').toString().compareTo(
+                                (b['name'] ?? '').toString(),
+                              ),
+                            );
+
                           for (final cat in sortedCats) {
-                            final id = (cat['_id'] ?? cat['id'] ?? '').toString();
+                            final id = (cat['_id'] ?? cat['id'] ?? '')
+                                .toString();
                             final name = (cat['name'] ?? 'Unknown').toString();
                             if (id.isEmpty) continue;
-                            
-                            items.add(DropdownMenuItem<String>(
-                              value: id,
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 12),
-                                child: Text(name, overflow: TextOverflow.ellipsis),
+
+                            items.add(
+                              DropdownMenuItem<String>(
+                                value: id,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(left: 12),
+                                  child: Text(
+                                    name,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
                               ),
-                            ));
+                            );
                           }
                         }
                         return items;

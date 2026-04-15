@@ -30,6 +30,7 @@ model User {
   answeredBy          ChecklistAnswer[]     @relation("AnsweredBy")
   approvalDecisions   ChecklistApproval[]   @relation("ApprovalDecider")
   checklistHistories  ChecklistTransaction[] @relation("TransactionUser")
+  uploadedImages      ChecklistImage[]      @relation("ChecklistImageUploader")
 }
 
 model Role {
@@ -250,6 +251,30 @@ model ProjectChecklist {
   @@unique([projectId, stageId])
   @@index([projectId])
   @@index([stageId])
+}
+
+model ChecklistImage {
+  id            String   @id @db.Char(24)
+  project_id    String?  @db.Char(24)
+  checklist_id  String?  @db.Char(24)
+  defect_id     String?  @db.VarChar(255)
+  question_id   String   @db.VarChar(255)
+  image_path    String   @db.Text
+  uploaded_by   String?  @db.Char(24)
+  role          String?  @db.VarChar(50)
+  original_name String?  @db.VarChar(255)
+  mime_type     String?  @db.VarChar(100)
+  size_bytes    Int?
+  created_at    DateTime @default(now())
+
+  // Relations
+  uploader User? @relation("ChecklistImageUploader", fields: [uploaded_by], references: [id])
+
+  @@index([question_id])
+  @@index([uploaded_by])
+  @@index([project_id])
+  @@index([checklist_id])
+  @@index([defect_id])
 }
 
 model GlobalDefectCategory {
