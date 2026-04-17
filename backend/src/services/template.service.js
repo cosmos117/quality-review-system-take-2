@@ -98,7 +98,7 @@ function findSection(checklist, sectionId) {
   return section;
 }
 
-// ── Template CRUD ──
+// Template CRUD 
 
 export async function createOrUpdateTemplate(name, userId) {
   let template = await prisma.template.findFirst({
@@ -286,7 +286,7 @@ export async function resetTemplate() {
   return { deletedCount: result.count };
 }
 
-// ── Checklist (group) management ──
+// Checklist (group) management 
 
 export async function addChecklistToTemplate(stage, text, userId) {
   validateStage(stage);
@@ -345,7 +345,7 @@ export async function deleteChecklistFromTemplate(checklistId, stage, userId) {
   return updatedTemplate;
 }
 
-// ── Checkpoint (question) management on checklists ──
+// Checkpoint (question) management on checklists 
 
 export async function addCheckpointToTemplate(checklistId, stage, text, categoryId, userId) {
   validateStage(stage);
@@ -409,7 +409,7 @@ export async function deleteCheckpointFromTemplate(checkpointId, stage, checklis
   return updatedTemplate;
 }
 
-// ── Section management ──
+// Section management 
 
 export async function addSectionToChecklist(checklistId, stage, text, userId) {
   validateStage(stage);
@@ -473,7 +473,7 @@ export async function deleteSectionFromChecklist(checklistId, sectionId, stage, 
   return updatedTemplate;
 }
 
-// ── Checkpoint management on sections ──
+// Checkpoint management on sections 
 
 export async function addCheckpointToSection(checklistId, sectionId, stage, text, categoryId, userId) {
   validateStage(stage);
@@ -540,7 +540,7 @@ export async function deleteCheckpointFromSection(checklistId, sectionId, checkp
   return updatedTemplate;
 }
 
-// ── Stage management ──
+// Stage management 
 
 export async function addStageToTemplate(stage, stageName, userId) {
   validateStage(stage);
@@ -637,16 +637,16 @@ export async function getAllStages() {
   );
 }
 
-// ── Defect categories ──
+// Defect categories 
 
 export async function updateDefectCategories(defectCategories, userId, defectCategoryGroups) {
   const template = await getTemplateSingleton();
 
   const mappedCategories = defectCategories.map((cat) => ({
-    _id: cat._id || cat.id || newId(),  // ← preserve or generate _id
+    _id: cat._id || cat.id || newId(),  //  preserve or generate _id
     name: cat.name,
     color: cat.color || "#2196F3",
-    group: cat.group || "General",      // ← preserve group field
+    group: cat.group || "General",      //  preserve group field
     keywords: Array.isArray(cat.keywords) ? cat.keywords : [],
   }));
 
@@ -663,7 +663,7 @@ export async function updateDefectCategories(defectCategories, userId, defectCat
   return updatedTemplate;
 }
 
-// ── Seed ──
+// Seed 
 
 export async function seedTemplate(userId) {
   let template = await prisma.template.findFirst({ orderBy: { createdAt: "asc" } });

@@ -131,7 +131,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   }
 
   /// Loads defect categories in the background without blocking the checklist.
-  /// Safe to call multiple times — subsequent calls are deduplicated by ApiCache.
+  /// Safe to call multiple times  subsequent calls are deduplicated by ApiCache.
   void _loadDefectCategoriesInBackground() {
     Future(() async {
       try {
@@ -280,7 +280,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     _loadingTimer = Timer(const Duration(seconds: 20), () {
       if (kDebugMode)
         print(
-          "!!! [QuestionsScreen] HARD TIMER FIRED — force dismissing spinner",
+          "!!! [QuestionsScreen] HARD TIMER FIRED - force dismissing spinner",
         );
       if (mounted) {
         setState(() {
@@ -617,15 +617,19 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       setState(() {
         // Parse iterations data
         final iterations = iterationData['iterations'] as List<dynamic>? ?? [];
-        
-        debugPrint('DEBUG: Received ${iterations.length} total iterations from backend');
+
+        debugPrint(
+          'DEBUG: Received ${iterations.length} total iterations from backend',
+        );
         if (iterations.isNotEmpty) {
           for (var i = 0; i < iterations.length; i++) {
             final iter = iterations[i];
             if (iter is Map<String, dynamic>) {
               final iterNum = iter['iterationNumber'];
               final groups = iter['groups'] as List<dynamic>? ?? [];
-              debugPrint('  Iteration $iterNum: ${groups.length} groups, defectRate=${iter['defectRate']}');
+              debugPrint(
+                '  Iteration $iterNum: ${groups.length} groups, defectRate=${iter['defectRate']}',
+              );
             }
           }
         }
@@ -634,10 +638,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         final Map<int, Map<String, dynamic>> uniqueIterations = {};
         for (final iter in iterations) {
           if (iter is! Map<String, dynamic>) continue;
-          
+
           final iterNum = iter['iterationNumber'] as int?;
-          if (iterNum == null || iterNum == 0) continue; // Skip invalid iteration numbers
-          
+          if (iterNum == null || iterNum == 0)
+            continue; // Skip invalid iteration numbers
+
           uniqueIterations[iterNum] = {
             'iterationNumber': iterNum,
             'defectRate': (iter['defectRate'] ?? 0.0).toDouble(),
@@ -653,8 +658,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
               a['iterationNumber'] as int,
             ),
           );
-        
-        debugPrint('DEBUG: After dedup: ${_iterationsWithRates.length} iterations available for dropdown');
+
+        debugPrint(
+          'DEBUG: After dedup: ${_iterationsWithRates.length} iterations available for dropdown',
+        );
 
         // Parse overall defect rate
         _overallDefectRate = (overallData['overallDefectRate'] ?? 0.0)
@@ -671,11 +678,13 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           };
         }
 
-        debugPrint('DEBUG: Selected iteration = $_selectedIterationNumber, current = ${_currentIterationStats?['iterationNumber']}');
+        debugPrint(
+          'DEBUG: Selected iteration = $_selectedIterationNumber, current = ${_currentIterationStats?['iterationNumber']}',
+        );
 
         // Rebuild dropdown items NOW (with both current and iterations available)
         _rebuildDropdownItems();
-        
+
         // Initialize selected iteration to current iteration if not set
         if (_selectedIterationNumber == null &&
             _currentIterationStats != null) {
@@ -693,14 +702,15 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     if (_cachedDropdownItems.isEmpty) {
       return null;
     }
-    
+
     // Check if selected value exists in items
     final validValues = _cachedDropdownItems.map((item) => item.value).toList();
-    
-    if (_selectedIterationNumber != null && validValues.contains(_selectedIterationNumber)) {
+
+    if (_selectedIterationNumber != null &&
+        validValues.contains(_selectedIterationNumber)) {
       return _selectedIterationNumber;
     }
-    
+
     // Return first valid value if selected is invalid
     return validValues.isNotEmpty ? validValues.first : null;
   }
@@ -721,7 +731,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     for (final iter in _iterationsWithRates) {
       final iterNum = iter['iterationNumber'] as int?;
       if (iterNum == null || iterNum == 0) continue;
-      
+
       // Don't override current iteration label
       if (!iterationMap.containsKey(iterNum)) {
         iterationMap[iterNum] = 'Iteration $iterNum';
@@ -729,7 +739,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     }
 
     // Sort by iteration number descending
-    final sortedKeys = iterationMap.keys.toList()..sort((a, b) => b.compareTo(a));
+    final sortedKeys = iterationMap.keys.toList()
+      ..sort((a, b) => b.compareTo(a));
 
     // Build dropdown items - guaranteed unique
     _cachedDropdownItems = sortedKeys.map((key) {
@@ -739,16 +750,22 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       );
     }).toList();
 
-    debugPrint('DEBUG: Rebuilt dropdown with ${_cachedDropdownItems.length} items: ${sortedKeys.join(", ")}');
+    debugPrint(
+      'DEBUG: Rebuilt dropdown with ${_cachedDropdownItems.length} items: ${sortedKeys.join(", ")}',
+    );
 
     // Ensure selected value is in the dropdown
     if (_cachedDropdownItems.isNotEmpty) {
-      final validValues = _cachedDropdownItems.map((item) => item.value).toList();
-      
+      final validValues = _cachedDropdownItems
+          .map((item) => item.value)
+          .toList();
+
       // If current selection is not valid, select the first (current) one
       if (!validValues.contains(_selectedIterationNumber)) {
         _selectedIterationNumber = validValues.first;
-        debugPrint('DEBUG: Updated selection to $_selectedIterationNumber (was invalid)');
+        debugPrint(
+          'DEBUG: Updated selection to $_selectedIterationNumber (was invalid)',
+        );
       }
     } else {
       _selectedIterationNumber = null;
@@ -1016,7 +1033,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     int active = availablePhases.first;
     bool allPhasesCompleted = false;
 
-    // ── Step A: Fetch approval statuses with a hard timeout ──────────────────
+    // Step A: Fetch approval statuses with a hard timeout
     try {
       final statusFutures = availablePhases
           .map(
@@ -1025,7 +1042,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                 .catchError((_) => null),
           )
           .toList();
-      // Hard 10s timeout — never block the whole page waiting for approval status
+      // Hard 10s timeout  never block the whole page waiting for approval status
       final statuses = await Future.wait(statusFutures).timeout(
         const Duration(seconds: 10),
         onTimeout: () {
@@ -1086,7 +1103,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       }
     });
 
-    // ── Step B: Revert counts — fire-and-forget with timeout ─────────────────
+    // Step B: Revert counts  fire-and-forget with timeout
     Future(() async {
       try {
         final revertCountFutures = availablePhases
@@ -1115,7 +1132,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       } catch (_) {}
     });
 
-    // ── Step C: Compare + approval status — fire-and-forget with timeout ─────
+    // Step C: Compare + approval status  fire-and-forget with timeout
     Future(() async {
       try {
         await Future.wait([
@@ -1992,7 +2009,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: const Text(
-                                    'âœ… Review submitted! Phase approved automatically. Next phase is now active.',
+                                    'Review submitted! Phase approved automatically. Next phase is now active.',
                                   ),
                                   backgroundColor: Colors.green,
                                   duration: const Duration(seconds: 4),

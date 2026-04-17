@@ -8,6 +8,110 @@ let _categoriesCache = null;
 let _cacheExpiry = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
+function normalizeCategoryName(value) {
+  return value.toString().trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function normalizeGroupName(value) {
+  const cleaned = value.toString().trim().replace(/\s+/g, " ");
+  return cleaned || "General";
+}
+
+function normalizeKeywords(keywords) {
+  if (!Array.isArray(keywords)) {
+    return [];
+  }
+
+  const seen = new Set();
+  const result = [];
+
+  for (const keyword of keywords) {
+    const cleaned = keyword?.toString().trim();
+    if (!cleaned) {
+      continue;
+    }
+
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    result.push(cleaned);
+  }
+
+  return result;
+}
+
+function dedupeCategoryPayload(categories = []) {
+  const seenNames = new Set();
+  const deduped = [];
+  const hex24 = /^[0-9a-fA-F]{24}$/;
+
+  for (const rawCat of categories) {
+    if (!rawCat || typeof rawCat !== "object") {
+      continue;
+    }
+
+    const cleanedName = rawCat.name?.toString().trim().replace(/\s+/g, " ");
+    const normalizedName = normalizeCategoryName(cleanedName || "");
+    if (!normalizedName) {
+      continue;
+    }
+
+    if (seenNames.has(normalizedName)) {
+      continue;
+    }
+    seenNames.add(normalizedName);
+
+    let finalId = (rawCat.id || rawCat._id || "").toString();
+    if (!hex24.test(finalId)) {
+      finalId = newId();
+    }
+
+    deduped.push({
+      id: finalId,
+      name: cleanedName,
+      group: normalizeGroupName(rawCat.group || "General"),
+      keywords: normalizeKeywords(rawCat.keywords),
+    });
+  }
+
+  return deduped;
+}
+
+function buildUniqueGroups(groups = [], categories = []) {
+  const byNormalized = new Map();
+
+  const addGroup = (value) => {
+    const cleaned = value?.toString().trim().replace(/\s+/g, " ");
+    if (!cleaned) {
+      return;
+    }
+
+    const key = cleaned.toLowerCase();
+    if (!byNormalized.has(key)) {
+      byNormalized.set(key, cleaned);
+    }
+  };
+
+  if (Array.isArray(groups)) {
+    for (const group of groups) {
+      addGroup(group);
+    }
+  }
+
+  for (const category of categories) {
+    addGroup(category.group);
+  }
+
+  if (byNormalized.size === 0) {
+    addGroup("General");
+  }
+
+  return Array.from(byNormalized.values());
+}
+
 function invalidateCache() {
   _categoriesCache = null;
   _cacheExpiry = 0;
@@ -25,14 +129,14 @@ export async function getGlobalDefectCategories() {
   }
 
   let categories = await prisma.globalDefectCategory.findMany({
-    orderBy: { name: "asc" }
+    orderBy: { name: "asc" },
   });
 
   // If empty, seed from existing templates (only happens once per server boot)
   if (categories.length === 0) {
     await seedGlobalDefectCategories();
     categories = await prisma.globalDefectCategory.findMany({
-      orderBy: { name: "asc" }
+      orderBy: { name: "asc" },
     });
   }
 
@@ -54,8 +158,13 @@ export async function getGlobalDefectSettings() {
     settings = await prisma.globalDefectCategorySettings.create({
       data: {
         id: newId(),
-        defectCategoryGroups: ["General", "Modelling Strategy", "Results & Output", "Meshing"]
-      }
+        defectCategoryGroups: [
+          "General",
+          "Modelling Strategy",
+          "Results & Output",
+          "Meshing",
+        ],
+      },
     });
   }
 
@@ -74,7 +183,7 @@ export async function getGlobalDefectData() {
   // Fetch both in parallel to halve latency
   let [categories, settings] = await Promise.all([
     prisma.globalDefectCategory.findMany({ orderBy: { name: "asc" } }),
-    prisma.globalDefectCategorySettings.findFirst()
+    prisma.globalDefectCategorySettings.findFirst(),
   ]);
 
   // Seed if empty (first ever call)
@@ -82,7 +191,7 @@ export async function getGlobalDefectData() {
     await seedGlobalDefectCategories();
     [categories, settings] = await Promise.all([
       prisma.globalDefectCategory.findMany({ orderBy: { name: "asc" } }),
-      prisma.globalDefectCategorySettings.findFirst()
+      prisma.globalDefectCategorySettings.findFirst(),
     ]);
   }
 
@@ -90,8 +199,13 @@ export async function getGlobalDefectData() {
     settings = await prisma.globalDefectCategorySettings.create({
       data: {
         id: newId(),
-        defectCategoryGroups: ["General", "Modelling Strategy", "Results & Output", "Meshing"]
-      }
+        defectCategoryGroups: [
+          "General",
+          "Modelling Strategy",
+          "Results & Output",
+          "Meshing",
+        ],
+      },
     });
   }
 
@@ -106,36 +220,30 @@ export async function getGlobalDefectData() {
  * Update global defect categories and groups
  */
 export async function updateGlobalDefectCategories(categories, groups) {
+  const mapped = dedupeCategoryPayload(
+    Array.isArray(categories) ? categories : [],
+  );
+  const uniqueGroups = buildUniqueGroups(groups, mapped);
+
   // Use a transaction to update both if needed
   return await prisma.$transaction(async (tx) => {
     // 1. Update/Create categories
     // We'll replace the existing ones for simplicity, matching the current template logic
     await tx.globalDefectCategory.deleteMany({});
-    
-    const hex24 = /^[0-9a-fA-F]{24}$/;
-    const mapped = categories.map(cat => {
-      // Use existing ID if it's already a valid 24-char hex (Prisma format)
-      let finalId = (cat.id || cat._id || '').toString();
-      if (!hex24.test(finalId)) {
-        finalId = newId();
-      }
-      
-      return {
-        id: finalId,
-        name: cat.name,
-        group: cat.group || "General",
-        keywords: Array.isArray(cat.keywords) ? cat.keywords : []
-      };
-    });
 
-    try {
-      await tx.globalDefectCategory.createMany({
-        data: mapped,
-        skipDuplicates: true // Safety fallback
-      });
-    } catch (error) {
-      console.error("[DefectCategoryService] Error seeding categories:", error);
-      throw error;
+    if (mapped.length > 0) {
+      try {
+        await tx.globalDefectCategory.createMany({
+          data: mapped,
+          skipDuplicates: true, // Extra safety fallback
+        });
+      } catch (error) {
+        console.error(
+          "[DefectCategoryService] Error updating categories:",
+          error,
+        );
+        throw error;
+      }
     }
 
     // 2. Update settings (groups)
@@ -144,15 +252,15 @@ export async function updateGlobalDefectCategories(categories, groups) {
       settings = await tx.globalDefectCategorySettings.create({
         data: {
           id: newId(),
-          defectCategoryGroups: groups || []
-        }
+          defectCategoryGroups: uniqueGroups,
+        },
       });
     } else {
       settings = await tx.globalDefectCategorySettings.update({
         where: { id: settings.id },
         data: {
-          defectCategoryGroups: groups || []
-        }
+          defectCategoryGroups: uniqueGroups,
+        },
       });
     }
 
@@ -169,32 +277,60 @@ export async function updateGlobalDefectCategories(categories, groups) {
 async function seedGlobalDefectCategories() {
   // Fetch all templates and filter in JS to avoid Prisma JSON validation issues for now
   const allTemplates = await prisma.template.findMany();
-  const templates = allTemplates.filter(t => t.defectCategories != null && typeof t.defectCategories === 'object' && Array.isArray(t.defectCategories));
+  const templates = allTemplates.filter(
+    (t) =>
+      t.defectCategories != null &&
+      typeof t.defectCategories === "object" &&
+      Array.isArray(t.defectCategories),
+  );
 
   let sourceCategories = [];
   let sourceGroups = [];
+  const seenCategoryNames = new Set();
+  const seenGroups = new Set();
 
   for (const t of templates) {
     const cats = Array.isArray(t.defectCategories) ? t.defectCategories : [];
-    const groups = Array.isArray(t.defectCategoryGroups) ? t.defectCategoryGroups : [];
-    
-    // Simple merge: add if not already present by name
+    const groups = Array.isArray(t.defectCategoryGroups)
+      ? t.defectCategoryGroups
+      : [];
+
+    // Simple merge: add if not already present by normalized name
     for (const cat of cats) {
-      if (!sourceCategories.find(c => c.name === cat.name)) {
-        sourceCategories.push(cat);
+      const normalizedName = normalizeCategoryName(cat?.name || "");
+      if (!normalizedName || seenCategoryNames.has(normalizedName)) {
+        continue;
       }
+
+      seenCategoryNames.add(normalizedName);
+      sourceCategories.push(cat);
     }
+
     for (const group of groups) {
-      if (!sourceGroups.includes(group)) {
-        sourceGroups.push(group);
+      const cleanedGroup = group?.toString().trim();
+      const normalizedGroup = cleanedGroup?.toLowerCase();
+      if (
+        !cleanedGroup ||
+        !normalizedGroup ||
+        seenGroups.has(normalizedGroup)
+      ) {
+        continue;
       }
+
+      seenGroups.add(normalizedGroup);
+      sourceGroups.push(cleanedGroup);
     }
   }
 
   if (sourceCategories.length === 0) {
     // Fallback to hardcoded defaults if no templates found
     sourceCategories = getDefaultCategories();
-    sourceGroups = ["General", "Modelling Strategy", "Results & Output", "Meshing"];
+    sourceGroups = [
+      "General",
+      "Modelling Strategy",
+      "Results & Output",
+      "Meshing",
+    ];
   }
 
   await updateGlobalDefectCategories(sourceCategories, sourceGroups);
@@ -202,57 +338,60 @@ async function seedGlobalDefectCategories() {
 
 function getDefaultCategories() {
   const names = [
-    'Incorrect Modelling Strategy - Geometry',
-    'Incorrect Modelling Strategy - Material',
-    'Incorrect Modelling Strategy - Loads',
-    'Incorrect Modelling Strategy - BC',
-    'Incorrect Modelling Strategy - Assumptions',
-    'Incorrect Modelling Strategy - Acceptance Criteria',
-    'Incorrect geometry units',
-    'Incorrect meshing',
-    'Defective mesh quality',
-    'Incorrect contact definition',
-    'Incorrect beam/bolt modeling',
-    'RBE/RBE3 are not modeled properly',
-    'Incorrect loads and Boundary Condition',
-    'Incorrect connectivity',
-    'Incorrect degree of element order',
-    'Incorrect element quality',
-    'Incorrect bolt size',
-    'Incorrect elements order',
-    'Incorrect elements quality',
-    'Incorrect end loads',
-    'Too refined mesh at the non critical regions',
-    'Support Gap',
-    'Support Location',
-    'Incorrect Scope',
-    'free pages',
-    'Incorrect mass modeling',
-    'Incorrect material properties',
-    'Incorrect global output request',
-    'Incorrect loadstep creation',
-    'Incorrect output request',
-    'Incorrect Interpretation',
-    'Incorrect Results location and Values',
-    'Incorrect Observation',
-    'Incorrect Naming',
-    'Missing Results Plot',
-    'Incomplete conclusion, suggestions',
-    'Template not followed',
-    'Checklist not followed',
-    'Planning sheet not followed',
-    'Folder Structure not followed',
-    'Name/revision report incorrect',
-    'Typo Textual Error',
+    "Incorrect Modelling Strategy - Geometry",
+    "Incorrect Modelling Strategy - Material",
+    "Incorrect Modelling Strategy - Loads",
+    "Incorrect Modelling Strategy - BC",
+    "Incorrect Modelling Strategy - Assumptions",
+    "Incorrect Modelling Strategy - Acceptance Criteria",
+    "Incorrect geometry units",
+    "Incorrect meshing",
+    "Defective mesh quality",
+    "Incorrect contact definition",
+    "Incorrect beam/bolt modeling",
+    "RBE/RBE3 are not modeled properly",
+    "Incorrect loads and Boundary Condition",
+    "Incorrect connectivity",
+    "Incorrect degree of element order",
+    "Incorrect element quality",
+    "Incorrect bolt size",
+    "Incorrect elements order",
+    "Incorrect elements quality",
+    "Incorrect end loads",
+    "Too refined mesh at the non critical regions",
+    "Support Gap",
+    "Support Location",
+    "Incorrect Scope",
+    "free pages",
+    "Incorrect mass modeling",
+    "Incorrect material properties",
+    "Incorrect global output request",
+    "Incorrect loadstep creation",
+    "Incorrect output request",
+    "Incorrect Interpretation",
+    "Incorrect Results location and Values",
+    "Incorrect Observation",
+    "Incorrect Naming",
+    "Missing Results Plot",
+    "Incomplete conclusion, suggestions",
+    "Template not followed",
+    "Checklist not followed",
+    "Planning sheet not followed",
+    "Folder Structure not followed",
+    "Name/revision report incorrect",
+    "Typo Textual Error",
   ];
   return names.map((name, i) => {
-    let groupName = 'General';
-    if (name.startsWith('Incorrect Modelling Strategy')) {
-      groupName = 'Modelling Strategy';
-    } else if (name.toLowerCase().includes('results') || name.toLowerCase().includes('output')) {
-      groupName = 'Results & Output';
-    } else if (name.toLowerCase().includes('mesh')) {
-      groupName = 'Meshing';
+    let groupName = "General";
+    if (name.startsWith("Incorrect Modelling Strategy")) {
+      groupName = "Modelling Strategy";
+    } else if (
+      name.toLowerCase().includes("results") ||
+      name.toLowerCase().includes("output")
+    ) {
+      groupName = "Results & Output";
+    } else if (name.toLowerCase().includes("mesh")) {
+      groupName = "Meshing";
     }
 
     return {
@@ -261,7 +400,7 @@ function getDefaultCategories() {
       group: groupName,
       keywords: name
         .toLowerCase()
-        .replace(/[-/\\]/g, ' ')
+        .replace(/[-/\\]/g, " ")
         .split(/\s+/)
         .filter((w) => w.length > 1),
     };

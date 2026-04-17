@@ -6,19 +6,19 @@ class AnalyticsController extends GetxController {
 
   AnalyticsController(this._service);
 
-  // ── Filter state ──────────────────────────────────────────────────────────
+  // Filter state 
   final selectedTeamLeader = RxnString();
   final selectedProject = RxnString(); // project name (display key)
   final selectedDefectCategory = RxnString();
   final selectedExecutor = RxnString();
 
-  // ── Dropdown options ──────────────────────────────────────────────────────
+  // Dropdown options 
   final teamLeaders = RxList<String>();
   final projects = RxList<AnalyticsProjectItem>();
   final defectCategories = RxList<String>();
   final executors = RxList<String>();
 
-  // ── Analytics data ────────────────────────────────────────────────────────
+  // Analytics data 
   final summary = Rx<AnalyticsSummary>(AnalyticsSummary.empty);
   final allDefectCategories = RxList<CategoryCount>();
   final topDefectCategories = RxList<CategoryCount>();
@@ -27,19 +27,19 @@ class AnalyticsController extends GetxController {
   final drByTeamLeader = RxList<TeamLeaderDR>();
   final defectDetails = RxList<DefectDetail>();
 
-  // ── Pagination ────────────────────────────────────────────────────────────
+  // Pagination 
   final currentPage = 1.obs;
   final totalRecords = 0.obs;
   static const pageSize = 10;
   final searchQuery = ''.obs;
 
-  // ── Loading flags ─────────────────────────────────────────────────────────
+  // Loading flags 
   final isSummaryLoading = false.obs;
   final isChartsLoading = false.obs;
   final isTableLoading = false.obs;
   final isOptionsLoading = false.obs;
 
-  // ── Error messages ────────────────────────────────────────────────────────
+  // Error messages 
   final summaryError = RxnString();
   final chartsError = RxnString();
   final tableError = RxnString();
@@ -51,14 +51,14 @@ class AnalyticsController extends GetxController {
     loadAll();
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // Helpers 
 
   String? get _tl => selectedTeamLeader.value;
   String? get _proj => selectedProject.value;
   String? get _cat => selectedDefectCategory.value;
   String? get _exc => selectedExecutor.value;
 
-  // ── Filter options loading ────────────────────────────────────────────────
+  // Filter options loading 
 
   Future<void> _loadFilterOptions() async {
     isOptionsLoading.value = true;
@@ -92,13 +92,13 @@ class AnalyticsController extends GetxController {
         selectedExecutor.value = null;
       }
     } catch (_) {
-      // Non-critical – keep empty lists
+      // Non-critical  keep empty lists
     } finally {
       isOptionsLoading.value = false;
     }
   }
 
-  // ── Data loading ──────────────────────────────────────────────────────────
+  // Data loading 
 
   Future<void> loadAll() async {
     await Future.wait([
@@ -187,7 +187,7 @@ class AnalyticsController extends GetxController {
     }
   }
 
-  // ── Filter actions ────────────────────────────────────────────────────────
+  // Filter actions 
 
   void applyTeamLeader(String? value) {
     selectedTeamLeader.value = value;
@@ -214,7 +214,7 @@ class AnalyticsController extends GetxController {
     loadTable();
   }
 
-  // ── Pagination ────────────────────────────────────────────────────────────
+  // Pagination 
 
   int get totalPages => (totalRecords.value / pageSize).ceil().clamp(1, 9999);
 

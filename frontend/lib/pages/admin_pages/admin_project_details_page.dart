@@ -132,11 +132,20 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
           onPressed: () => Get.back(),
         ),
         actions: [
-          IconButton(
-            tooltip: 'Edit project',
-            icon: const Icon(Icons.edit),
-            onPressed: () => _showEditDialog(context, details),
-          ),
+          Obx(() {
+            final canEditProject =
+                details.project.status.trim().toLowerCase() == 'not started';
+
+            if (!canEditProject) {
+              return const SizedBox.shrink();
+            }
+
+            return IconButton(
+              tooltip: 'Edit project',
+              icon: const Icon(Icons.edit),
+              onPressed: () => _showEditDialog(context, details),
+            );
+          }),
           IconButton(
             tooltip: 'Delete project',
             icon: const Icon(Icons.delete_outline),
@@ -200,7 +209,10 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
                             ),
                             _row(
                               'Checklist\nTemplate',
-                              (details.project.templateName?.trim().isNotEmpty ?? false)
+                              (details.project.templateName
+                                          ?.trim()
+                                          .isNotEmpty ??
+                                      false)
                                   ? details.project.templateName!.trim()
                                   : 'None Assigned',
                             ),

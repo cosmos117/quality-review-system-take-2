@@ -15,7 +15,7 @@ const uploadsRoot = path.join(__dirname, "..", "uploads");
 
 // app.use(helmet()); // Temporarily disabled to debug Render connection issues
 
-// ── CORS ──
+// CORS 
 // If FRONTEND_URL is set in .env, only allow those origins (comma-separated).
 const rawAllowedOrigins = process.env.FRONTEND_URL || "";
 const allowedOrigins = rawAllowedOrigins
@@ -78,19 +78,15 @@ app.get("/", (req, res) => {
   res.send("<h1>Backend is UP and Running!</h1>");
 });
 
-// ── Route imports ──
 import userRouter from "./routes/user.routes.js";
 import roleRoutes from "./routes/role.routes.js";
 import projectMembershipRoutes from "./routes/projectMembership.routes.js";
 import projectRoutes from "./routes/project.routes.js";
-import checklistRoutes from "./routes/checklistRoutes.js";
-import checklistAnswerRoutes from "./routes/checklistAnswerRoutes.js";
 import stageRouter from "./routes/stage.routes.js";
 import approvalRoutes from "./routes/approval.routes.js";
 import projectChecklistRoutes from "./routes/projectChecklist.routes.js";
 import templateRoutes from "./routes/template.routes.js";
 import templateMultiRoutes from "./routes/template.multi.routes.js";
-import checkpointRoutes from "./routes/checkpoint.routes.js";
 import analyticsRoutes from "./routes/analytics.routes.js";
 import exportRoutes from "./routes/export.routes.js";
 import imagesRouter from "./routes/images.js";
@@ -101,14 +97,11 @@ app.use("/api/v1/roles", roleRoutes);
 
 app.use("/api/v1/projects", authMiddleware, projectMembershipRoutes);
 app.use("/api/v1/projects", authMiddleware, projectRoutes);
-app.use("/api/v1", authMiddleware, checklistRoutes);
-app.use("/api/v1", authMiddleware, checklistAnswerRoutes);
 app.use("/api/v1", authMiddleware, stageRouter);
 app.use("/api/v1", authMiddleware, approvalRoutes);
 app.use("/api/v1", authMiddleware, projectChecklistRoutes);
 app.use("/api/v1/templates", authMiddleware, templateRoutes);
 app.use("/api/v1/template-library", authMiddleware, templateMultiRoutes);
-app.use("/api/v1", authMiddleware, checkpointRoutes);
 app.use("/api/v1", authMiddleware, analyticsRoutes);
 app.use("/api/v1", authMiddleware, exportRoutes);
 app.use("/api/v1/", authMiddleware, imagesRouter);

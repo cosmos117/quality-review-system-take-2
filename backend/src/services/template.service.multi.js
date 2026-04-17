@@ -94,7 +94,7 @@ function findSection(checklist, sectionId) {
   return section;
 }
 
-// ── Template CRUD ──
+// Template CRUD 
 
 export async function createTemplate(templateName, displayName, description, userId) {
   if (!templateName || !templateName.trim()) {
@@ -384,7 +384,7 @@ export async function duplicateTemplate(sourceTemplateName, newTemplateName, use
   return newTemplate;
 }
 
-// ── Checklist (group) management ──
+// Checklist (group) management 
 
 export async function addChecklistToTemplate(templateName, stage, text, userId) {
   validateStage(stage);
@@ -443,7 +443,7 @@ export async function deleteChecklistFromTemplate(templateName, checklistId, sta
   return updated;
 }
 
-// ── Checkpoint (question) management on checklists ──
+// Checkpoint (question) management on checklists 
 
 export async function addCheckpointToTemplate(templateName, checklistId, stage, text, categoryId, userId) {
   validateStage(stage);
@@ -507,7 +507,7 @@ export async function deleteCheckpointFromTemplate(templateName, checkpointId, s
   return updated;
 }
 
-// ── Section management ──
+// Section management 
 
 export async function addSectionToChecklist(templateName, checklistId, stage, text, userId) {
   validateStage(stage);
@@ -571,7 +571,7 @@ export async function deleteSectionFromChecklist(templateName, checklistId, sect
   return updated;
 }
 
-// ── Checkpoint management on sections ──
+// Checkpoint management on sections 
 
 export async function addCheckpointToSection(templateName, checklistId, sectionId, stage, text, categoryId, userId) {
   validateStage(stage);
@@ -638,7 +638,7 @@ export async function deleteCheckpointFromSection(templateName, checklistId, sec
   return updated;
 }
 
-// ── Stage management ──
+// Stage management 
 
 export async function addStageToTemplate(templateName, stage, stageName, userId) {
   validateStage(stage);
@@ -734,7 +734,7 @@ export async function getAllStages(templateName) {
   );
 }
 
-// ── Defect categories ──
+// Defect categories 
 
 export async function updateDefectCategories(templateName, defectCategories, userId) {
   const template = await getTemplateByName(templateName);
@@ -756,7 +756,7 @@ export async function updateDefectCategories(templateName, defectCategories, use
   return updated;
 }
 
-// ── Seed ──
+// Seed 
 
 export async function seedSampleTemplates(userId) {
   const existing = await prisma.template.count();

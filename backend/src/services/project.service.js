@@ -6,7 +6,7 @@ import { getOrSet, keys, TTL, invalidateProjects, invalidateStages } from "../ut
 import { clearAnalyticsCache } from "./analytics-excel.service.js";
 import { newId } from "../utils/newId.js";
 
-// ── Helpers ──────────────────────────────────────────────────────────
+// Helpers 
 
 async function resolveTemplateForProject(projectOrTemplateName) {
   const templateName = typeof projectOrTemplateName === "string" 
@@ -191,7 +191,7 @@ async function createStagesAndChecklistsFromTemplate(projectId, templateName) {
   }
 }
 
-// ── Service functions ────────────────────────────────────────────────
+// Service functions 
 
 export async function getAllProjects(query) {
   const { page, limit, skip } = parsePagination(query);

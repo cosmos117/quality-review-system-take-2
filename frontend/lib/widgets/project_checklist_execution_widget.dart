@@ -1,7 +1,6 @@
 /// Hierarchical checklist execution widget for ProjectChecklist structure.
 /// This widget handles role-based editing (Executor, Reviewer, TeamLeader) and renders
-/// the hierarchical structure: Group â†’ Sections (optional) â†’ Questions.
-///
+/// the hierarchical structure: Group -> Sections (optional) -> Questions.
 /// This is distinct from the template editor (checklist.dart) and is used
 /// when displaying a project's execution-mode checklist.
 
@@ -596,7 +595,8 @@ class _QuestionTileState extends State<_QuestionTile> {
             children: [
               // Answer dropdown
               DropdownButton<String?>(
-                value: ['Yes', 'No', 'NA'].contains(widget.question.executorAnswer)
+                value:
+                    ['Yes', 'No', 'NA'].contains(widget.question.executorAnswer)
                     ? widget.question.executorAnswer
                     : null,
                 items: [null, 'Yes', 'No', 'NA']
@@ -707,7 +707,11 @@ class _QuestionTileState extends State<_QuestionTile> {
             children: [
               // Status dropdown
               DropdownButton<String?>(
-                value: ['Approved', 'Rejected'].contains(widget.question.reviewerStatus)
+                value:
+                    [
+                      'Approved',
+                      'Rejected',
+                    ].contains(widget.question.reviewerStatus)
                     ? widget.question.reviewerStatus
                     : null,
                 items: [null, 'Approved', 'Rejected']

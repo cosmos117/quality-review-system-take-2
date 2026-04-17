@@ -18,7 +18,7 @@ class ChecklistController extends GetxService {
   // Loading state
   final _isLoading = <String, bool>{}.obs;
 
-  // Pending saves (debouncing) — use Timer so they are properly cancellable
+  // Pending saves (debouncing)  use Timer so they are properly cancellable
   final Map<String, Timer> _pendingSaves = {};
 
   // Removed stage/checklist caches - using direct checklist answers endpoints

@@ -30,7 +30,7 @@ class ProjectsController extends GetxController {
   /// True when a background refresh is running but stale data is already visible.
   final RxBool isRefreshing = false.obs;
 
-  /// Reactive cache: projectId → membership names (team leaders, executors, reviewers).
+  /// Reactive cache: projectId -> membership names (team leaders, executors, reviewers).
   /// Dashboard cards observe this so they update instantly when memberships change.
   final membershipCache = <String, ProjectMembershipCache>{}.obs;
 

@@ -2,18 +2,18 @@ import NodeCache from "node-cache";
 
 // TTL values in seconds
 const TTL = {
-  PROJECTS: 30,       // 30s – project list changes moderately often
-  PROJECT_BY_ID: 60,  // 1min – individual project detail
-  PROJECT_STAGES: 60, // 1min – stages for a project
-  TEMPLATES: 120,     // 2min – template rarely changes
-  ROLES: 120,         // 2min – roles are near-static
-  STAGES: 60,         // 1min – stage data
+  PROJECTS: 30,       // 30s  project list changes moderately often
+  PROJECT_BY_ID: 60,  // 1min  individual project detail
+  PROJECT_STAGES: 60, // 1min  stages for a project
+  TEMPLATES: 120,     // 2min  template rarely changes
+  ROLES: 120,         // 2min  roles are near-static
+  STAGES: 60,         // 1min  stage data
 };
 
 // Single shared cache instance with check-period of 30s
 const cache = new NodeCache({ stdTTL: 60, checkperiod: 30 });
 
-// ── Cache key builders ───────────────────────────────────────────────
+// Cache key builders 
 
 const keys = {
   allProjects: (queryStr) => `projects:all:${queryStr || "default"}`,
@@ -27,7 +27,7 @@ const keys = {
   stageById: (id) => `stages:id:${id}`,
 };
 
-// ── Cache helpers ────────────────────────────────────────────────────
+// Cache helpers 
 
 /**
  * Get-or-set pattern: returns cached value if present, otherwise calls
@@ -53,7 +53,7 @@ function invalidateByPrefix(prefix) {
   if (toDelete.length > 0) cache.del(toDelete);
 }
 
-// ── Domain-level invalidation ────────────────────────────────────────
+// Domain-level invalidation 
 
 function invalidateProjects() {
   invalidateByPrefix("projects:");

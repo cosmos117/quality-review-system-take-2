@@ -1,32 +1,15 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// API Configuration
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// HOW TO USE (LAN Deployment):
-//
-//   1. Find your PC's Local IP:  Run  ipconfig  in CMD.
-//      Look for "IPv4 Address"  e.g.  192.168.1.45
-//
-//   2. Run Flutter with your LAN IP injected at runtime (no code change needed):
-//
-//      flutter run -d chrome \
-//        --dart-define=API_URL=http://192.168.1.45:8000/api/v1
-//
-//   3. Your colleagues open the web app in their browser using YOUR IP as the
-//      Flutter host.  All API calls automatically go to 192.168.1.45:8000.
-//
-// ─────────────────────────────────────────────────────────────────────────────
+// API base URL configuration.
+// Override it at run/build time with:
+// --dart-define=API_URL=http://<server-ip>:8000/api/v1
 
 class ApiConfig {
-  // Default fallback: your own machine (used when no --dart-define is given)
+  // Local fallback when API_URL is not provided.
   static const String _defaultUrl = 'http://localhost:8000/api/v1';
 
-  // The active URL:  overridden at build/run time via --dart-define=API_URL=...
   static const String baseUrl = String.fromEnvironment(
     'API_URL',
     defaultValue: _defaultUrl,
   );
 
-  // Checklist endpoints share the same base
   static const String checklistBaseUrl = baseUrl;
 }

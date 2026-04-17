@@ -65,11 +65,11 @@ class _LoginPageState extends State<LoginPage> {
   // Teal color matching the reference image
   static const Color _teal = Color(0xFF2A9D8F);
 
-  /// Builds a labelled text field that matches the reference screenshot:
-  ///  • Label text sits ABOVE the box
-  ///  • Teal outlined border (thicker when focused)
-  ///  • Hint text inside the box
-  ///  • Prefix icon in teal
+  /// Builds a labeled text field.
+  /// Label text sits ABOVE the box
+  /// Teal outlined border (thicker when focused)
+  /// Hint text inside the box
+  /// Prefix icon in teal
   Widget _buildField({
     required String label,
     required String hint,
@@ -81,7 +81,7 @@ class _LoginPageState extends State<LoginPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Label above the box ──
+        // Label above the box 
         Text(
           label,
           style: const TextStyle(
@@ -91,7 +91,7 @@ class _LoginPageState extends State<LoginPage> {
           ),
         ),
         const SizedBox(height: 6),
-        // ── Text field ──
+        // Text field 
         TextField(
           controller: textController,
           obscureText: obscure,
@@ -147,7 +147,7 @@ class _LoginPageState extends State<LoginPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 30),
-                  // ── Title ──
+                  // Title 
                   const Center(
                     child: Text(
                       "Welcome Back",
@@ -166,7 +166,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 36),
 
-                  // ── Email Field ──
+                  // Email Field 
                   _buildField(
                     label: 'Email',
                     hint: 'Enter your email',
@@ -175,7 +175,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 20),
 
-                  // ── Password Field ──
+                  // Password Field 
                   _buildField(
                     label: 'Password',
                     hint: 'Enter your password',
@@ -196,7 +196,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 36),
 
-                  // ── Login Button ──
+                  // Login Button 
                   Obx(() {
                     if (controller.isLoading.value) {
                       return const Center(child: CircularProgressIndicator());

@@ -1,6 +1,6 @@
 /// Models for hierarchical ProjectChecklist structure used in execution mode.
 /// These models mirror the backend schema and represent the project-specific
-/// checklist hierarchy: Group → Sections (optional) → Questions
+/// checklist hierarchy: Group -> Sections (optional) -> Questions
 
 /// Represents a single question in the project checklist
 class ProjectQuestion {

@@ -4,7 +4,7 @@ import { paginatedResponse } from "../utils/paginate.js";
 import { getOrSet, keys, TTL, invalidateStages } from "../utils/cache.js";
 import { newId } from "../utils/newId.js";
 
-// ── Helpers ──────────────────────────────────────────────────────────
+// Helpers 
 
 const deriveStageKey = (stageName = "") => {
   const lower = stageName.toLowerCase();
@@ -161,7 +161,7 @@ async function ensureProjectChecklistsForStages(stages, projectId) {
   }
 }
 
-// ── Service functions ────────────────────────────────────────────────
+// Service functions 
 
 export async function listStagesForProject(projectId, userId) {
   return getOrSet(keys.stagesForProject(projectId), async () => {

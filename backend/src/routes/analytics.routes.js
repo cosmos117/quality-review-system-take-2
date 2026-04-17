@@ -26,7 +26,7 @@ const router = express.Router();
  * All routes require authentication
  */
 
-// ── Per-project analytics (existing) ────────────────────────────────────────
+// Per-project analytics (existing) 
 router.get("/projects/:projectId/analysis", authMiddleware, getProjectAnalysis);
 router.get(
   "/projects/:projectId/analysis/defects-per-phase",
@@ -44,7 +44,7 @@ router.get(
   getCategoryDistribution,
 );
 
-// ── Dashboard analytics (new) ────────────────────────────────────────────────
+// Dashboard analytics (new) 
 router.get("/analytics/summary", getDashboardSummary);
 router.get("/analytics/top-defect-categories", getTopDefectCategories);
 router.get("/analytics/all-defect-categories", getAllDefectCategories);

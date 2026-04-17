@@ -232,26 +232,26 @@ class AdminChecklistTemplateController extends GetxController {
       final defectSettings = await templateService.fetchGlobalDefectCategories(
         forceRefresh: true,
       );
-      
+
       final parsedCategories = _parseDefectCategories(
         defectSettings['categories'] ?? [],
       );
 
       phases.value = newPhases;
       defectCategories.value = parsedCategories;
-      defectCategoryGroups.value = _ensureList(defectSettings['groups'])
-          .map((e) => e.toString())
-          .toList();
+      defectCategoryGroups.value = _ensureList(
+        defectSettings['groups'],
+      ).map((e) => e.toString()).toList();
 
       if (defectCategories.isEmpty || defectCategories.length <= 4) {
         // ... (preserving logic but potentially updating it to be global)
         // Actually, seed logic is now in the backend, but we'll keep it as a fallback
         if (defectCategories.isEmpty) {
-           defectCategories.value = _getDefaultDefectCategories();
-            await templateService.updateDefectCategories(
-              defectCategories.toList(),
-              categoryGroups: defectCategoryGroups.toList(),
-            );
+          defectCategories.value = _getDefaultDefectCategories();
+          await templateService.updateDefectCategories(
+            defectCategories.toList(),
+            categoryGroups: defectCategoryGroups.toList(),
+          );
         }
       }
 
@@ -291,7 +291,10 @@ class AdminChecklistTemplateController extends GetxController {
     }
   }
 
-  Future<void> updateDefectCategories(List<DefectCategory> updated, {List<String>? groups}) async {
+  Future<void> updateDefectCategories(
+    List<DefectCategory> updated, {
+    List<String>? groups,
+  }) async {
     try {
       await templateService.updateDefectCategories(
         updated,
@@ -404,7 +407,8 @@ class AdminChecklistTemplateController extends GetxController {
     return stageData
         .map((checklistData) {
           if (checklistData is! Map<String, dynamic>) return null;
-          final id = (checklistData['_id'] ?? checklistData['id'] ?? '').toString();
+          final id = (checklistData['_id'] ?? checklistData['id'] ?? '')
+              .toString();
           final text = (checklistData['text'] ?? '').toString();
           final checkpointsData = _ensureList(checklistData['checkpoints']);
           final sectionsData = _ensureList(checklistData['sections']);
@@ -423,7 +427,8 @@ class AdminChecklistTemplateController extends GetxController {
           final sections = sectionsData
               .map((sectionData) {
                 if (sectionData is! Map<String, dynamic>) return null;
-                final sectionId = (sectionData['_id'] ?? sectionData['id'] ?? '').toString();
+                final sectionId =
+                    (sectionData['_id'] ?? sectionData['id'] ?? '').toString();
                 final sectionText = (sectionData['text'] ?? '').toString();
                 final sectionCheckpoints = _ensureList(
                   sectionData['checkpoints'],
@@ -468,22 +473,37 @@ class AdminChecklistTemplateController extends GetxController {
     return [];
   }
 
+  String _normalizeCategoryName(String value) {
+    return value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+  }
+
   List<DefectCategory> _parseDefectCategories(dynamic categoriesData) {
     final list = _ensureList(categoriesData);
+    final seenNames = <String>{};
+
     return list
         .map((catData) {
           if (catData is! Map<String, dynamic>) return null;
-          
+
           // Try multiple ID fields, fallback to a unique local ID if all missing
           String parsedId = (catData['id'] ?? catData['_id'] ?? '').toString();
           if (parsedId.isEmpty) {
-            parsedId = 'temp_cat_${DateTime.now().microsecondsSinceEpoch}_${list.indexOf(catData)}';
+            parsedId =
+                'temp_cat_${DateTime.now().microsecondsSinceEpoch}_${list.indexOf(catData)}';
           }
+
+          final cleanedName = (catData['name'] ?? '')
+              .toString()
+              .trim()
+              .replaceAll(RegExp(r'\s+'), ' ');
+          final cleanedGroup = (catData['group'] ?? 'General')
+              .toString()
+              .trim();
 
           return DefectCategory(
             id: parsedId,
-            name: (catData['name'] ?? '').toString(),
-            group: (catData['group'] ?? 'General').toString(),
+            name: cleanedName,
+            group: cleanedGroup.isEmpty ? 'General' : cleanedGroup,
             keywords:
                 (catData['keywords'] as List<dynamic>?)
                     ?.map((k) => k.toString())
@@ -492,6 +512,15 @@ class AdminChecklistTemplateController extends GetxController {
           );
         })
         .whereType<DefectCategory>()
+        .where((cat) {
+          final normalizedName = _normalizeCategoryName(cat.name);
+          if (normalizedName.isEmpty || seenNames.contains(normalizedName)) {
+            return false;
+          }
+
+          seenNames.add(normalizedName);
+          return true;
+        })
         .toList();
   }
 }
@@ -557,11 +586,12 @@ List<DefectCategory> _getDefaultDefectCategories() {
   return names.asMap().entries.map((entry) {
     final i = entry.key + 1;
     final name = entry.value;
-    
+
     String groupName = 'General';
     if (name.startsWith('Incorrect Modelling Strategy')) {
       groupName = 'Modelling Strategy';
-    } else if (name.toLowerCase().contains('results') || name.toLowerCase().contains('output')) {
+    } else if (name.toLowerCase().contains('results') ||
+        name.toLowerCase().contains('output')) {
       groupName = 'Results & Output';
     } else if (name.toLowerCase().contains('mesh')) {
       groupName = 'Meshing';

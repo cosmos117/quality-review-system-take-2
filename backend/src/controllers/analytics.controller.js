@@ -12,14 +12,9 @@ import {
   getExecutorsList,
 } from "../services/analytics-excel.service.js";
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Per-project analytics (unchanged â€“ keep existing functionality)
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 export const getProjectAnalysis = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
-  if (!isValidObjectId(projectId))
-    throw new ApiError(400, "Invalid projectId");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
 
   const data = await analyticsService.getProjectAnalysis(projectId);
   const message = data.summary
@@ -32,8 +27,7 @@ export const getProjectAnalysis = asyncHandler(async (req, res) => {
 
 export const getDefectsPerPhase = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
-  if (!isValidObjectId(projectId))
-    throw new ApiError(400, "Invalid projectId");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
 
   const result = await analyticsService.getDefectsPerPhase(projectId);
   return res
@@ -45,8 +39,7 @@ export const getDefectsPerPhase = asyncHandler(async (req, res) => {
 
 export const getDefectsPerChecklist = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
-  if (!isValidObjectId(projectId))
-    throw new ApiError(400, "Invalid projectId");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
 
   const result = await analyticsService.getDefectsPerChecklist(projectId);
   return res
@@ -62,8 +55,7 @@ export const getDefectsPerChecklist = asyncHandler(async (req, res) => {
 
 export const getCategoryDistribution = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
-  if (!isValidObjectId(projectId))
-    throw new ApiError(400, "Invalid projectId");
+  if (!isValidObjectId(projectId)) throw new ApiError(400, "Invalid projectId");
 
   const data = await analyticsService.getCategoryDistribution(projectId);
   const message =
@@ -73,14 +65,8 @@ export const getCategoryDistribution = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, data, message));
 });
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Dashboard Analytics  (Excel-data-driven)
-//
-// All endpoints read from the same ProjectChecklist + Project + Stage +
-// Template data used by the master Excel export.  This guarantees the
-// dashboard always matches the exported report.
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
+// Dashboard analytics
+// Uses the same source data as Excel export so numbers stay aligned.
 /** Shared helper: load raw data and return filter params from query string. */
 async function loadAndParse(req) {
   const { teamLeader, project, defectCategory, executor } = req.query;

@@ -376,7 +376,7 @@ class EmployeePage extends StatelessWidget {
     } catch (e) {}
 
     final String warningMessage = hasActiveProjects
-        ? 'Warning: "${m.name}" is currently assigned to ${projectRoles.length} in-progress project(s):\n\n${projectRoles.entries.map((e) => '• ${e.key} (${e.value.join(', ')})').join('\n')}\n\nDeleting this employee may affect these projects. Are you sure you want to proceed?'
+        ? 'Warning: "${m.name}" is currently assigned to ${projectRoles.length} in-progress project(s):\n\n${projectRoles.entries.map((e) => ' ${e.key} (${e.value.join(', ')})').join('\n')}\n\nDeleting this employee may affect these projects. Are you sure you want to proceed?'
         : 'Are you sure you want to delete "${m.name}"? This action cannot be undone.';
 
     final String deleteButtonText = hasActiveProjects

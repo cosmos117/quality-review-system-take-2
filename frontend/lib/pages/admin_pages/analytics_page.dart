@@ -88,7 +88,7 @@ Color _greenShadeByValue(double value, double maxValue) {
   return _kGreenLight;
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+// Page
 
 class AnalyticsPage extends StatelessWidget {
   const AnalyticsPage({super.key});
@@ -206,7 +206,7 @@ class AnalyticsPage extends StatelessWidget {
   }
 }
 
-// ── Filter bar ────────────────────────────────────────────────────────────────
+// Filter bar
 
 class _FilterBar extends StatelessWidget {
   final AnalyticsController ctrl;
@@ -332,7 +332,7 @@ class _FilterDropdown<T extends String> extends StatelessWidget {
   }
 }
 
-// ── KPI Row ───────────────────────────────────────────────────────────────────
+// KPI Row
 
 class _KpiRow extends StatelessWidget {
   final AnalyticsController ctrl;
@@ -461,10 +461,9 @@ class _KpiCard extends StatelessWidget {
   }
 }
 
-// ── Chart row (two cards side by side) ───────────────────────────────────────
+// Chart row (two cards side by side)
 
-
-// ── Card wrapper ──────────────────────────────────────────────────────────────
+// Card wrapper
 
 class _CardWrapper extends StatelessWidget {
   final String title;
@@ -506,7 +505,7 @@ class _CardWrapper extends StatelessWidget {
   }
 }
 
-// ── All Defect Categories ───────────────────────────────────────────────────
+// All Defect Categories
 
 class _AllDefectCategoriesChart extends StatelessWidget {
   final AnalyticsController ctrl;
@@ -591,7 +590,7 @@ class _AllDefectCategoriesChart extends StatelessWidget {
   }
 }
 
-// ── Top Defect Categories – horizontal bar chart ──────────────────────────────
+// Top Defect Categories  horizontal bar chart
 
 class _TopDefectCategoriesChart extends StatelessWidget {
   final AnalyticsController ctrl;
@@ -676,7 +675,7 @@ class _TopDefectCategoriesChart extends StatelessWidget {
   }
 }
 
-// ── Severity Pie Chart ────────────────────────────────────────────────────────
+// Severity Pie Chart
 
 class _SeverityPieChart extends StatelessWidget {
   final AnalyticsController ctrl;
@@ -757,7 +756,7 @@ class _SeverityPieChart extends StatelessWidget {
   }
 }
 
-// ── DR by Project – horizontal bar chart ─────────────────────────────────────
+// DR by Project  horizontal bar chart
 
 class _DrByProjectChart extends StatelessWidget {
   final AnalyticsController ctrl;
@@ -779,7 +778,7 @@ class _DrByProjectChart extends StatelessWidget {
   }
 }
 
-// ── DR by Team Leader – vertical bar chart ────────────────────────────────────
+// DR by Team Leader  vertical bar chart
 
 class _DrByTeamLeaderChart extends StatelessWidget {
   final AnalyticsController ctrl;
@@ -799,10 +798,9 @@ class _DrByTeamLeaderChart extends StatelessWidget {
   }
 }
 
-// ── Reusable horizontal bar list ──────────────────────────────────────────────
+// Reusable horizontal bar list
 
-
-// ── Risk-colored horizontal bar list ──────────────────────────────────────────
+// Risk-colored horizontal bar list
 
 class _RiskColoredHorizontalBarList extends StatelessWidget {
   final List<({String label, double value})> items;
@@ -901,13 +899,11 @@ class _RiskColoredHorizontalBarList extends StatelessWidget {
   }
 }
 
-// ── Green-colored horizontal bar list ────────────────────────────────────────
+// Green-colored horizontal bar list
 
+// Reusable vertical bar chart
 
-// ── Reusable vertical bar chart ───────────────────────────────────────────────
-
-
-// ── Green-shaded vertical bar chart ──────────────────────────────────────────
+// Green-shaded vertical bar chart
 
 class _GreenVerticalBarChart extends StatelessWidget {
   final List<({String label, double value})> items;
@@ -977,7 +973,7 @@ class _GreenVerticalBarChart extends StatelessWidget {
   }
 }
 
-// ── Pie chart painter ─────────────────────────────────────────────────────────
+// Pie chart painter
 
 class _PiePainter extends CustomPainter {
   final List<double> values;
@@ -1026,7 +1022,7 @@ class _PiePainter extends CustomPainter {
       old.values != values || old.colors != colors;
 }
 
-// ── Defect Details Table ──────────────────────────────────────────────────────
+// Defect Details Table
 
 class _DefectDetailsTable extends StatefulWidget {
   final AnalyticsController ctrl;
@@ -1062,7 +1058,7 @@ class _DefectDetailsTableState extends State<_DefectDetailsTable> {
                 },
                 onSubmitted: widget.ctrl.applySearch,
                 decoration: InputDecoration(
-                  hintText: 'Search by Project No., Project Name, Team Leader…',
+                  hintText: 'Search by Project No., Project Name, Team Leader',
                   hintStyle: const TextStyle(fontSize: 13),
                   prefixIcon: const Icon(Icons.search, size: 18),
                   suffixIcon: _searchCtrl.text.isNotEmpty
@@ -1189,10 +1185,7 @@ class _DefectDetailsTableState extends State<_DefectDetailsTable> {
   }
 }
 
-
-
-
-// ── Fixed-width cell widgets for horizontal scroll table ─────────────────────
+// Fixed-width cell widgets for horizontal scroll table
 
 class _FixedHeaderCell extends StatelessWidget {
   final String label;
@@ -1230,7 +1223,7 @@ class _FixedDataCell extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         child: Text(
-          text.isEmpty ? '—' : text,
+          text.isEmpty ? '-' : text,
           style: TextStyle(
             fontSize: 14,
             color: text.isEmpty ? Colors.grey : Colors.black87,
@@ -1250,7 +1243,7 @@ class _TooltipDataCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final display = text.isEmpty ? '—' : text;
+    final display = text.isEmpty ? '-' : text;
     return SizedBox(
       width: width,
       child: Padding(
@@ -1285,7 +1278,7 @@ class _FixedSeverityCell extends StatelessWidget {
         width: width,
         child: const Padding(
           padding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-          child: Text('—', style: TextStyle(fontSize: 14, color: Colors.grey)),
+          child: Text('-', style: TextStyle(fontSize: 14, color: Colors.grey)),
         ),
       );
     }
@@ -1338,7 +1331,7 @@ class _RemarkCell extends StatelessWidget {
             border: Border.all(color: Colors.grey.shade200),
           ),
           child: Text(
-            text.isEmpty ? '—' : text,
+            text.isEmpty ? '-' : text,
             style: TextStyle(
               fontSize: 14,
               color: text.isEmpty ? Colors.grey : Colors.black87,
@@ -1353,7 +1346,7 @@ class _RemarkCell extends StatelessWidget {
   }
 }
 
-// ── Pagination ────────────────────────────────────────────────────────────────
+// Pagination
 
 class _Pagination extends StatelessWidget {
   final AnalyticsController ctrl;
@@ -1409,7 +1402,7 @@ class _Pagination extends StatelessWidget {
   }
 }
 
-// ── Shared helpers ────────────────────────────────────────────────────────────
+// Shared helpers
 
 class _LoadingWidget extends StatelessWidget {
   const _LoadingWidget();

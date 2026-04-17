@@ -2542,7 +2542,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     for (final cat in widget.availableCategories) {
       final name = (cat['name'] ?? '').toString();
       final id = (cat['_id'] ?? '').toString();
-      // Gather keywords with graceful fallbacks: keywords[] â†’ aliases[] â†’ name tokens
+      // Gather keywords with graceful fallbacks: keywords[]  aliases[]  name tokens
       final kwFromArray = (cat['keywords'] as List<dynamic>? ?? [])
           .map((k) => k.toString().toLowerCase())
           .where((k) => k.trim().isNotEmpty)

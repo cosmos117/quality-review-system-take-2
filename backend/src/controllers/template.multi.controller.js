@@ -3,7 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import * as templateService from "../services/template.service.multi.js";
 
-// ── Template Management ──
+// Template Management 
 
 /**
  * Create a new template
@@ -152,7 +152,7 @@ export const duplicateTemplate = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, template, "Template duplicated successfully"));
 });
 
-// ── Checklist (Group) Management ──
+// Checklist (Group) Management 
 
 /**
  * Add checklist group to template
@@ -218,7 +218,7 @@ export const deleteChecklistFromTemplate = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, template, "Checklist deleted successfully"));
 });
 
-// ── Checkpoint (Question) Management on Checklists ──
+// Checkpoint (Question) Management on Checklists 
 
 /**
  * Add checkpoint to checklist
@@ -289,7 +289,7 @@ export const deleteCheckpointFromTemplate = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, template, "Checkpoint deleted successfully"));
 });
 
-// ── Section Management ──
+// Section Management 
 
 /**
  * Add section to checklist
@@ -358,7 +358,7 @@ export const deleteSectionFromChecklist = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, template, "Section deleted successfully"));
 });
 
-// ── Checkpoint (Question) Management on Sections ──
+// Checkpoint (Question) Management on Sections 
 
 /**
  * Add checkpoint to section
@@ -450,7 +450,7 @@ export const deleteCheckpointFromSection = asyncHandler(async (req, res) => {
     );
 });
 
-// ── Stage Management ──
+// Stage Management 
 
 /**
  * Add stage to template
@@ -502,7 +502,7 @@ export const getAllStages = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, stages, "Stages fetched successfully"));
 });
 
-// ── Defect Categories ──
+// Defect Categories 
 
 /**
  * Update defect categories for a template
@@ -527,7 +527,7 @@ export const updateDefectCategories = asyncHandler(async (req, res) => {
     );
 });
 
-// ── Seed ──
+// Seed 
 
 /**
  * Seed sample templates

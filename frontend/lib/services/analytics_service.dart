@@ -1,7 +1,7 @@
 import '../config/api_config.dart';
 import 'http_client.dart';
 
-// ── Data models ───────────────────────────────────────────────────────────────
+// Data models 
 
 class AnalyticsSummary {
   final int totalProjects;
@@ -127,7 +127,7 @@ class AnalyticsProjectItem {
   String get displayName => name.isNotEmpty ? name : no;
 }
 
-// ── Service ───────────────────────────────────────────────────────────────────
+// Service 
 
 class AnalyticsService {
   final SimpleHttp _http;

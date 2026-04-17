@@ -24,9 +24,9 @@ async function main() {
         status: "active",
       },
     });
-    console.log("✅ Admin user created: admin@gmail.com / admin");
+    console.log("Admin user created: admin@gmail.com / admin");
   } else {
-    console.log("ℹ️ Admin user already exists");
+    console.log("Admin user already exists");
   }
 
   // Create a default reviewer too if needed
@@ -46,7 +46,7 @@ async function main() {
         status: "active",
       },
     });
-    console.log("✅ Reviewer user created: reviewer@gmail.com / admin");
+    console.log("Reviewer user created: reviewer@gmail.com / admin");
   }
 }
 
