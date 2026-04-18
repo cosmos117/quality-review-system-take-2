@@ -4,7 +4,7 @@ import multer from "multer";
 import path from "path";
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png"]);
 const ALLOWED_EXTENSIONS = new Set([".jpg", ".jpeg", ".png"]);
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
 const upload = multer({
   storage: multer.memoryStorage(),

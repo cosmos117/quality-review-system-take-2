@@ -1,5 +1,7 @@
 # Context Document: Quality Review System — Updated Deployment Guide
+
 ### Purpose
+
 This file contains all the accurate, current technical context needed for Claude to rewrite the
 "Quality Review System – Deployment & Implementation Guide" for Atlas Copco (IT Department).
 The original guide was written when the project used MongoDB + Mongoose + GridFS.
@@ -9,15 +11,15 @@ The original guide was written when the project used MongoDB + Mongoose + GridFS
 
 ## 1. What Changed (Migration Summary)
 
-| Area | Old (Deprecated – DO NOT document) | New (Current – Document this) |
-|---|---|---|
-| Database | MongoDB 6.0 / MongoDB Atlas | MySQL (hosted on **Aiven** cloud) |
-| ORM / Schema | Mongoose | **Prisma ORM v6** (`@prisma/client ^6.4.0`) |
-| File / Image Storage | MongoDB GridFS | **Local server disk** (`backend/uploads/`) + metadata in MySQL |
-| Schema file | Mongoose model files | `backend/prisma/schema.prisma` |
-| DB connection var | `MONGODB_URI` | `DATABASE_URL` |
-| DB push command | (none) | `npx prisma db push` |
-| Client generation | (none) | `npx prisma generate` (auto-runs on `npm install` via `postinstall`) |
+| Area                 | Old (Deprecated – DO NOT document) | New (Current – Document this)                                        |
+| -------------------- | ---------------------------------- | -------------------------------------------------------------------- |
+| Database             | MongoDB 6.0 / MongoDB Atlas        | MySQL (hosted on **Aiven** cloud)                                    |
+| ORM / Schema         | Mongoose                           | **Prisma ORM v6** (`@prisma/client ^6.4.0`)                          |
+| File / Image Storage | MongoDB GridFS                     | **Local server disk** (`backend/uploads/`) + metadata in MySQL       |
+| Schema file          | Mongoose model files               | `backend/prisma/schema.prisma`                                       |
+| DB connection var    | `MONGODB_URI`                      | `DATABASE_URL`                                                       |
+| DB push command      | (none)                             | `npx prisma db push`                                                 |
+| Client generation    | (none)                             | `npx prisma generate` (auto-runs on `npm install` via `postinstall`) |
 
 > **CRITICAL**: Remove all references to MongoDB, Mongoose, and GridFS from the new document.
 > Replace every mention of `MONGODB_URI` with `DATABASE_URL`.
@@ -26,19 +28,19 @@ The original guide was written when the project used MongoDB + Mongoose + GridFS
 
 ## 2. Technology Stack (Current)
 
-| Component | Technology | Version / Notes |
-|---|---|---|
-| Frontend | Flutter (Dart) + GetX | Flutter 3.x stable |
-| Backend | Express.js + Node.js | Express v5 (`^5.1.0`), Node.js 18+ |
-| Database | MySQL | Aiven cloud-hosted MySQL (recommended) or local MySQL 8+ |
-| ORM | Prisma | `@prisma/client ^6.4.0`, `prisma ^6.4.0` |
-| Auth | JWT + bcrypt | `jsonwebtoken ^9.0.3`, `bcrypt ^6.0.0` |
-| Image Storage | Local disk (`backend/uploads/`) | Served as static files via Express; metadata in MySQL `ChecklistImage` table |
-| Security | helmet, express-rate-limit | `helmet ^8.1.0`, `express-rate-limit ^8.3.0` |
-| Logging | winston | `winston ^3.19.0` |
-| Caching | node-cache | `node-cache ^5.1.2` |
-| Export | exceljs | `exceljs ^4.4.0` |
-| File upload handler | multer | `multer ^2.0.0` – images buffered in memory, then written to disk |
+| Component           | Technology                      | Version / Notes                                                              |
+| ------------------- | ------------------------------- | ---------------------------------------------------------------------------- |
+| Frontend            | Flutter (Dart) + GetX           | Flutter 3.x stable                                                           |
+| Backend             | Express.js + Node.js            | Express v5 (`^5.1.0`), Node.js 18+                                           |
+| Database            | MySQL                           | Aiven cloud-hosted MySQL (recommended) or local MySQL 8+                     |
+| ORM                 | Prisma                          | `@prisma/client ^6.4.0`, `prisma ^6.4.0`                                     |
+| Auth                | JWT + bcrypt                    | `jsonwebtoken ^9.0.3`, `bcrypt ^6.0.0`                                       |
+| Image Storage       | Local disk (`backend/uploads/`) | Served as static files via Express; metadata in MySQL `ChecklistImage` table |
+| Security            | helmet, express-rate-limit      | `helmet ^8.1.0`, `express-rate-limit ^8.3.0`                                 |
+| Logging             | winston                         | `winston ^3.19.0`                                                            |
+| Caching             | node-cache                      | `node-cache ^5.1.2`                                                          |
+| Export              | exceljs                         | `exceljs ^4.4.0`                                                             |
+| File upload handler | multer                          | `multer ^2.0.0` – images buffered in memory, then written to disk            |
 
 ---
 
@@ -59,17 +61,18 @@ COOKIE_SECRET=your_cookie_secret_here
 
 ### Variable Reference Table
 
-| Variable | Required | Description |
-|---|---|---|
-| `PORT` | No | Server port. Default: `8000` |
-| `NODE_ENV` | No | `development` or `production` |
-| `DATABASE_URL` | **Yes** | Full Prisma-compatible MySQL connection string (see note below) |
-| `ACCESS_TOKEN_SECRET` | **Yes** | Secret for signing JWT tokens (use a long random string) |
-| `ACCESS_TOKEN_EXPIRY` | No | JWT expiry. Default: `1d` |
-| `FRONTEND_URL` | No | Comma-separated allowed CORS origins (e.g. `http://192.168.1.45:5000`). Blank = allow all LAN + localhost |
-| `COOKIE_SECRET` | No | Cookie signing secret |
+| Variable              | Required | Description                                                                                               |
+| --------------------- | -------- | --------------------------------------------------------------------------------------------------------- |
+| `PORT`                | No       | Server port. Default: `8000`                                                                              |
+| `NODE_ENV`            | No       | `development` or `production`                                                                             |
+| `DATABASE_URL`        | **Yes**  | Full Prisma-compatible MySQL connection string (see note below)                                           |
+| `ACCESS_TOKEN_SECRET` | **Yes**  | Secret for signing JWT tokens (use a long random string)                                                  |
+| `ACCESS_TOKEN_EXPIRY` | No       | JWT expiry. Default: `1d`                                                                                 |
+| `FRONTEND_URL`        | No       | Comma-separated allowed CORS origins (e.g. `http://192.168.1.45:5000`). Blank = allow all LAN + localhost |
+| `COOKIE_SECRET`       | No       | Cookie signing secret                                                                                     |
 
 **DATABASE_URL format note:**
+
 - For Aiven MySQL (production): `mysql://avnadmin:PASSWORD@HOST:PORT/defaultdb?ssl-mode=REQUIRED`
 - For local MySQL: `mysql://user:password@localhost:3306/your_db_name`
 - Prisma requires `sslmode=require&sslaccept=strict` style for SSL (not CLI-style `--ssl-mode`). The Aiven connection string uses `ssl-mode=REQUIRED` which Prisma accepts.
@@ -141,7 +144,7 @@ This is the most significant architectural change from the original document and
 
 1. **Upload**: The Flutter app sends a `multipart/form-data` POST to `/api/v1/images/:questionId`
    or `/api/v1/upload-image`. multer buffers the file in memory on the server.
-2. **Validation**: The backend validates MIME type and file extension (JPG/PNG only, max 5 MB).
+2. **Validation**: The backend validates MIME type and file extension (JPG/PNG only, max 10 MB).
    It also detects the true image type from the file's binary header (magic bytes) because
    Flutter Web sometimes sends `application/octet-stream` regardless of the actual image type.
 3. **Storage**: The image buffer is written to disk under `backend/uploads/` with a structured
@@ -177,15 +180,15 @@ This is the most significant architectural change from the original document and
 
 ### Testing / Validation (Image Upload Flow)
 
-| Test Case | Steps | Expected Result |
-|---|---|---|
-| Upload JPG via Flutter | Open a checklist, attach a photo via the camera/gallery picker | Server writes file to `backend/uploads/…`, returns `image_url`, image appears inline in the checklist |
-| Upload PNG via Flutter Web | Same as above but from browser file picker | File validated via magic bytes (not MIME header), stored correctly |
-| Retrieve image | Open a submitted checklist as Admin; view uploaded photos | Image loads from `http://<server>:8000/uploads/…` URL |
-| Invalid file type rejected | Try to upload a PDF or `.txt` file | Returns HTTP 400: `"Only JPG and PNG images are allowed"` |
-| Oversized file rejected | Upload image > 5 MB | Returns HTTP 400: `"Image size exceeds 5MB limit"` |
-| Delete image | Admin deletes an attachment from a submission | MySQL record removed, file deleted from disk, image no longer accessible |
-| Disk persistence check | Restart the backend server; re-open a submission with images | Images still load (files persist on disk; MySQL metadata intact) |
+| Test Case                  | Steps                                                          | Expected Result                                                                                       |
+| -------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Upload JPG via Flutter     | Open a checklist, attach a photo via the camera/gallery picker | Server writes file to `backend/uploads/…`, returns `image_url`, image appears inline in the checklist |
+| Upload PNG via Flutter Web | Same as above but from browser file picker                     | File validated via magic bytes (not MIME header), stored correctly                                    |
+| Retrieve image             | Open a submitted checklist as Admin; view uploaded photos      | Image loads from `http://<server>:8000/uploads/…` URL                                                 |
+| Invalid file type rejected | Try to upload a PDF or `.txt` file                             | Returns HTTP 400: `"Only JPG and PNG images are allowed"`                                             |
+| Oversized file rejected    | Upload image > 10 MB                                           | Returns HTTP 400: `"Image size exceeds 10MB limit"`                                                   |
+| Delete image               | Admin deletes an attachment from a submission                  | MySQL record removed, file deleted from disk, image no longer accessible                              |
+| Disk persistence check     | Restart the backend server; re-open a submission with images   | Images still load (files persist on disk; MySQL metadata intact)                                      |
 
 ---
 
@@ -193,23 +196,23 @@ This is the most significant architectural change from the original document and
 
 The schema is defined in `backend/prisma/schema.prisma`. Key models:
 
-| Model | Purpose |
-|---|---|
-| `User` | All users (admin + employee). Fields: id, name, email, password (bcrypt), role, status |
-| `Role` | Named roles (e.g. Executor, Reviewer) assignable to project members |
-| `Project` | Quality review projects with status, priority, dates, templateName |
-| `ProjectMembership` | Many-to-many: User ↔ Project ↔ Role |
-| `Stage` | Stages within a project (e.g. stage1…stage12) |
-| `Checklist` | Individual checklist instances per stage. Stores answers as JSON |
-| `Checkpoint` | Individual checklist questions/items |
-| `ChecklistAnswer` | Per-question answers (executor + reviewer roles), includes images JSON field |
-| `ChecklistApproval` | Approval workflow state per project phase |
-| `ChecklistTransaction` | Audit trail of checklist actions (CREATED, SUBMITTED, APPROVED, etc.) |
-| `Template` | Admin-defined checklist templates with stage names, defect categories, stage data |
-| `ProjectChecklist` | Links a project stage to its live checklist groups + iterations |
-| `ChecklistImage` | **Image metadata** — file path, question/project/checklist association, uploader |
-| `GlobalDefectCategory` | Company-wide defect categories with keywords and groups |
-| `GlobalDefectCategorySettings` | Settings for defect category groupings |
+| Model                          | Purpose                                                                                |
+| ------------------------------ | -------------------------------------------------------------------------------------- |
+| `User`                         | All users (admin + employee). Fields: id, name, email, password (bcrypt), role, status |
+| `Role`                         | Named roles (e.g. Executor, Reviewer) assignable to project members                    |
+| `Project`                      | Quality review projects with status, priority, dates, templateName                     |
+| `ProjectMembership`            | Many-to-many: User ↔ Project ↔ Role                                                    |
+| `Stage`                        | Stages within a project (e.g. stage1…stage12)                                          |
+| `Checklist`                    | Individual checklist instances per stage. Stores answers as JSON                       |
+| `Checkpoint`                   | Individual checklist questions/items                                                   |
+| `ChecklistAnswer`              | Per-question answers (executor + reviewer roles), includes images JSON field           |
+| `ChecklistApproval`            | Approval workflow state per project phase                                              |
+| `ChecklistTransaction`         | Audit trail of checklist actions (CREATED, SUBMITTED, APPROVED, etc.)                  |
+| `Template`                     | Admin-defined checklist templates with stage names, defect categories, stage data      |
+| `ProjectChecklist`             | Links a project stage to its live checklist groups + iterations                        |
+| `ChecklistImage`               | **Image metadata** — file path, question/project/checklist association, uploader       |
+| `GlobalDefectCategory`         | Company-wide defect categories with keywords and groups                                |
+| `GlobalDefectCategorySettings` | Settings for defect category groupings                                                 |
 
 ---
 
@@ -228,32 +231,32 @@ The schema is defined in `backend/prisma/schema.prisma`. Key models:
 
 All routes start with `/api/v1/` and require JWT auth except `/api/v1/users/login` and `/api/v1/users/register`.
 
-| Area | Routes file | Key endpoints |
-|---|---|---|
-| Users / Auth | `user.routes.js` | POST /users/login, POST /users/register, GET /users/me |
-| Roles | `role.routes.js` | CRUD for roles |
-| Projects | `project.routes.js` | CRUD for projects |
-| Project Membership | `projectMembership.routes.js` | Add/remove members from projects |
-| Stages | `stage.routes.js` | CRUD for project stages |
-| Checklists | `checklistRoutes.js` | CRUD for checklist instances |
-| Checklist Answers | `checklistAnswerRoutes.js` | Save/get per-question answers |
-| Checkpoints | `checkpoint.routes.js` | Checklist checkpoint items |
-| Approvals | `approval.routes.js` | Submit for review, approve, revert |
-| Project Checklists | `projectChecklist.routes.js` | Live checklist state per project stage |
-| Templates | `template.routes.js`, `template.multi.routes.js` | Admin template management |
-| Analytics | `analytics.routes.js` | Defect rates, submission stats |
-| Export | `export.routes.js` | Excel export of submissions |
-| Images | `images.js` | Upload, list, download, delete images |
-| Defect Categories | `defect_category_routes.js` | Global defect category management |
+| Area               | Routes file                                      | Key endpoints                                          |
+| ------------------ | ------------------------------------------------ | ------------------------------------------------------ |
+| Users / Auth       | `user.routes.js`                                 | POST /users/login, POST /users/register, GET /users/me |
+| Roles              | `role.routes.js`                                 | CRUD for roles                                         |
+| Projects           | `project.routes.js`                              | CRUD for projects                                      |
+| Project Membership | `projectMembership.routes.js`                    | Add/remove members from projects                       |
+| Stages             | `stage.routes.js`                                | CRUD for project stages                                |
+| Checklists         | `checklistRoutes.js`                             | CRUD for checklist instances                           |
+| Checklist Answers  | `checklistAnswerRoutes.js`                       | Save/get per-question answers                          |
+| Checkpoints        | `checkpoint.routes.js`                           | Checklist checkpoint items                             |
+| Approvals          | `approval.routes.js`                             | Submit for review, approve, revert                     |
+| Project Checklists | `projectChecklist.routes.js`                     | Live checklist state per project stage                 |
+| Templates          | `template.routes.js`, `template.multi.routes.js` | Admin template management                              |
+| Analytics          | `analytics.routes.js`                            | Defect rates, submission stats                         |
+| Export             | `export.routes.js`                               | Excel export of submissions                            |
+| Images             | `images.js`                                      | Upload, list, download, delete images                  |
+| Defect Categories  | `defect_category_routes.js`                      | Global defect category management                      |
 
 ---
 
 ## 10. Default Seed Accounts (After running `node seed.js`)
 
-| Role | Email | Password |
-|---|---|---|
-| Admin | admin@gmail.com | admin |
-| Reviewer | reviewer@gmail.com | admin |
+| Role     | Email              | Password |
+| -------- | ------------------ | -------- |
+| Admin    | admin@gmail.com    | admin    |
+| Reviewer | reviewer@gmail.com | admin    |
 
 > **Security note for production**: Change these credentials immediately after first deployment.
 
@@ -286,31 +289,31 @@ backend/
 
 ## 12. Port and Network Reference
 
-| Port | Protocol | Purpose | Accessibility |
-|---|---|---|---|
-| 8000 | TCP | Express.js API + static image serving | Open to client machines |
-| 14382 | TCP | Aiven MySQL (cloud) | Backend server only (no need to open on LAN) |
-| 3306 | TCP | Local MySQL (if used) | Backend server only |
-| 80 / 443 | TCP | Web server for Flutter frontend static build | Open to client machines |
+| Port     | Protocol | Purpose                                      | Accessibility                                |
+| -------- | -------- | -------------------------------------------- | -------------------------------------------- |
+| 8000     | TCP      | Express.js API + static image serving        | Open to client machines                      |
+| 14382    | TCP      | Aiven MySQL (cloud)                          | Backend server only (no need to open on LAN) |
+| 3306     | TCP      | Local MySQL (if used)                        | Backend server only                          |
+| 80 / 443 | TCP      | Web server for Flutter frontend static build | Open to client machines                      |
 
 ---
 
 ## 13. Troubleshooting Reference (Updated)
 
-| Issue | Resolution |
-|---|---|
-| Backend fails to start | Check Node.js ≥ 18 (`node --version`). Run `npm install`. Check `.env` exists with valid `DATABASE_URL`. |
-| `PrismaClientInitializationError` | `DATABASE_URL` is wrong or Aiven IP is not whitelisted. Verify the connection string format and SSL parameters. |
-| Database schema out of sync | Run `npx prisma db push` to push schema changes to MySQL. |
-| Prisma client not found | Run `npx prisma generate` (or re-run `npm install`). |
-| JWT authentication errors | Ensure `ACCESS_TOKEN_SECRET` is set. Clear browser cookies and retry. |
-| CORS errors in browser | Set `FRONTEND_URL` in `.env` to the exact Flutter web origin (e.g. `http://192.168.1.45:5000`). |
-| Flutter web cannot reach backend | Confirm `--dart-define=API_URL=` matches backend address. Check firewall on port 8000. |
-| Image upload fails (400) | Ensure file is JPG or PNG and under 5 MB. |
-| Image displays broken after upload | Check `backend/uploads/` directory exists and is writable. Confirm MySQL `ChecklistImage` record was created. |
-| Image lost after server migration | The `uploads/` directory was not copied to the new server. Always back up `uploads/` with the database. |
-| `npm install` fails | Check internet. Run `npm cache clean --force`, retry. Verify Node.js and npm versions. |
-| Employee cannot see templates | Admin must have created and published templates. Check role middleware assignment at registration. |
+| Issue                              | Resolution                                                                                                      |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Backend fails to start             | Check Node.js ≥ 18 (`node --version`). Run `npm install`. Check `.env` exists with valid `DATABASE_URL`.        |
+| `PrismaClientInitializationError`  | `DATABASE_URL` is wrong or Aiven IP is not whitelisted. Verify the connection string format and SSL parameters. |
+| Database schema out of sync        | Run `npx prisma db push` to push schema changes to MySQL.                                                       |
+| Prisma client not found            | Run `npx prisma generate` (or re-run `npm install`).                                                            |
+| JWT authentication errors          | Ensure `ACCESS_TOKEN_SECRET` is set. Clear browser cookies and retry.                                           |
+| CORS errors in browser             | Set `FRONTEND_URL` in `.env` to the exact Flutter web origin (e.g. `http://192.168.1.45:5000`).                 |
+| Flutter web cannot reach backend   | Confirm `--dart-define=API_URL=` matches backend address. Check firewall on port 8000.                          |
+| Image upload fails (400)           | Ensure file is JPG or PNG and under 10 MB.                                                                      |
+| Image displays broken after upload | Check `backend/uploads/` directory exists and is writable. Confirm MySQL `ChecklistImage` record was created.   |
+| Image lost after server migration  | The `uploads/` directory was not copied to the new server. Always back up `uploads/` with the database.         |
+| `npm install` fails                | Check internet. Run `npm cache clean --force`, retry. Verify Node.js and npm versions.                          |
+| Employee cannot see templates      | Admin must have created and published templates. Check role middleware assignment at registration.              |
 
 ---
 

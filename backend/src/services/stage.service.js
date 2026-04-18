@@ -4,7 +4,7 @@ import { paginatedResponse } from "../utils/paginate.js";
 import { getOrSet, keys, TTL, invalidateStages } from "../utils/cache.js";
 import { newId } from "../utils/newId.js";
 
-// Helpers 
+// Helpers
 
 const deriveStageKey = (stageName = "") => {
   const lower = stageName.toLowerCase();
@@ -16,21 +16,39 @@ const deriveStageKey = (stageName = "") => {
 const mapTemplateGroups = (stageTemplate = []) => {
   return stageTemplate.map((group) => ({
     groupName: (group?.text || "").trim(),
+    defectCount: 0,
     questions: (group?.checkpoints || []).map((cp) => ({
+      _id: cp?._id || newId(),
       text: (cp?.text || "").trim(),
       executorAnswer: null,
       executorRemark: "",
+      executorImages: [],
+      reviewerAnswer: null,
       reviewerStatus: null,
       reviewerRemark: "",
+      reviewerImages: [],
+      categoryId: "",
+      severity: "",
+      answeredBy: { executor: null, reviewer: null },
+      answeredAt: { executor: null, reviewer: null },
     })),
     sections: (group?.sections || []).map((sec) => ({
+      _id: sec?._id || newId(),
       sectionName: (sec?.text || "").trim(),
       questions: (sec?.checkpoints || []).map((cp) => ({
+        _id: cp?._id || newId(),
         text: (cp?.text || "").trim(),
         executorAnswer: null,
         executorRemark: "",
+        executorImages: [],
+        reviewerAnswer: null,
         reviewerStatus: null,
         reviewerRemark: "",
+        reviewerImages: [],
+        categoryId: "",
+        severity: "",
+        answeredBy: { executor: null, reviewer: null },
+        answeredAt: { executor: null, reviewer: null },
       })),
     })),
   }));
@@ -44,16 +62,31 @@ async function cloneTemplateToProject(projectId, userId) {
   if (!project) throw new ApiError(404, "Project not found");
 
   const template = await prisma.template.findFirst();
-  if (!template) throw new ApiError(404, "Template not found. Please create a template first.");
+  if (!template)
+    throw new ApiError(
+      404,
+      "Template not found. Please create a template first.",
+    );
 
   const creatorId = userId || project.created_by;
 
-  const stageData = template.stageData ? (typeof template.stageData === "string" ? JSON.parse(template.stageData) : template.stageData) : {};
-  const stageNames = template.stageNames ? (typeof template.stageNames === "string" ? JSON.parse(template.stageNames) : template.stageNames) : {};
+  const stageData = template.stageData
+    ? typeof template.stageData === "string"
+      ? JSON.parse(template.stageData)
+      : template.stageData
+    : {};
+  const stageNames = template.stageNames
+    ? typeof template.stageNames === "string"
+      ? JSON.parse(template.stageNames)
+      : template.stageNames
+    : {};
 
   const stageKeys = Object.keys(stageData)
     .filter((key) => /^stage\d{1,2}$/.test(key))
-    .sort((a, b) => parseInt(a.replace("stage", "")) - parseInt(b.replace("stage", "")));
+    .sort(
+      (a, b) =>
+        parseInt(a.replace("stage", "")) - parseInt(b.replace("stage", "")),
+    );
 
   const stageDefs = stageKeys.map((key) => ({
     name: stageNames[key] || `${key}`,
@@ -80,49 +113,22 @@ async function cloneTemplateToProject(projectId, userId) {
 
   for (const { doc: stage, key } of stageDocs) {
     const checklists = stageData[key] || [];
-    for (const cl of checklists) {
-      const checklist = await prisma.checklist.create({
-        data: {
-          id: newId(),
-          stage_id: stage.id,
-          created_by: creatorId,
-          checklist_name: cl.text,
-          description: "",
-          status: "draft",
-          revision_number: 0,
-          answers: {},
-        },
-      });
-
-      const checkpointDocs = (cl.checkpoints || []).map((cp) => ({
-        id: newId(),
-        checklistId: checklist.id,
-        question: cp.text,
-        executorResponse: {},
-        reviewerResponse: {},
-      }));
-
-      if (checkpointDocs.length > 0) {
-        await prisma.checkpoint.createMany({ data: checkpointDocs });
-      }
-    }
-
     const groups = mapTemplateGroups(checklists);
-    
+
     // Upsert projectChecklist
     const existingPC = await prisma.projectChecklist.findFirst({
-        where: { projectId, stageId: stage.id }
+      where: { projectId, stageId: stage.id },
     });
     if (!existingPC) {
-        await prisma.projectChecklist.create({
-            data: {
-                id: newId(),
-                projectId,
-                stageId: stage.id,
-                stage: stage.stage_name,
-                groups,
-            }
-        });
+      await prisma.projectChecklist.create({
+        data: {
+          id: newId(),
+          projectId,
+          stageId: stage.id,
+          stage: stage.stage_name,
+          groups,
+        },
+      });
     }
   }
 
@@ -132,28 +138,32 @@ async function cloneTemplateToProject(projectId, userId) {
 async function ensureProjectChecklistsForStages(stages, projectId) {
   try {
     const template = await prisma.template.findFirst();
-    const stageData = template?.stageData ? (typeof template.stageData === "string" ? JSON.parse(template.stageData) : template.stageData) : {};
-    
+    const stageData = template?.stageData
+      ? typeof template.stageData === "string"
+        ? JSON.parse(template.stageData)
+        : template.stageData
+      : {};
+
     for (const stage of stages) {
       let stageKey = stage.stage_key;
       if (!stageKey) stageKey = deriveStageKey(stage.stage_name);
-      
+
       const stageTemplate = stageKey ? stageData[stageKey] || [] : [];
       const groups = mapTemplateGroups(stageTemplate);
-      
+
       const existingPC = await prisma.projectChecklist.findFirst({
-        where: { projectId, stageId: stage.id }
+        where: { projectId, stageId: stage.id },
       });
       if (!existingPC) {
-          await prisma.projectChecklist.create({
-            data: {
-                id: newId(),
-                projectId,
-                stageId: stage.id,
-                stage: stage.stage_name,
-                groups,
-            }
-          });
+        await prisma.projectChecklist.create({
+          data: {
+            id: newId(),
+            projectId,
+            stageId: stage.id,
+            stage: stage.stage_name,
+            groups,
+          },
+        });
       }
     }
   } catch {
@@ -161,40 +171,52 @@ async function ensureProjectChecklistsForStages(stages, projectId) {
   }
 }
 
-// Service functions 
+// Service functions
 
 export async function listStagesForProject(projectId, userId) {
-  return getOrSet(keys.stagesForProject(projectId), async () => {
-    let stages = await prisma.stage.findMany({
-      where: { project_id: projectId },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (stages.length === 0) {
-      const project = await prisma.project.findUnique({
-        where: { id: projectId },
-        select: { id: true },
+  return getOrSet(
+    keys.stagesForProject(projectId),
+    async () => {
+      let stages = await prisma.stage.findMany({
+        where: { project_id: projectId },
+        orderBy: { createdAt: "asc" },
       });
-      if (!project) throw new ApiError(404, "Project not found");
 
-      stages = await cloneTemplateToProject(projectId, userId);
-    }
+      if (stages.length === 0) {
+        const project = await prisma.project.findUnique({
+          where: { id: projectId },
+          select: { id: true },
+        });
+        if (!project) throw new ApiError(404, "Project not found");
 
-    await ensureProjectChecklistsForStages(stages, projectId);
+        stages = await cloneTemplateToProject(projectId, userId);
+      }
 
-    return paginatedResponse(stages, stages.length, { page: 1, limit: null });
-  }, TTL.STAGES);
+      await ensureProjectChecklistsForStages(stages, projectId);
+
+      return paginatedResponse(stages, stages.length, { page: 1, limit: null });
+    },
+    TTL.STAGES,
+  );
 }
 
 export async function getStageById(id) {
-  return getOrSet(keys.stageById(id), async () => {
-    const stage = await prisma.stage.findUnique({ where: { id } });
-    if (!stage) throw new ApiError(404, "Stage not found");
-    return stage;
-  }, TTL.STAGES);
+  return getOrSet(
+    keys.stageById(id),
+    async () => {
+      const stage = await prisma.stage.findUnique({ where: { id } });
+      if (!stage) throw new ApiError(404, "Stage not found");
+      return stage;
+    },
+    TTL.STAGES,
+  );
 }
 
-export async function createStage(projectId, { stage_name, stage_key, description, status }, createdBy) {
+export async function createStage(
+  projectId,
+  { stage_name, stage_key, description, status },
+  createdBy,
+) {
   const stage = await prisma.stage.create({
     data: {
       id: newId(),
@@ -211,20 +233,23 @@ export async function createStage(projectId, { stage_name, stage_key, descriptio
     const template = await prisma.template.findFirst();
     let key = stage_key;
     if (!key) key = deriveStageKey(stage_name);
-    
-    const stageData = template?.stageData ? (typeof template.stageData === "string" ? JSON.parse(template.stageData) : template.stageData) : {};
-    const groups = key ? mapTemplateGroups(stageData[key] || []) : [];
-    
-    await prisma.projectChecklist.create({
-        data: {
-            id: newId(),
-            projectId,
-            stageId: stage.id,
-            stage: stage.stage_name,
-            groups,
-        }
-    });
 
+    const stageData = template?.stageData
+      ? typeof template.stageData === "string"
+        ? JSON.parse(template.stageData)
+        : template.stageData
+      : {};
+    const groups = key ? mapTemplateGroups(stageData[key] || []) : [];
+
+    await prisma.projectChecklist.create({
+      data: {
+        id: newId(),
+        projectId,
+        stageId: stage.id,
+        stage: stage.stage_name,
+        groups,
+      },
+    });
   } catch {
     // Silent failure
   }
@@ -255,9 +280,9 @@ export async function updateStage(id, { stage_name, description, status }) {
 export async function deleteStage(id) {
   const stage = await prisma.stage.findUnique({ where: { id } });
   if (!stage) throw new ApiError(404, "Stage not found");
-  
+
   await prisma.stage.delete({ where: { id } });
-  
+
   invalidateStages(stage.project_id);
   return stage;
 }
