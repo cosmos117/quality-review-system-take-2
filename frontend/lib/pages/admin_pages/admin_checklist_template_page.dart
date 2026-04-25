@@ -281,7 +281,7 @@ class AdminChecklistTemplatePage
                                     if (name != null) c.addPhase(name);
                                   },
                                   icon: const Icon(Icons.add, size: 22),
-                                  label: const Text('Add Phase'),
+                                  label: const Text('Add Stage'),
                                 ),
                               ],
                             ),
@@ -470,7 +470,7 @@ class _PhaseTabViewState extends State<_PhaseTabView>
                     if (name != null) c.addPhase(name);
                   },
                   icon: const Icon(Icons.add, size: 22),
-                  label: const Text('Add Phase'),
+                  label: const Text('Add Stage'),
                 ),
               ],
             ),
