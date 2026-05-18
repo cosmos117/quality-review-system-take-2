@@ -21,7 +21,7 @@ function answersMatch(execAns, revAns) {
   for (const k of commonKeys) {
     const e = execAns[k] || {};
     const r = revAns[k] || {};
-    // Use normalized comparison from utility
+    // Compare using normalized utility
     if (areAnswersDifferent(e.answer, r.answer)) return false;
   }
   return true;
@@ -193,32 +193,16 @@ export const revertToExecutor = async (projectId, phaseNum, notes, userId) => {
       reviewerSubmittedAt: approvalRecord?.reviewer_submitted_at || null,
     };
 
-    // Sanitize iteration data before saving to ensure no invalid values
     newIteration.groups = sanitizeGroups(newIteration.groups);
-
-    logger.info(`[revertToExecutor] newIteration structure has groups: ${!!newIteration.groups}, groups length: ${newIteration.groups?.length}`);
-    logger.info(`[revertToExecutor] First group has questions: ${!!newIteration.groups?.[0]?.questions}, count: ${newIteration.groups?.[0]?.questions?.length || 0}`);
-    if (newIteration.groups?.[0]?.questions?.[0]) {
-      const q = newIteration.groups[0].questions[0];
-      logger.info(`[revertToExecutor] First question has: executorAnswer=${q.executorAnswer}, reviewerAnswer=${q.reviewerAnswer}, executorRemark=${q.executorRemark?.substring(0, 50)}`);
-    }
 
     iterations.push(newIteration);
     const updatedCurrentIteration = (checklist.currentIteration || 1) + 1;
     iterationSaved = checklist.currentIteration;
 
-    logger.info(`[revertToExecutor] Saving iteration ${iterationSaved} with ${newIteration.groups?.length || 0} groups`);
-
     await prisma.projectChecklist.update({
       where: { id: checklist.id },
-      data: {
-        groups,
-        iterations,
-        currentIteration: updatedCurrentIteration
-      }
+      data: { groups, iterations, currentIteration: updatedCurrentIteration }
     });
-    
-    logger.info(`[revertToExecutor] Iteration saved. Total iterations now: ${iterations.length}`);
   }
 
   const updateFields = {

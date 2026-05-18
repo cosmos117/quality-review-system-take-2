@@ -22,13 +22,12 @@ const PORT = process.env.PORT || 8000;
 // Listen on configured host (defaults to all interfaces).
 const HOST = process.env.HOST || "0.0.0.0";
 
-connectDB()
-  .then(() => {
-    app.listen(PORT, HOST, () => {
-      logger.info(`Server is running on http://${HOST}:${PORT}`);
-    });
-  })
-  .catch((err) => {
-    logger.error("MySQL connection failed:", err);
-    process.exit(1);
-  });
+const dbReady = await connectDB();
+
+if (!dbReady) {
+  logger.warn("Starting server without a live database connection.");
+}
+
+app.listen(PORT, HOST, () => {
+  logger.info(`Server is running on http://${HOST}:${PORT}`);
+});

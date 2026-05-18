@@ -3,13 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import * as templateService from "../services/template.service.multi.js";
 
-// Template Management 
-
-/**
- * Create a new template
- * POST /api/templates
- * Body: { templateName, name?, description? }
- */
+// Create a new template
 export const createTemplate = asyncHandler(async (req, res) => {
   const { templateName, name, description } = req.body;
   if (!templateName) throw new ApiError(400, "templateName is required");
@@ -25,11 +19,7 @@ export const createTemplate = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, template, "Template created successfully"));
 });
 
-/**
- * Save full template payload as a named template
- * POST /api/template-library/save
- * Body: { templateName, name?, description?, templateData }
- */
+// Save a full template payload under a new name
 export const saveTemplatePayload = asyncHandler(async (req, res) => {
   const { templateName, name, description, templateData } = req.body;
   if (!templateName) throw new ApiError(400, "templateName is required");
@@ -50,11 +40,7 @@ export const saveTemplatePayload = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, template, "Template saved successfully"));
 });
 
-/**
- * Save full template payload into an existing named template
- * PUT /api/template-library/:templateName/save
- * Body: { name?, description?, templateData }
- */
+// Update an existing template's full payload
 export const updateTemplatePayload = asyncHandler(async (req, res) => {
   const { templateName } = req.params;
   const { name, description, templateData } = req.body;
@@ -76,10 +62,7 @@ export const updateTemplatePayload = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, template, "Template updated successfully"));
 });
 
-/**
- * Get all template names for dropdown
- * GET /api/templates/list
- */
+// Get all template names (for dropdowns)
 export const getAllTemplateNames = asyncHandler(async (req, res) => {
   const templates = await templateService.getAllTemplateNames(true);
   return res
@@ -89,11 +72,7 @@ export const getAllTemplateNames = asyncHandler(async (req, res) => {
     );
 });
 
-/**
- * Get template by name
- * GET /api/templates/:templateName
- * Query: ?stage=stage1 (optional)
- */
+// Get a single template by name
 export const getTemplate = asyncHandler(async (req, res) => {
   const { templateName } = req.params;
   const { stage } = req.query;
@@ -103,11 +82,7 @@ export const getTemplate = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, data, "Template fetched successfully"));
 });
 
-/**
- * Update template metadata
- * PATCH /api/templates/:templateName
- * Body: { name?, description?, isActive? }
- */
+// Update template metadata
 export const updateTemplate = asyncHandler(async (req, res) => {
   const { templateName } = req.params;
   const template = await templateService.updateTemplateMetadata(
@@ -120,10 +95,7 @@ export const updateTemplate = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, template, "Template updated successfully"));
 });
 
-/**
- * Delete template
- * DELETE /api/templates/:templateName
- */
+// Delete a template
 export const deleteTemplate = asyncHandler(async (req, res) => {
   const { templateName } = req.params;
   const result = await templateService.deleteTemplate(templateName);
@@ -132,11 +104,7 @@ export const deleteTemplate = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, result, "Template deleted successfully"));
 });
 
-/**
- * Duplicate template
- * POST /api/templates/:templateName/duplicate
- * Body: { newTemplateName }
- */
+// Duplicate a template under a new name
 export const duplicateTemplate = asyncHandler(async (req, res) => {
   const { templateName } = req.params;
   const { newTemplateName } = req.body;
@@ -152,13 +120,9 @@ export const duplicateTemplate = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, template, "Template duplicated successfully"));
 });
 
-// Checklist (Group) Management 
+// Checklist group management
 
-/**
- * Add checklist group to template
- * POST /api/templates/:templateName/checklists
- * Body: { stage, text }
- */
+// Add a checklist group to a template stage
 export const addChecklistToTemplate = asyncHandler(async (req, res) => {
   const { templateName } = req.params;
   const { stage, text } = req.body;
@@ -175,11 +139,7 @@ export const addChecklistToTemplate = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, template, "Checklist added successfully"));
 });
 
-/**
- * Update checklist group
- * PATCH /api/templates/:templateName/checklists/:checklistId
- * Body: { stage, text }
- */
+// Update a checklist group
 export const updateChecklistInTemplate = asyncHandler(async (req, res) => {
   const { templateName, checklistId } = req.params;
   const { stage, text } = req.body;
@@ -197,11 +157,7 @@ export const updateChecklistInTemplate = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, template, "Checklist updated successfully"));
 });
 
-/**
- * Delete checklist group
- * DELETE /api/templates/:templateName/checklists/:checklistId
- * Body: { stage }
- */
+// Delete a checklist group
 export const deleteChecklistFromTemplate = asyncHandler(async (req, res) => {
   const { templateName, checklistId } = req.params;
   const { stage } = req.body;
@@ -218,13 +174,9 @@ export const deleteChecklistFromTemplate = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, template, "Checklist deleted successfully"));
 });
 
-// Checkpoint (Question) Management on Checklists 
+// Checkpoint (Question) management
 
-/**
- * Add checkpoint to checklist
- * POST /api/templates/:templateName/checklists/:checklistId/checkpoints
- * Body: { stage, text, categoryId? }
- */
+// Add a checkpoint to a checklist group
 export const addCheckpointToTemplate = asyncHandler(async (req, res) => {
   const { templateName, checklistId } = req.params;
   const { stage, text, categoryId } = req.body;
@@ -243,11 +195,7 @@ export const addCheckpointToTemplate = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, template, "Checkpoint added successfully"));
 });
 
-/**
- * Update checkpoint in checklist
- * PATCH /api/templates/:templateName/checklists/:checklistId/checkpoints/:checkpointId
- * Body: { stage, text, categoryId? }
- */
+// Update a checkpoint in a checklist group
 export const updateCheckpointInTemplate = asyncHandler(async (req, res) => {
   const { templateName, checklistId, checkpointId } = req.params;
   const { stage, text, categoryId } = req.body;
@@ -267,11 +215,7 @@ export const updateCheckpointInTemplate = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, template, "Checkpoint updated successfully"));
 });
 
-/**
- * Delete checkpoint from checklist
- * DELETE /api/templates/:templateName/checklists/:checklistId/checkpoints/:checkpointId
- * Body: { stage }
- */
+// Delete a checkpoint from a checklist group
 export const deleteCheckpointFromTemplate = asyncHandler(async (req, res) => {
   const { templateName, checklistId, checkpointId } = req.params;
   const { stage } = req.body;
@@ -289,13 +233,9 @@ export const deleteCheckpointFromTemplate = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, template, "Checkpoint deleted successfully"));
 });
 
-// Section Management 
+// Section management
 
-/**
- * Add section to checklist
- * POST /api/templates/:templateName/checklists/:checklistId/sections
- * Body: { stage, text }
- */
+// Add a section to a checklist group
 export const addSectionToChecklist = asyncHandler(async (req, res) => {
   const { templateName, checklistId } = req.params;
   const { stage, text } = req.body;
@@ -313,11 +253,7 @@ export const addSectionToChecklist = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, template, "Section added successfully"));
 });
 
-/**
- * Update section in checklist
- * PATCH /api/templates/:templateName/checklists/:checklistId/sections/:sectionId
- * Body: { stage, text }
- */
+// Update a section
 export const updateSectionInChecklist = asyncHandler(async (req, res) => {
   const { templateName, checklistId, sectionId } = req.params;
   const { stage, text } = req.body;
@@ -336,11 +272,7 @@ export const updateSectionInChecklist = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, template, "Section updated successfully"));
 });
 
-/**
- * Delete section from checklist
- * DELETE /api/templates/:templateName/checklists/:checklistId/sections/:sectionId
- * Body: { stage }
- */
+// Delete a section
 export const deleteSectionFromChecklist = asyncHandler(async (req, res) => {
   const { templateName, checklistId, sectionId } = req.params;
   const { stage } = req.body;
@@ -358,13 +290,9 @@ export const deleteSectionFromChecklist = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, template, "Section deleted successfully"));
 });
 
-// Checkpoint (Question) Management on Sections 
+// Checkpoint management on sections
 
-/**
- * Add checkpoint to section
- * POST /api/templates/:templateName/checklists/:checklistId/sections/:sectionId/checkpoints
- * Body: { stage, text, categoryId? }
- */
+// Add a checkpoint to a section
 export const addCheckpointToSection = asyncHandler(async (req, res) => {
   const { templateName, checklistId, sectionId } = req.params;
   const { stage, text, categoryId } = req.body;
@@ -390,11 +318,7 @@ export const addCheckpointToSection = asyncHandler(async (req, res) => {
     );
 });
 
-/**
- * Update checkpoint in section
- * PATCH /api/templates/:templateName/checklists/:checklistId/sections/:sectionId/checkpoints/:checkpointId
- * Body: { stage, text, categoryId? }
- */
+// Update a checkpoint in a section
 export const updateCheckpointInSection = asyncHandler(async (req, res) => {
   const { templateName, checklistId, sectionId, checkpointId } = req.params;
   const { stage, text, categoryId } = req.body;
@@ -421,11 +345,7 @@ export const updateCheckpointInSection = asyncHandler(async (req, res) => {
     );
 });
 
-/**
- * Delete checkpoint from section
- * DELETE /api/templates/:templateName/checklists/:checklistId/sections/:sectionId/checkpoints/:checkpointId
- * Body: { stage }
- */
+// Delete a checkpoint from a section
 export const deleteCheckpointFromSection = asyncHandler(async (req, res) => {
   const { templateName, checklistId, sectionId, checkpointId } = req.params;
   const { stage } = req.body;
@@ -450,13 +370,9 @@ export const deleteCheckpointFromSection = asyncHandler(async (req, res) => {
     );
 });
 
-// Stage Management 
+// Stage management
 
-/**
- * Add stage to template
- * POST /api/templates/:templateName/stages
- * Body: { stage, stageName? }
- */
+// Add a stage to a template
 export const addStageToTemplate = asyncHandler(async (req, res) => {
   const { templateName } = req.params;
   const { stage, stageName } = req.body;
@@ -473,10 +389,7 @@ export const addStageToTemplate = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, template, "Stage added successfully"));
 });
 
-/**
- * Delete stage from template
- * DELETE /api/templates/:templateName/stages/:stage
- */
+// Delete a stage from a template
 export const deleteStageFromTemplate = asyncHandler(async (req, res) => {
   const { templateName, stage } = req.params;
 
@@ -490,10 +403,7 @@ export const deleteStageFromTemplate = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, template, "Stage deleted successfully"));
 });
 
-/**
- * Get all stages in a template
- * GET /api/templates/:templateName/stages
- */
+// Get all stages in a template
 export const getAllStages = asyncHandler(async (req, res) => {
   const { templateName } = req.params;
   const stages = await templateService.getAllStages(templateName);
@@ -502,13 +412,9 @@ export const getAllStages = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, stages, "Stages fetched successfully"));
 });
 
-// Defect Categories 
+// Defect categories
 
-/**
- * Update defect categories for a template
- * PUT /api/templates/:templateName/categories
- * Body: { defectCategories }
- */
+// Update defect categories for a template
 export const updateDefectCategories = asyncHandler(async (req, res) => {
   const { templateName } = req.params;
   const { defectCategories } = req.body;
@@ -527,12 +433,9 @@ export const updateDefectCategories = asyncHandler(async (req, res) => {
     );
 });
 
-// Seed 
+// Seed
 
-/**
- * Seed sample templates
- * POST /api/templates/seed
- */
+// Create sample templates for testing
 export const seedSampleTemplates = asyncHandler(async (req, res) => {
   const result = await templateService.seedSampleTemplates(req.user?._id);
   return res

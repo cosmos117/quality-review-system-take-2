@@ -153,11 +153,6 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Track all employees\' project assignments and completion status',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                    ),
                     const SizedBox(height: 24),
 
                     // Data Table

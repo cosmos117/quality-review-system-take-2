@@ -14,24 +14,19 @@ const parseJsonField = (field) => {
 export const allowedExecutorAnswers = ["Yes", "No", "NA", null];
 export const allowedReviewerStatuses = ["Approved", "Rejected", null];
 
-// Sanitize question data to fix any invalid values
+// Reset invalid answer/status values to null
 export const sanitizeQuestion = (question) => {
   if (!question) return question;
-  
-  // Fix invalid executorAnswer
   if (question.executorAnswer && !allowedExecutorAnswers.includes(question.executorAnswer)) {
     question.executorAnswer = null;
   }
-  
-  // Fix invalid reviewerStatus
   if (question.reviewerStatus && !allowedReviewerStatuses.includes(question.reviewerStatus)) {
     question.reviewerStatus = null;
   }
-  
   return question;
 };
 
-// Sanitize all groups recursively
+// Sanitize all groups and their sections
 export const sanitizeGroups = (groups) => {
   if (!Array.isArray(groups)) return groups;
   
@@ -62,7 +57,6 @@ export const updateProjectStatusToInProgress = async (projectId) => {
       where: { id: projectId },
       data: { status: "In Progress" },
     });
-    // Invalidate project cache so the UI reflects the change
     import("../utils/cache.js")
       .then((cache) => {
         if (cache.invalidateProjects) cache.invalidateProjects();
@@ -213,10 +207,7 @@ export const getProjectChecklist = async (projectId, stageId) => {
     stageDoc: { ...stageDoc, _id: stageDoc.id },
   });
 
-  const checklistObj = checklist.toJSON ? checklist.toJSON() : { ...checklist };
   let groups = parseJsonField(checklistObj.groups);
-  
-  // Sanitize current groups - fix any invalid data in the database
   groups = sanitizeGroups(groups);
 
   checklistObj.groups = groups.map((group) => {
@@ -225,30 +216,12 @@ export const getProjectChecklist = async (projectId, stageId) => {
   });
 
   let iterations = parseJsonField(checklistObj.iterations) || [];
-  
-  // Sanitize all iterations - fix any invalid data in the database
   iterations = iterations.map((iteration) => {
-    if (iteration.groups) {
-      iteration.groups = sanitizeGroups(iteration.groups);
-    }
+    if (iteration.groups) iteration.groups = sanitizeGroups(iteration.groups);
     return iteration;
   });
-  
-  logger.info(`[getProjectChecklist] Returning ${iterations.length} iterations for project ${projectId}, stage ${stageId}`);
-  
-  // Log each iteration to debug
-  for (let i = 0; i < iterations.length; i++) {
-    const iter = iterations[i];
-    logger.info(`[getProjectChecklist]   Iteration ${i}: num=${iter?.iterationNumber}, groups=${Array.isArray(iter?.groups) ? iter.groups.length : 'N/A'}`);
-  }
-  if (iterations.length > 0) {
-    logger.info(`[getProjectChecklist] First iteration structure: ${JSON.stringify(iterations[0]).substring(0, 300)}`);
-  }
 
-  return {
-    ...checklistObj,
-    iterations: iterations,
-  };
+  return { ...checklistObj, iterations };
 };
 
 export const updateExecutorAnswer = async (
@@ -285,7 +258,6 @@ export const updateExecutorAnswer = async (
   }
 
   if (answer !== undefined) {
-    // Validate answer is in allowed list
     if (!allowedExecutorAnswers.includes(answer)) {
       throw new ApiError(400, `Invalid executorAnswer: ${answer}. Must be one of: Yes, No, NA, or null`);
     }
@@ -353,7 +325,6 @@ export const updateReviewerStatus = async (
 
   if (answer !== undefined) question.reviewerAnswer = answer;
   if (status !== undefined) {
-    // Validate status is in allowed list
     if (!allowedReviewerStatuses.includes(status)) {
       throw new ApiError(400, `Invalid reviewerStatus: ${status}. Must be one of: ${allowedReviewerStatuses.map(s => s === null ? 'null' : s).join(', ')}`);
     }
@@ -523,12 +494,12 @@ export const getOverallDefectRate = async (projectId) => {
 
     const groups = parseJsonField(checklist.groups) || [];
 
-    // 1. Add current mismatches to total defects found in this phase
+    // Count current mismatches (executor vs reviewer disagreements)
     const currentMismatches = calculateCurrentMismatches(groups);
     stageTotalDefectsFound += currentMismatches.totalDefects;
     stageTotalQuestions += currentMismatches.totalQuestions;
 
-    // 2. Add historical defects from iterations
+    // Add defects from past iterations
     const iterations = parseJsonField(checklist.iterations);
     const iterationStats = calculateIterationDefectRates(iterations, groups);
 
@@ -538,7 +509,6 @@ export const getOverallDefectRate = async (projectId) => {
       totalHistoricalDefectsInPhase + currentMismatches.totalDefects;
     projectTotalDefects += stageTotalDefectsFound;
 
-    // Use current questions count as the base for the phase
     const currentQuestionCount = currentMismatches.totalQuestions;
 
     phaseBreakdown.push({
@@ -551,7 +521,6 @@ export const getOverallDefectRate = async (projectId) => {
     });
   }
 
-  // Calculate projectTotalQuestions as the sum of unique questions across all COMPLETED/ACTIVE stages
   projectTotalQuestions = phaseBreakdown.reduce(
     (acc, p) => acc + p.currentTotalQuestions,
     0,
@@ -564,7 +533,7 @@ export const getOverallDefectRate = async (projectId) => {
         )
       : 0;
 
-  // Cap at 100% just in case re-rejections blow it up
+  // Cap at 100% to handle edge cases with repeated rejections
   if (overallDefectRate > 100) overallDefectRate = 100;
 
   await prisma.project.update({

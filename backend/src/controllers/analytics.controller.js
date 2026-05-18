@@ -65,9 +65,7 @@ export const getCategoryDistribution = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, data, message));
 });
 
-// Dashboard analytics
-// Uses the same source data as Excel export so numbers stay aligned.
-/** Shared helper: load raw data and return filter params from query string. */
+// Load raw data and parse filter params from query string
 async function loadAndParse(req) {
   const { teamLeader, project, defectCategory, executor } = req.query;
   const { summaryRows, detailRows } = await getRawAnalyticsData();

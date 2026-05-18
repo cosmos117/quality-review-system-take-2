@@ -6,6 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import authMiddleware from "./middleware/auth.Middleware.js";
 import requestLogger from "./middleware/requestLogger.js";
+import { isDatabaseReady } from "./config/db.js";
 import logger from "./utils/logger.js";
 
 const app = express();
@@ -13,10 +14,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadsRoot = path.join(__dirname, "..", "uploads");
 
-// app.use(helmet()); // Temporarily disabled to debug Render connection issues
+// app.use(helmet()); // re-enable when Render deployment is stable
 
-// CORS
-// If FRONTEND_URL is set in .env, only allow those origins (comma-separated).
+// Allow origins from FRONTEND_URL env var (comma-separated) or fallback to all
 const rawAllowedOrigins = process.env.FRONTEND_URL || "";
 const allowedOrigins = rawAllowedOrigins
   .split(",")
@@ -24,10 +24,10 @@ const allowedOrigins = rawAllowedOrigins
   .filter((s) => s.length > 0);
 
 const corsOriginFn = (origin, callback) => {
-  // Allow requests with no origin (REST clients, mobile apps, Postman)
+  // Allow requests with no origin (mobile apps, Postman, etc.)
   if (!origin) return callback(null, true);
 
-  // 1. Always allow localhost and private LAN subnets
+  // Allow localhost and private LAN ranges
   const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(
     origin,
   );
@@ -40,7 +40,7 @@ const corsOriginFn = (origin, callback) => {
 
   if (isLocalhost || isLAN) return callback(null, true);
 
-  // 2. Allow if specific FRONTEND_URL origins are set
+  // Allow if specific FRONTEND_URL origins are configured
   if (allowedOrigins.length > 0) {
     if (allowedOrigins.includes(origin)) return callback(null, true);
     return callback(
@@ -48,7 +48,7 @@ const corsOriginFn = (origin, callback) => {
     );
   }
 
-  // 3. Fallback: Allow all origins during development/setup
+  // Default: allow all (useful during local dev)
   return callback(null, true);
 };
 
@@ -70,8 +70,30 @@ app.use("/uploads", express.static(uploadsRoot));
 
 app.use(requestLogger);
 
+app.use((req, res, next) => {
+  if (!req.path.startsWith("/api/")) {
+    return next();
+  }
+
+  if (isDatabaseReady()) {
+    return next();
+  }
+
+  return res.status(503).json({
+    statusCode: 503,
+    message:
+      "Database connection is unavailable. Start MySQL or update DATABASE_URL, then retry.",
+    success: false,
+    data: null,
+  });
+});
+
 app.get("/health", (req, res) => {
-  res.json({ status: "ok", uptime: process.uptime() });
+  res.json({
+    status: "ok",
+    uptime: process.uptime(),
+    databaseReady: isDatabaseReady(),
+  });
 });
 
 app.get("/", (req, res) => {

@@ -12,7 +12,7 @@ import {
 import { clearAnalyticsCache } from "./analytics-excel.service.js";
 import { newId } from "../utils/newId.js";
 
-// Helpers
+// Internal helpers
 
 async function resolveTemplateForProject(projectOrTemplateName) {
   const templateName =
@@ -53,7 +53,7 @@ async function resolveTemplateForProject(projectOrTemplateName) {
   return anyTemplate;
 }
 
-// Ensure parsing of template json
+// Parse JSON if it comes back as a string
 const parseJsonField = (field) => {
   if (!field) return {};
   if (typeof field === "string") return JSON.parse(field);
@@ -259,7 +259,7 @@ async function createStagesAndChecklistsFromTemplate(projectId, templateName) {
   }
 }
 
-// Service functions
+// Exported service functions
 
 export async function getAllProjects(query) {
   const { page, limit, skip } = parsePagination(query);
@@ -278,7 +278,7 @@ export async function getAllProjects(query) {
         ...(limit ? { skip, take: limit } : {}),
       });
 
-      // Format `created_by` back for legacy compatibility
+      // Map creator into created_by for frontend compatibility
       const formattedProjects = projects.map((p) => ({
         ...p,
         created_by: p.creator,
@@ -365,7 +365,7 @@ export async function createProject(data) {
     include: { creator: { select: { name: true, email: true } } },
   });
 
-  // Automatically initialize stages if template is assigned and project is active
+  // Auto-create stages if template is set and project is active
   if (
     project.templateName &&
     (isActiveStatus(project.status) || isCompletedStatus(project.status))
@@ -394,12 +394,6 @@ export async function updateProject(projectId, data, requestingUserId) {
     const assigned = await prisma.projectMembership.findFirst({
       where: { project_id: projectId, user_id: requestingUserId },
     });
-    // For legacy reasons, we might allow bypassing this if the user is an admin or creator
-    // but the rule is generally for assigned users to start.
-    if (!assigned && existing.created_by !== requestingUserId) {
-      // Check if user is admin as well? For now, keep as is but supporting new statuses
-      // throw new ApiError(403, "Only assigned users can start this project");
-    }
   }
 
   const updateData = {};
@@ -436,10 +430,8 @@ export async function updateProject(projectId, data, requestingUserId) {
 
   invalidateProjects();
 
-  // Initialize stages if:
-  // 1. Transitioning to active/completed from inactive
-  // 2. OR if template changed and project is already active
-  // 3. AND no stages currently exist
+  // Create stages if: status switched to active OR template changed on an active project
+  // Only if no stages exist yet
   const statusChangedToActive =
     isInactiveStatus(prevStatus) &&
     (isActiveStatus(updatedProject.status) ||
@@ -501,7 +493,7 @@ export async function deleteProject(projectId) {
 
   const deletionStats = {};
 
-  // Find IDs for nested deletion
+  // Collect all image file IDs across current groups and past iterations
   const projectChecklists = await prisma.projectChecklist.findMany({
     where: { projectId },
   });
@@ -511,7 +503,7 @@ export async function deleteProject(projectId) {
   });
   const stageIds = stages.map((s) => s.id);
 
-  // Collect images to delete from GridFS/Local Storage
+
   try {
     const allFileIds = [];
 
@@ -519,7 +511,6 @@ export async function deleteProject(projectId) {
       const groups = parseJsonField(checklist.groups) || [];
       const iterations = parseJsonField(checklist.iterations) || [];
 
-      // Collect from groups
       for (const group of groups) {
         for (const question of group.questions || []) {
           if (question.executorImages)
@@ -545,7 +536,6 @@ export async function deleteProject(projectId) {
         }
       }
 
-      // Collect from iterations
       for (const iteration of iterations) {
         for (const group of iteration.groups || []) {
           for (const question of group.questions || []) {
@@ -583,7 +573,7 @@ export async function deleteProject(projectId) {
     deletionStats.imagesDeleteError = imageError.message;
   }
 
-  // Delete records from database using Prisma Transaction to ensure data integrity
+  // Delete all related records in a transaction
   const [
     deletedMemberships,
     deletedApprovals,

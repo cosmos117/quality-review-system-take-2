@@ -519,7 +519,7 @@ class _ProjectCard extends StatelessWidget {
                 Icon(Icons.calendar_today, size: 14, color: Colors.grey[600]),
                 const SizedBox(width: 4),
                 Text(
-                  'Started: ${project.started}',
+                  'Started: ${project.started.year}-${project.started.month.toString().padLeft(2, '0')}-${project.started.day.toString().padLeft(2, '0')}',
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
                 const Spacer(),

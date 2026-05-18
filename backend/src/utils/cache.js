@@ -1,19 +1,18 @@
 import NodeCache from "node-cache";
 
-// TTL values in seconds
+// Cache TTL in seconds
 const TTL = {
-  PROJECTS: 30,       // 30s  project list changes moderately often
-  PROJECT_BY_ID: 60,  // 1min  individual project detail
-  PROJECT_STAGES: 60, // 1min  stages for a project
-  TEMPLATES: 120,     // 2min  template rarely changes
-  ROLES: 120,         // 2min  roles are near-static
-  STAGES: 60,         // 1min  stage data
+  PROJECTS: 30,
+  PROJECT_BY_ID: 60,
+  PROJECT_STAGES: 60,
+  TEMPLATES: 120,
+  ROLES: 120,
+  STAGES: 60,
 };
 
-// Single shared cache instance with check-period of 30s
 const cache = new NodeCache({ stdTTL: 60, checkperiod: 30 });
 
-// Cache key builders 
+// Key builders
 
 const keys = {
   allProjects: (queryStr) => `projects:all:${queryStr || "default"}`,
@@ -27,12 +26,7 @@ const keys = {
   stageById: (id) => `stages:id:${id}`,
 };
 
-// Cache helpers 
-
-/**
- * Get-or-set pattern: returns cached value if present, otherwise calls
- * `fetchFn`, caches the result, and returns it.
- */
+// Returns cached value or fetches, caches, and returns fresh data
 async function getOrSet(key, fetchFn, ttl) {
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
@@ -44,16 +38,14 @@ async function getOrSet(key, fetchFn, ttl) {
   return data;
 }
 
-/**
- * Invalidate all keys matching a prefix (e.g. "projects:" clears all project caches).
- */
+// Clears all cache keys starting with the given prefix
 function invalidateByPrefix(prefix) {
   const allKeys = cache.keys();
   const toDelete = allKeys.filter((k) => k.startsWith(prefix));
   if (toDelete.length > 0) cache.del(toDelete);
 }
 
-// Domain-level invalidation 
+// Invalidation helpers per domain
 
 function invalidateProjects() {
   invalidateByPrefix("projects:");

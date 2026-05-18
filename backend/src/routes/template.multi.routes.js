@@ -7,7 +7,7 @@ const router = Router();
 // Apply auth middleware to all routes
 router.use(authMiddleware);
 
-// Template Management 
+// Template management
 
 // Get all templates list (for dropdown)
 router.get("/list", templateController.getAllTemplateNames);
@@ -33,7 +33,7 @@ router.delete("/:templateName", templateController.deleteTemplate);
 // Duplicate template
 router.post("/:templateName/duplicate", templateController.duplicateTemplate);
 
-// Stage Management 
+// Stage management
 
 // Get all stages in a template
 router.get("/:templateName/stages", templateController.getAllStages);
@@ -47,7 +47,7 @@ router.delete(
   templateController.deleteStageFromTemplate,
 );
 
-// Checklist (Group) Management 
+// Checklist group management
 
 // Add checklist group
 router.post(
@@ -67,7 +67,7 @@ router.delete(
   templateController.deleteChecklistFromTemplate,
 );
 
-// Checkpoint Management on Checklists 
+// Checkpoint management on checklists
 
 // Add checkpoint to checklist
 router.post(
@@ -87,7 +87,7 @@ router.delete(
   templateController.deleteCheckpointFromTemplate,
 );
 
-// Section Management 
+// Section management
 
 // Add section to checklist
 router.post(
@@ -107,7 +107,7 @@ router.delete(
   templateController.deleteSectionFromChecklist,
 );
 
-// Checkpoint Management on Sections 
+// Checkpoint management on sections
 
 // Add checkpoint to section
 router.post(
@@ -127,15 +127,13 @@ router.delete(
   templateController.deleteCheckpointFromSection,
 );
 
-// Defect Categories 
+// Defect categories
 
 // Update defect categories
 router.put(
   "/:templateName/categories",
   templateController.updateDefectCategories,
 );
-
-// Seed 
 
 // Seed sample templates
 router.post("/seed/sample", templateController.seedSampleTemplates);

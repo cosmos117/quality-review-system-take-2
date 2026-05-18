@@ -27,12 +27,7 @@ import {
 
 const router = express.Router();
 
-/**
- * TEMPLATE ROUTES
- * Base path: /api/v1/templates
- *
- * Note: Only ONE template exists in the system
- */
+// Template routes — base path: /api/v1/templates
 
 // Seed template with sample data (for testing/setup)
 router.post("/seed", authMiddleware, requireAdmin, seedTemplate);
@@ -40,10 +35,10 @@ router.post("/seed", authMiddleware, requireAdmin, seedTemplate);
 // Create template (only once, requires auth)
 router.post("/", authMiddleware, requireAdmin, createTemplate);
 
-// Get template (public or auth-protected based on requirements)
+// Get template
 router.get("/", getTemplate);
 
-// ========== CHECKLIST OPERATIONS ==========
+// Checklist routes
 
 // Add a checklist to a stage in the template
 router.post(
@@ -69,7 +64,7 @@ router.delete(
   deleteChecklistFromTemplate,
 );
 
-// ========== CHECKPOINT OPERATIONS ==========
+// Checkpoint routes
 
 // Add a checkpoint to a checklist in the template (direct to group)
 router.post(
@@ -119,7 +114,7 @@ router.delete(
   deleteCheckpointFromTemplate,
 );
 
-// ========== SECTION OPERATIONS ==========
+// Section routes
 
 // Add a section to a checklist group in the template
 router.post(
@@ -145,7 +140,7 @@ router.delete(
   deleteSectionFromChecklist,
 );
 
-// ========== DEFECT CATEGORY OPERATIONS ==========
+// Defect category routes
 
 // Update defect categories in the template
 router.patch(
@@ -154,7 +149,7 @@ router.patch(
   requireAdmin,
   updateDefectCategories,
 );
-// ========== STAGE OPERATIONS ==========
+// Stage routes
 
 // Get all available stages
 router.get("/stages", getAllStages);

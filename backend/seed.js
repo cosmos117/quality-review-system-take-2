@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   const adminEmail = "admin@gmail.com";
-  const password = "admin"; // Using "admin" as requested by user's screenshot dots (or common default)
+  const password = "admin";
   const hashedPassword = await bcrypt.hash(password, 10);
 
   // Check if admin already exists

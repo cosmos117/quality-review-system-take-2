@@ -20,13 +20,9 @@ import {
 
 const router = express.Router();
 
-/**
- * ANALYTICS ROUTES
- * Base path: /api/v1
- * All routes require authentication
- */
+// Analytics routes — base path: /api/v1
 
-// Per-project analytics (existing) 
+// Per-project analytics
 router.get("/projects/:projectId/analysis", authMiddleware, getProjectAnalysis);
 router.get(
   "/projects/:projectId/analysis/defects-per-phase",
@@ -44,7 +40,7 @@ router.get(
   getCategoryDistribution,
 );
 
-// Dashboard analytics (new) 
+// Dashboard analytics
 router.get("/analytics/summary", getDashboardSummary);
 router.get("/analytics/top-defect-categories", getTopDefectCategories);
 router.get("/analytics/all-defect-categories", getAllDefectCategories);
