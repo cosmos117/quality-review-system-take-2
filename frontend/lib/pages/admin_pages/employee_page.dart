@@ -376,16 +376,14 @@ class EmployeePage extends StatelessWidget {
     } catch (e) {}
 
     final String warningMessage = hasActiveProjects
-        ? 'Warning: "${m.name}" is currently assigned to ${projectRoles.length} in-progress project(s):\n\n${projectRoles.entries.map((e) => ' ${e.key} (${e.value.join(', ')})').join('\n')}\n\nDeleting this employee may affect these projects. Are you sure you want to proceed?'
+        ? '"${m.name}" is currently assigned to ${projectRoles.length} in-progress project(s):\n\n${projectRoles.entries.map((e) => ' ${e.key} (${e.value.join(', ')})').join('\n')}\n\nDeleting this employee may affect these projects. Are you sure you want to proceed?'
         : 'Are you sure you want to delete "${m.name}"? This action cannot be undone.';
 
-    final String deleteButtonText = hasActiveProjects
-        ? 'Acknowledge and Delete'
-        : 'Delete Member';
+    final String deleteButtonText = 'Delete User';
 
     final confirmed = await showAdminDialog<bool>(
       context,
-      title: 'Delete Member',
+      title: 'Delete User',
       width: 520,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -399,20 +397,21 @@ class EmployeePage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.orange.shade200),
               ),
-              child: Row(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.warning_amber_rounded,
-                    color: Colors.orange.shade700,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      warningMessage,
-                      style: TextStyle(color: Colors.orange.shade900),
+                  Text(
+                    'WARNING',
+                    style: TextStyle(
+                      color: Colors.orange.shade900,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    warningMessage,
+                    style: TextStyle(color: Colors.orange.shade900),
                   ),
                 ],
               ),
@@ -430,7 +429,11 @@ class EmployeePage extends StatelessWidget {
               const SizedBox(width: 12),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent,
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 onPressed: () => Navigator.of(context).pop(true),
                 child: Text(deleteButtonText),
@@ -579,21 +582,8 @@ class EmployeePage extends StatelessWidget {
                                       ),
                                       const DataColumn(label: Text('Email')),
                                       const DataColumn(label: Text('Role')),
-                                      DataColumn(
-                                        label: const Text('Added on Date/Time'),
-                                        onSort: (colIndex, asc) {
-                                          final sorted = ctrl.members.toList()
-                                            ..sort(
-                                              (a, b) => asc
-                                                  ? a.dateAdded.compareTo(
-                                                      b.dateAdded,
-                                                    )
-                                                  : b.dateAdded.compareTo(
-                                                      a.dateAdded,
-                                                    ),
-                                            );
-                                          ctrl.members.assignAll(sorted);
-                                        },
+                                      const DataColumn(
+                                        label: Text('Added on Date/Time'),
                                       ),
                                       const DataColumn(label: Text('Actions')),
                                     ],

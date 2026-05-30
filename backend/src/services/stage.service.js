@@ -104,7 +104,6 @@ async function cloneTemplateToProject(projectId, userId) {
         stage_key: def.key,
         status: "pending",
         created_by: creatorId,
-        loopback_count: 0,
         conflict_count: 0,
       },
     });
@@ -214,7 +213,7 @@ export async function getStageById(id) {
 
 export async function createStage(
   projectId,
-  { stage_name, stage_key, description, status },
+  { stage_name, stage_key, status },
   createdBy,
 ) {
   const stage = await prisma.stage.create({
@@ -223,7 +222,6 @@ export async function createStage(
       project_id: projectId,
       stage_name,
       stage_key: stage_key || null,
-      description,
       status,
       created_by: createdBy,
     },
@@ -258,10 +256,9 @@ export async function createStage(
   return stage;
 }
 
-export async function updateStage(id, { stage_name, description, status }) {
+export async function updateStage(id, { stage_name, status }) {
   const data = {};
   if (typeof stage_name === "string") data.stage_name = stage_name;
-  if (typeof description === "string") data.description = description;
   if (typeof status === "string") data.status = status;
 
   if (Object.keys(data).length === 0) {
@@ -289,7 +286,7 @@ export async function deleteStage(id) {
 
 export async function migrateStageCounters() {
   const { count } = await prisma.stage.updateMany({
-    data: { loopback_count: 0, conflict_count: 0 },
+    data: { conflict_count: 0 },
   });
   return count;
 }

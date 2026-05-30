@@ -27,16 +27,22 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   int _currentPage = 1;
   final int _itemsPerPage = 12;
   final ScrollController _horizontalScrollController = ScrollController();
+  late final TextEditingController _searchTextController;
 
   @override
   void initState() {
     super.initState();
+    final ui = Get.find<AdminDashboardUIController>();
+    ui.searchQuery.value = ''; // Reset the search query on dashboard entry
+    ui.clearFilters(); // Reset any selected status filters for a clean slate
+    _searchTextController = TextEditingController(text: '');
     // Refresh projects once when the page is entered, not on every build
     Get.find<ProjectsController>().refreshProjects();
   }
 
   @override
   void dispose() {
+    _searchTextController.dispose();
     _horizontalScrollController.dispose();
     super.dispose();
   }
@@ -479,10 +485,29 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   ],
                 ),
                 child: TextField(
+                  controller: _searchTextController,
                   decoration: InputDecoration(
                     hintText: 'Search by title, status, priority...',
                     hintStyle: TextStyle(fontSize: responsiveFontSize(6)),
                     prefixIcon: Icon(Icons.search, size: responsiveFontSize(9)),
+                    suffixIcon: Obx(() {
+                      if (ui.searchQuery.value.isNotEmpty) {
+                        return IconButton(
+                          icon: Icon(Icons.clear, size: responsiveFontSize(8)),
+                          splashRadius: responsiveFontSize(8) * 0.9,
+                          style: IconButton.styleFrom(
+                            minimumSize: Size(responsiveFontSize(8) * 1.4, responsiveFontSize(8) * 1.4),
+                            padding: EdgeInsets.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: () {
+                            _searchTextController.clear();
+                            ui.setSearch('');
+                          },
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    }),
                     border: InputBorder.none,
                     isDense: true,
                     contentPadding: EdgeInsets.symmetric(
@@ -802,6 +827,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         SizedBox(width: responsivePadding(16)),
         IconButton(
           icon: Icon(Icons.chevron_left, size: responsiveFontSize(9)),
+          style: IconButton.styleFrom(
+            minimumSize: Size(responsiveFontSize(9) * 1.4, responsiveFontSize(9) * 1.4),
+            padding: EdgeInsets.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
           onPressed: _currentPage > 1
               ? () {
                   setState(() {
@@ -816,6 +846,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         SizedBox(width: responsivePadding(8)),
         IconButton(
           icon: Icon(Icons.chevron_right, size: responsiveFontSize(9)),
+          style: IconButton.styleFrom(
+            minimumSize: Size(responsiveFontSize(9) * 1.4, responsiveFontSize(9) * 1.4),
+            padding: EdgeInsets.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
           onPressed: _currentPage < totalPages
               ? () {
                   setState(() {

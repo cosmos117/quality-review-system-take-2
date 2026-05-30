@@ -4,6 +4,9 @@ import logger from "../utils/logger.js";
 let databaseReady = false;
 
 export const isDatabaseReady = () => databaseReady;
+export const setDatabaseReady = (ready) => {
+  databaseReady = ready;
+};
 
 const connectDB = async () => {
   try {

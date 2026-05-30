@@ -25,7 +25,6 @@ model User {
   // Relations
   createdProjects   Project[]           @relation("UserProjects")
   memberships       ProjectMembership[]
-  stagesCreated     Stage[]             @relation("StageCreator")
   approvalDecisions ChecklistApproval[] @relation("ApprovalDecider")
   uploadedImages    ChecklistImage[]    @relation("ChecklistImageUploader")
 }
@@ -89,17 +88,14 @@ model Stage {
   project_id     String   @db.Char(24)
   stage_name     String
   stage_key      String?
-  description    String?  @db.Text
   status         String   @default("pending") // "pending" | "in_progress" | "completed"
   created_by     String?  @db.Char(24)
-  loopback_count Int      @default(0)
   conflict_count Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   // Relations
   project           Project            @relation(fields: [project_id], references: [id])
-  creator           User?              @relation("StageCreator", fields: [created_by], references: [id])
   projectChecklists ProjectChecklist[]
 
   @@index([project_id])
@@ -133,8 +129,7 @@ model ChecklistApproval {
 
 model Template {
   id                   String   @id @db.Char(24)
-  templateName         String?  @unique
-  name                 String   @default("Default Quality Review Template")
+  templateName         String   @unique
   description          String?  @db.Text
   isActive             Boolean  @default(true)
   stageNames           Json?

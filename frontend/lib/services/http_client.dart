@@ -1,8 +1,20 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:get/get.dart';
+import '../controllers/auth_controller.dart';
 
 class SimpleHttp {
   String? accessToken;
+
+  void _checkAuth(int statusCode) {
+    if (statusCode == 401) {
+      try {
+        if (Get.isRegistered<AuthController>()) {
+          Get.find<AuthController>().logout();
+        }
+      } catch (_) {}
+    }
+  }
 
   Future<Map<String, dynamic>> getJson(Uri uri) async {
     final res = await http.get(uri, headers: _headers()).timeout(
@@ -18,6 +30,7 @@ class SimpleHttp {
     }
     final json = body.isNotEmpty ? jsonDecode(body) : {};
     if (res.statusCode >= 400) {
+      _checkAuth(res.statusCode);
       throw Exception(
         json is Map && json['message'] != null
             ? json['message'].toString()
@@ -44,6 +57,7 @@ class SimpleHttp {
     }
     final json = body.isNotEmpty ? jsonDecode(body) : {};
     if (res.statusCode >= 400) {
+      _checkAuth(res.statusCode);
       throw Exception(
         json is Map && json['message'] != null
             ? json['message'].toString()
@@ -70,6 +84,7 @@ class SimpleHttp {
     }
     final json = body.isNotEmpty ? jsonDecode(body) : {};
     if (res.statusCode >= 400) {
+      _checkAuth(res.statusCode);
       throw Exception(
         json is Map && json['message'] != null
             ? json['message'].toString()
@@ -96,6 +111,7 @@ class SimpleHttp {
     }
     final json = body.isNotEmpty ? jsonDecode(body) : {};
     if (res.statusCode >= 400) {
+      _checkAuth(res.statusCode);
       throw Exception(
         json is Map && json['message'] != null
             ? json['message'].toString()
@@ -111,6 +127,7 @@ class SimpleHttp {
       onTimeout: () => throw Exception('Connection timed out. Please try again.'),
     );
     if (res.statusCode >= 400) {
+      _checkAuth(res.statusCode);
       final body = res.body;
       if (_looksLikeHtml(body)) {
         throw Exception(
@@ -147,6 +164,7 @@ class SimpleHttp {
     }
     final json = body.isNotEmpty ? jsonDecode(body) : {};
     if (res.statusCode >= 400) {
+      _checkAuth(res.statusCode);
       throw Exception(
         json is Map && json['message'] != null
             ? json['message'].toString()

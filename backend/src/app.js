@@ -6,7 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import authMiddleware from "./middleware/auth.Middleware.js";
 import requestLogger from "./middleware/requestLogger.js";
-import { isDatabaseReady } from "./config/db.js";
+import connectDB, { isDatabaseReady } from "./config/db.js";
 import logger from "./utils/logger.js";
 
 const app = express();
@@ -14,9 +14,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadsRoot = path.join(__dirname, "..", "uploads");
 
-// app.use(helmet()); // re-enable when Render deployment is stable
-
-// Allow origins from FRONTEND_URL env var (comma-separated) or fallback to all
 const rawAllowedOrigins = process.env.FRONTEND_URL || "";
 const allowedOrigins = rawAllowedOrigins
   .split(",")
@@ -70,12 +67,18 @@ app.use("/uploads", express.static(uploadsRoot));
 
 app.use(requestLogger);
 
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   if (!req.path.startsWith("/api/")) {
     return next();
   }
 
   if (isDatabaseReady()) {
+    return next();
+  }
+
+  // Attempt dynamic reconnection if database is not marked ready
+  const reconnected = await connectDB();
+  if (reconnected) {
     return next();
   }
 

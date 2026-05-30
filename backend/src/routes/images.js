@@ -11,12 +11,12 @@ const upload = multer({
   limits: { fileSize: MAX_FILE_SIZE_BYTES },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname((file.originalname || "").toLowerCase());
+
     const mimeAllowed = ALLOWED_MIME_TYPES.has(
       (file.mimetype || "").toLowerCase(),
     );
     const extAllowed = ALLOWED_EXTENSIONS.has(ext);
-    // Flutter web often sends application/octet-stream; allow by trusted extension
-    // and validate the actual bytes later in handleUpload.
+   
     if (!mimeAllowed && !extAllowed) {
       return cb(new Error("Only JPG and PNG images are allowed"));
     }
@@ -34,13 +34,12 @@ import {
   getFileMetadata,
 } from "../local_storage.js";
 
-// Initialization is deferred until the first request.
-// The init() function is idempotent and fast after the first call.
-let gridfsReady = false;
-async function ensureGridFS() {
-  if (!gridfsReady) {
+
+let storageReady = false;
+async function ensureStorageReady() {
+  if (!storageReady) {
     await init();
-    gridfsReady = true;
+    storageReady = true;
   }
 }
 
@@ -119,7 +118,7 @@ function handleMulterError(err, _req, res, next) {
 function inferImageMimeFromBuffer(buffer) {
   if (!buffer || buffer.length < 4) return null;
 
-  // JPEG SOI marker: FF D8
+  // JPEG marker: FF D8
   if (buffer[0] === 0xff && buffer[1] === 0xd8) {
     return "image/jpeg";
   }
@@ -143,7 +142,7 @@ function inferImageMimeFromBuffer(buffer) {
 }
 
 async function handleUpload(req, res, questionIdFromPath = null) {
-  await ensureGridFS();
+  await ensureStorageReady();
 
   if (!req.file || !req.file.buffer) {
     return res.status(400).json({ error: "No image file provided" });
@@ -218,7 +217,7 @@ router.post("/images/:questionId", upload.single("image"), async (req, res) => {
 // GET /images/:questionId
 router.get("/images/:questionId", async (req, res) => {
   try {
-    await ensureGridFS();
+    await ensureStorageReady();
     const { questionId } = req.params;
     const role = (req.query?.role || "").toString().trim().toLowerCase();
 
@@ -244,7 +243,7 @@ router.get("/images/:questionId", async (req, res) => {
 // Download by file id for backward compatibility with current UI.
 router.get("/images/file/:fileId", async (req, res) => {
   try {
-    await ensureGridFS();
+    await ensureStorageReady();
     // Get file metadata to set correct headers
     const fileDoc = await getFileMetadata(req.params.fileId);
 
@@ -285,12 +284,12 @@ router.get("/images/file/:fileId", async (req, res) => {
 // Delete by file id
 router.delete("/images/file/:fileId", async (req, res) => {
   try {
-    await ensureGridFS();
+    await ensureStorageReady();
     const { fileId } = req.params;
     await deleteImageById(fileId);
     return res.status(204).end();
   } catch (e) {
-    // If not found, Mongo throws, respond 404
+    // If not found, Prisma or the file system will throw an error. Respond with 404.
     if (
       String(e?.message || "")
         .toLowerCase()

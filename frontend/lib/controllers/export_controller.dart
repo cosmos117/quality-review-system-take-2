@@ -76,8 +76,7 @@ class ExportController extends GetxController {
       final fileBytes = await masterExcelExportService.downloadMasterExcel();
 
       final timestamp = DateTime.now().toIso8601String().split('T')[0];
-      final filename =
-          'master_export_${timestamp}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+      final filename = 'master_export_$timestamp.xlsx';
 
       // Web-only download
       _downloadFileWeb(Uint8List.fromList(fileBytes), filename);

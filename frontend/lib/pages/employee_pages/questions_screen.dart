@@ -942,6 +942,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           _selectedDefectSeverity.addAll(historicalSeverities);
           _isLoadingData = false;
         });
+
+        // Recompute mismatch badges for the newly selected iteration snapshot.
+        _recomputeDefects();
       } else {
         setState(() => _isLoadingData = false);
       }

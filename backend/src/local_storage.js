@@ -139,9 +139,32 @@ async function uploadImage(
   const uploadedBy = toStringOrEmpty(metadata.userId) || null;
   const normalizedRole = normalizeRole(role);
 
-  const projectSegment = sanitizePathSegment(projectId, "unknown_project");
+  // Resolve real names of project and checklist/stage for a cleaner folder structure
+  let projectName = projectId;
+  if (projectId) {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { project_name: true },
+    });
+    if (project && project.project_name) {
+      projectName = project.project_name;
+    }
+  }
+
+  let checklistName = resolvedChecklistId;
+  if (resolvedChecklistId) {
+    const checklist = await prisma.projectChecklist.findUnique({
+      where: { id: resolvedChecklistId },
+      select: { stage: true },
+    });
+    if (checklist && checklist.stage) {
+      checklistName = checklist.stage;
+    }
+  }
+
+  const projectSegment = sanitizePathSegment(projectName, "unknown_project");
   const checklistSegment = sanitizePathSegment(
-    resolvedChecklistId,
+    checklistName,
     "unknown_checklist",
   );
   const questionSegment = sanitizePathSegment(qidRaw, "unknown_question");

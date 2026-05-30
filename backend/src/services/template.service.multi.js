@@ -6,21 +6,23 @@ import { newId } from "../utils/newId.js";
 const isValidStage = (stage) => /^stage\d{1,2}$/.test(stage);
 
 const parseJsonField = (field) => {
-    if (!field) return {};
-    if (typeof field === 'string') return JSON.parse(field);
-    return field;
+  if (!field) return {};
+  if (typeof field === "string") return JSON.parse(field);
+  return field;
 };
 
 const parseJsonArray = (field) => {
-    if (!field) return [];
-    if (typeof field === 'string') return JSON.parse(field);
-    return field;
+  if (!field) return [];
+  if (typeof field === "string") return JSON.parse(field);
+  return field;
 };
 
 async function ensureTemplateConsistency(template) {
   let modified = false;
   const stageData = parseJsonField(template.stageData);
-  const stageKeys = Object.keys(stageData).filter((k) => /^stage\d{1,2}$/.test(k));
+  const stageKeys = Object.keys(stageData).filter((k) =>
+    /^stage\d{1,2}$/.test(k),
+  );
 
   for (const stage of stageKeys) {
     const arr = stageData[stage];
@@ -62,7 +64,7 @@ async function ensureTemplateConsistency(template) {
       });
     });
   }
-  
+
   if (modified) {
     template.stageData = stageData;
   }
@@ -71,20 +73,23 @@ async function ensureTemplateConsistency(template) {
 
 async function getTemplateByName(templateName) {
   const template = await prisma.template.findFirst({ where: { templateName } });
-  if (!template) throw new ApiError(404, `Template "${templateName}" not found`);
+  if (!template)
+    throw new ApiError(404, `Template "${templateName}" not found`);
   return template;
 }
 
 function validateStage(stage) {
-  if (!isValidStage(stage)) throw new ApiError(400, "Invalid stage format. Must be stage1-99");
+  if (!isValidStage(stage))
+    throw new ApiError(400, "Invalid stage format. Must be stage1-99");
 }
 
 function findChecklist(stageData, stage, checklistId) {
   if (!Array.isArray(stageData[stage])) {
     throw new ApiError(404, `Stage ${stage} not found or has no checklists`);
   }
-  const checklist = stageData[stage].find(item => item._id === checklistId);
-  if (!checklist) throw new ApiError(404, "Checklist not found in specified stage");
+  const checklist = stageData[stage].find((item) => item._id === checklistId);
+  if (!checklist)
+    throw new ApiError(404, "Checklist not found in specified stage");
   return checklist;
 }
 
@@ -94,9 +99,14 @@ function findSection(checklist, sectionId) {
   return section;
 }
 
-// Template CRUD 
+// Template CRUD
 
-export async function createTemplate(templateName, displayName, description, userId) {
+export async function createTemplate(
+  templateName,
+  displayName,
+  description,
+  userId,
+) {
   if (!templateName || !templateName.trim()) {
     throw new ApiError(400, "templateName is required");
   }
@@ -105,27 +115,35 @@ export async function createTemplate(templateName, displayName, description, use
     where: { templateName: templateName.trim() },
   });
   if (existing) {
-    throw new ApiError(409, `Template with name "${templateName}" already exists`);
+    throw new ApiError(
+      409,
+      `Template with name "${templateName}" already exists`,
+    );
   }
 
   const template = await prisma.template.create({
     data: {
       id: newId(),
       templateName: templateName.trim(),
-      name: displayName || templateName.trim(),
       description: description || "",
       modifiedBy: userId,
       stageData: {},
       stageNames: {},
-      defectCategories: []
-    }
+      defectCategories: [],
+    },
   });
 
   invalidateTemplate();
   return template;
 }
 
-export async function saveTemplatePayload(templateName, displayName, description, templateData, userId) {
+export async function saveTemplatePayload(
+  templateName,
+  displayName,
+  description,
+  templateData,
+  userId,
+) {
   const normalizedTemplateName = (templateName || "").trim();
   if (!normalizedTemplateName) {
     throw new ApiError(400, "templateName is required");
@@ -135,7 +153,10 @@ export async function saveTemplatePayload(templateName, displayName, description
     where: { templateName: normalizedTemplateName },
   });
   if (existing) {
-    throw new ApiError(409, `Template with name "${normalizedTemplateName}" already exists`);
+    throw new ApiError(
+      409,
+      `Template with name "${normalizedTemplateName}" already exists`,
+    );
   }
 
   const stageData = {};
@@ -146,7 +167,11 @@ export async function saveTemplatePayload(templateName, displayName, description
   }
 
   let stageNames = {};
-  if (templateData.stageNames && typeof templateData.stageNames === "object" && !Array.isArray(templateData.stageNames)) {
+  if (
+    templateData.stageNames &&
+    typeof templateData.stageNames === "object" &&
+    !Array.isArray(templateData.stageNames)
+  ) {
     stageNames = templateData.stageNames;
   }
 
@@ -166,30 +191,42 @@ export async function saveTemplatePayload(templateName, displayName, description
       id: newId(),
       templateName: normalizedTemplateName,
       name: (displayName || normalizedTemplateName).trim(),
-      description: (description || "").trim(),
       isActive: true,
       modifiedBy: userId,
       stageData,
       stageNames,
-      defectCategories
-    }
+      defectCategories,
+    },
   });
-  
+
   invalidateTemplate();
   return template;
 }
 
-export async function updateTemplatePayload(templateName, displayName, description, templateData, userId) {
+export async function updateTemplatePayload(
+  templateName,
+  displayName,
+  description,
+  templateData,
+  userId,
+) {
   const normalizedTemplateName = (templateName || "").trim();
-  if (!normalizedTemplateName) throw new ApiError(400, "templateName is required");
+  if (!normalizedTemplateName)
+    throw new ApiError(400, "templateName is required");
 
   const existing = await getTemplateByName(normalizedTemplateName);
 
   const setObj = { modifiedBy: userId };
-  if (displayName && displayName.trim()) setObj.name = displayName.trim();
-  if (description !== undefined) setObj.description = (description || "").trim();
+  if (displayName && displayName.trim())
+    setObj.templateName = displayName.trim();
+  if (description !== undefined)
+    setObj.description = (description || "").trim();
 
-  if (templateData.stageNames && typeof templateData.stageNames === "object" && !Array.isArray(templateData.stageNames)) {
+  if (
+    templateData.stageNames &&
+    typeof templateData.stageNames === "object" &&
+    !Array.isArray(templateData.stageNames)
+  ) {
     setObj.stageNames = templateData.stageNames;
   }
 
@@ -203,9 +240,11 @@ export async function updateTemplatePayload(templateName, displayName, descripti
     }));
   }
 
-  const payloadStageKeys = Object.keys(templateData || {}).filter(key => /^stage\d{1,2}$/.test(key));
+  const payloadStageKeys = Object.keys(templateData || {}).filter((key) =>
+    /^stage\d{1,2}$/.test(key),
+  );
   let stageData = parseJsonField(existing.stageData);
-  
+
   const existingStageKeys = Object.keys(stageData);
 
   // Update provided stages
@@ -227,7 +266,7 @@ export async function updateTemplatePayload(templateName, displayName, descripti
 
   const updatedTemplate = await prisma.template.update({
     where: { id: existing.id },
-    data: setObj
+    data: setObj,
   });
 
   invalidateTemplate();
@@ -243,7 +282,6 @@ export async function getAllTemplateNames(isActive = true) {
         where: query,
         select: {
           templateName: true,
-          name: true,
           description: true,
           isActive: true,
           createdAt: true,
@@ -267,18 +305,18 @@ export async function getTemplate(templateName, stage) {
       if (wasModified) {
         await prisma.template.update({
           where: { id: template.id },
-          data: { stageData: template.stageData }
+          data: { stageData: template.stageData },
         });
       }
 
       const stageData = parseJsonField(template.stageData);
-      
+
       if (stage) {
         validateStage(stage);
         return {
           _id: template.id,
           templateName: template.templateName,
-          name: template.name,
+          templateName: template.templateName,
           description: template.description,
           [stage]: stageData[stage] || [],
           modifiedBy: template.modifiedBy,
@@ -305,14 +343,13 @@ export async function getTemplate(templateName, stage) {
       if (catModified) {
         await prisma.template.update({
           where: { id: template.id },
-          data: { defectCategories }
+          data: { defectCategories },
         });
       }
 
       return {
         _id: template.id,
         templateName: template.templateName,
-        name: template.name,
         description: template.description,
         ...stageData,
         stageNames,
@@ -328,13 +365,18 @@ export async function getTemplate(templateName, stage) {
 
 export async function updateTemplateMetadata(templateName, updates, userId) {
   const template = await getTemplateByName(templateName);
-  
+
   const updateData = { modifiedBy: userId };
-  if (updates.name) updateData.name = updates.name;
-  if (updates.description !== undefined) updateData.description = updates.description;
+  if (updates.templateName) updateData.templateName = updates.templateName;
+  if (updates.description !== undefined)
+    updateData.description = updates.description;
   if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
-  
-  if (updates.stageNames && typeof updates.stageNames === "object" && !Array.isArray(updates.stageNames)) {
+
+  if (
+    updates.stageNames &&
+    typeof updates.stageNames === "object" &&
+    !Array.isArray(updates.stageNames)
+  ) {
     const currentStageNames = parseJsonField(template.stageNames);
     updateData.stageNames = {
       ...currentStageNames,
@@ -344,7 +386,7 @@ export async function updateTemplateMetadata(templateName, updates, userId) {
 
   const updatedTemplate = await prisma.template.update({
     where: { id: template.id },
-    data: updateData
+    data: updateData,
   });
 
   invalidateTemplate();
@@ -358,35 +400,48 @@ export async function deleteTemplate(templateName) {
   return { deletedCount: 1, templateName };
 }
 
-export async function duplicateTemplate(sourceTemplateName, newTemplateName, userId) {
+export async function duplicateTemplate(
+  sourceTemplateName,
+  newTemplateName,
+  userId,
+) {
   const sourceTemplate = await getTemplateByName(sourceTemplateName);
 
-  const existing = await prisma.template.findFirst({ where: { templateName: newTemplateName } });
+  const existing = await prisma.template.findFirst({
+    where: { templateName: newTemplateName },
+  });
   if (existing) {
-    throw new ApiError(409, `Template with name "${newTemplateName}" already exists`);
+    throw new ApiError(
+      409,
+      `Template with name "${newTemplateName}" already exists`,
+    );
   }
 
   const newTemplate = await prisma.template.create({
     data: {
       id: newId(),
       templateName: newTemplateName,
-      name: `${sourceTemplate.name || sourceTemplateName} (Copy)`,
       description: sourceTemplate.description,
       isActive: sourceTemplate.isActive,
       stageData: parseJsonField(sourceTemplate.stageData),
       stageNames: parseJsonField(sourceTemplate.stageNames),
       defectCategories: parseJsonArray(sourceTemplate.defectCategories),
       modifiedBy: userId,
-    }
+    },
   });
 
   invalidateTemplate();
   return newTemplate;
 }
 
-// Checklist (group) management 
+// Checklist (group) management
 
-export async function addChecklistToTemplate(templateName, stage, text, userId) {
+export async function addChecklistToTemplate(
+  templateName,
+  stage,
+  text,
+  userId,
+) {
   validateStage(stage);
   const template = await getTemplateByName(templateName);
   const stageData = parseJsonField(template.stageData);
@@ -401,51 +456,71 @@ export async function addChecklistToTemplate(templateName, stage, text, userId) 
 
   const updated = await prisma.template.update({
     where: { id: template.id },
-    data: { stageData, modifiedBy: userId }
+    data: { stageData, modifiedBy: userId },
   });
 
   invalidateTemplate();
   return updated;
 }
 
-export async function updateChecklistInTemplate(templateName, checklistId, stage, text, userId) {
+export async function updateChecklistInTemplate(
+  templateName,
+  checklistId,
+  stage,
+  text,
+  userId,
+) {
   validateStage(stage);
   const template = await getTemplateByName(templateName);
   const stageData = parseJsonField(template.stageData);
   const checklist = findChecklist(stageData, stage, checklistId);
-  
+
   checklist.text = text.trim();
-  
+
   const updated = await prisma.template.update({
     where: { id: template.id },
-    data: { stageData, modifiedBy: userId }
+    data: { stageData, modifiedBy: userId },
   });
 
   invalidateTemplate();
   return updated;
 }
 
-export async function deleteChecklistFromTemplate(templateName, checklistId, stage, userId) {
+export async function deleteChecklistFromTemplate(
+  templateName,
+  checklistId,
+  stage,
+  userId,
+) {
   validateStage(stage);
   const template = await getTemplateByName(templateName);
   const stageData = parseJsonField(template.stageData);
-  
+
   if (Array.isArray(stageData[stage])) {
-    stageData[stage] = stageData[stage].filter(item => item._id !== checklistId);
+    stageData[stage] = stageData[stage].filter(
+      (item) => item._id !== checklistId,
+    );
   }
 
   const updated = await prisma.template.update({
     where: { id: template.id },
-    data: { stageData, modifiedBy: userId }
+    data: { stageData, modifiedBy: userId },
   });
 
   invalidateTemplate();
   return updated;
 }
 
-// Checkpoint (question) management on checklists 
+// Checkpoint (question) management on checklists
 
-export async function addCheckpointToTemplate(templateName, checklistId, stage, text, categoryId, userId) {
+export async function addCheckpointToTemplate(
+  templateName,
+  checklistId,
+  stage,
+  text,
+  categoryId,
+  userId,
+) {
   validateStage(stage);
   const template = await getTemplateByName(templateName);
   const stageData = parseJsonField(template.stageData);
@@ -457,20 +532,30 @@ export async function addCheckpointToTemplate(templateName, checklistId, stage, 
 
   const updated = await prisma.template.update({
     where: { id: template.id },
-    data: { stageData, modifiedBy: userId }
+    data: { stageData, modifiedBy: userId },
   });
 
   invalidateTemplate();
   return updated;
 }
 
-export async function updateCheckpointInTemplate(templateName, checkpointId, stage, checklistId, text, categoryId, userId) {
+export async function updateCheckpointInTemplate(
+  templateName,
+  checkpointId,
+  stage,
+  checklistId,
+  text,
+  categoryId,
+  userId,
+) {
   validateStage(stage);
   const template = await getTemplateByName(templateName);
   const stageData = parseJsonField(template.stageData);
   const checklist = findChecklist(stageData, stage, checklistId);
-  
-  const checkpoint = checklist.checkpoints.find(item => item._id === checkpointId);
+
+  const checkpoint = checklist.checkpoints.find(
+    (item) => item._id === checkpointId,
+  );
   if (!checkpoint) throw new ApiError(404, "Checkpoint not found");
 
   checkpoint.text = text.trim();
@@ -478,21 +563,29 @@ export async function updateCheckpointInTemplate(templateName, checkpointId, sta
 
   const updated = await prisma.template.update({
     where: { id: template.id },
-    data: { stageData, modifiedBy: userId }
+    data: { stageData, modifiedBy: userId },
   });
 
   invalidateTemplate();
   return updated;
 }
 
-export async function deleteCheckpointFromTemplate(templateName, checkpointId, stage, checklistId, userId) {
+export async function deleteCheckpointFromTemplate(
+  templateName,
+  checkpointId,
+  stage,
+  checklistId,
+  userId,
+) {
   validateStage(stage);
   const template = await getTemplateByName(templateName);
   const stageData = parseJsonField(template.stageData);
   const checklist = findChecklist(stageData, stage, checklistId);
 
   const initialLength = checklist.checkpoints.length;
-  checklist.checkpoints = checklist.checkpoints.filter(item => item._id !== checkpointId);
+  checklist.checkpoints = checklist.checkpoints.filter(
+    (item) => item._id !== checkpointId,
+  );
 
   if (checklist.checkpoints.length === initialLength) {
     throw new ApiError(404, "Checkpoint not found");
@@ -500,16 +593,22 @@ export async function deleteCheckpointFromTemplate(templateName, checkpointId, s
 
   const updated = await prisma.template.update({
     where: { id: template.id },
-    data: { stageData, modifiedBy: userId }
+    data: { stageData, modifiedBy: userId },
   });
 
   invalidateTemplate();
   return updated;
 }
 
-// Section management 
+// Section management
 
-export async function addSectionToChecklist(templateName, checklistId, stage, text, userId) {
+export async function addSectionToChecklist(
+  templateName,
+  checklistId,
+  stage,
+  text,
+  userId,
+) {
   validateStage(stage);
   const template = await getTemplateByName(templateName);
   const stageData = parseJsonField(template.stageData);
@@ -524,39 +623,54 @@ export async function addSectionToChecklist(templateName, checklistId, stage, te
 
   const updated = await prisma.template.update({
     where: { id: template.id },
-    data: { stageData, modifiedBy: userId }
+    data: { stageData, modifiedBy: userId },
   });
 
   invalidateTemplate();
   return updated;
 }
 
-export async function updateSectionInChecklist(templateName, checklistId, sectionId, stage, text, userId) {
+export async function updateSectionInChecklist(
+  templateName,
+  checklistId,
+  sectionId,
+  stage,
+  text,
+  userId,
+) {
   validateStage(stage);
   const template = await getTemplateByName(templateName);
   const stageData = parseJsonField(template.stageData);
   const checklist = findChecklist(stageData, stage, checklistId);
   const section = findSection(checklist, sectionId);
-  
+
   section.text = text.trim();
 
   const updated = await prisma.template.update({
     where: { id: template.id },
-    data: { stageData, modifiedBy: userId }
+    data: { stageData, modifiedBy: userId },
   });
 
   invalidateTemplate();
   return updated;
 }
 
-export async function deleteSectionFromChecklist(templateName, checklistId, sectionId, stage, userId) {
+export async function deleteSectionFromChecklist(
+  templateName,
+  checklistId,
+  sectionId,
+  stage,
+  userId,
+) {
   validateStage(stage);
   const template = await getTemplateByName(templateName);
   const stageData = parseJsonField(template.stageData);
   const checklist = findChecklist(stageData, stage, checklistId);
 
   const initialLength = (checklist.sections || []).length;
-  checklist.sections = (checklist.sections || []).filter(item => item._id !== sectionId);
+  checklist.sections = (checklist.sections || []).filter(
+    (item) => item._id !== sectionId,
+  );
 
   if ((checklist.sections || []).length === initialLength) {
     throw new ApiError(404, "Section not found in this checklist group");
@@ -564,16 +678,24 @@ export async function deleteSectionFromChecklist(templateName, checklistId, sect
 
   const updated = await prisma.template.update({
     where: { id: template.id },
-    data: { stageData, modifiedBy: userId }
+    data: { stageData, modifiedBy: userId },
   });
 
   invalidateTemplate();
   return updated;
 }
 
-// Checkpoint management on sections 
+// Checkpoint management on sections
 
-export async function addCheckpointToSection(templateName, checklistId, sectionId, stage, text, categoryId, userId) {
+export async function addCheckpointToSection(
+  templateName,
+  checklistId,
+  sectionId,
+  stage,
+  text,
+  categoryId,
+  userId,
+) {
   validateStage(stage);
   const template = await getTemplateByName(templateName);
   const stageData = parseJsonField(template.stageData);
@@ -586,36 +708,55 @@ export async function addCheckpointToSection(templateName, checklistId, sectionI
 
   const updated = await prisma.template.update({
     where: { id: template.id },
-    data: { stageData, modifiedBy: userId }
+    data: { stageData, modifiedBy: userId },
   });
 
   invalidateTemplate();
   return updated;
 }
 
-export async function updateCheckpointInSection(templateName, checklistId, sectionId, checkpointId, stage, text, categoryId, userId) {
+export async function updateCheckpointInSection(
+  templateName,
+  checklistId,
+  sectionId,
+  checkpointId,
+  stage,
+  text,
+  categoryId,
+  userId,
+) {
   validateStage(stage);
   const template = await getTemplateByName(templateName);
   const stageData = parseJsonField(template.stageData);
   const checklist = findChecklist(stageData, stage, checklistId);
   const section = findSection(checklist, sectionId);
 
-  const checkpoint = section.checkpoints.find(item => item._id === checkpointId);
-  if (!checkpoint) throw new ApiError(404, "Checkpoint not found in this section");
+  const checkpoint = section.checkpoints.find(
+    (item) => item._id === checkpointId,
+  );
+  if (!checkpoint)
+    throw new ApiError(404, "Checkpoint not found in this section");
 
   checkpoint.text = text.trim();
   if (categoryId !== undefined) checkpoint.categoryId = categoryId;
 
   const updated = await prisma.template.update({
     where: { id: template.id },
-    data: { stageData, modifiedBy: userId }
+    data: { stageData, modifiedBy: userId },
   });
 
   invalidateTemplate();
   return updated;
 }
 
-export async function deleteCheckpointFromSection(templateName, checklistId, sectionId, checkpointId, stage, userId) {
+export async function deleteCheckpointFromSection(
+  templateName,
+  checklistId,
+  sectionId,
+  checkpointId,
+  stage,
+  userId,
+) {
   validateStage(stage);
   const template = await getTemplateByName(templateName);
   const stageData = parseJsonField(template.stageData);
@@ -623,7 +764,9 @@ export async function deleteCheckpointFromSection(templateName, checklistId, sec
   const section = findSection(checklist, sectionId);
 
   const initialLength = section.checkpoints.length;
-  section.checkpoints = section.checkpoints.filter(item => item._id !== checkpointId);
+  section.checkpoints = section.checkpoints.filter(
+    (item) => item._id !== checkpointId,
+  );
 
   if (section.checkpoints.length === initialLength) {
     throw new ApiError(404, "Checkpoint not found in this section");
@@ -631,24 +774,34 @@ export async function deleteCheckpointFromSection(templateName, checklistId, sec
 
   const updated = await prisma.template.update({
     where: { id: template.id },
-    data: { stageData, modifiedBy: userId }
+    data: { stageData, modifiedBy: userId },
   });
 
   invalidateTemplate();
   return updated;
 }
 
-// Stage management 
+// Stage management
 
-export async function addStageToTemplate(templateName, stage, stageName, userId) {
+export async function addStageToTemplate(
+  templateName,
+  stage,
+  stageName,
+  userId,
+) {
   validateStage(stage);
   const template = await getTemplateByName(templateName);
   const stageData = parseJsonField(template.stageData);
   const stageNames = parseJsonField(template.stageNames);
 
   if (stageData[stage] !== undefined) {
-    const existingStages = Object.keys(stageData).filter(key => /^stage\d{1,2}$/.test(key));
-    throw new ApiError(400, `${stage} already exists. Available stages: ${existingStages.join(", ")}`);
+    const existingStages = Object.keys(stageData).filter((key) =>
+      /^stage\d{1,2}$/.test(key),
+    );
+    throw new ApiError(
+      400,
+      `${stage} already exists. Available stages: ${existingStages.join(", ")}`,
+    );
   }
 
   stageData[stage] = [];
@@ -658,7 +811,7 @@ export async function addStageToTemplate(templateName, stage, stageName, userId)
 
   const updated = await prisma.template.update({
     where: { id: template.id },
-    data: { stageData, stageNames, modifiedBy: userId }
+    data: { stageData, stageNames, modifiedBy: userId },
   });
 
   invalidateTemplate();
@@ -672,8 +825,13 @@ export async function deleteStageFromTemplate(templateName, stage, userId) {
   const stageNames = parseJsonField(template.stageNames);
 
   if (stageData[stage] === undefined) {
-    const availableStages = Object.keys(stageData).filter(key => /^stage\d{1,2}$/.test(key));
-    throw new ApiError(404, `Stage ${stage} not found. Available stages: ${availableStages.join(", ")}`);
+    const availableStages = Object.keys(stageData).filter((key) =>
+      /^stage\d{1,2}$/.test(key),
+    );
+    throw new ApiError(
+      404,
+      `Stage ${stage} not found. Available stages: ${availableStages.join(", ")}`,
+    );
   }
 
   delete stageData[stage];
@@ -683,16 +841,22 @@ export async function deleteStageFromTemplate(templateName, stage, userId) {
 
   const updated = await prisma.template.update({
     where: { id: template.id },
-    data: { stageData, stageNames, modifiedBy: userId }
+    data: { stageData, stageNames, modifiedBy: userId },
   });
 
   invalidateTemplate();
   return updated;
 }
 
-export async function renameStageInTemplate(templateName, stage, stageName, userId) {
+export async function renameStageInTemplate(
+  templateName,
+  stage,
+  stageName,
+  userId,
+) {
   validateStage(stage);
-  if (!stageName || !stageName.trim()) throw new ApiError(400, "stageName is required");
+  if (!stageName || !stageName.trim())
+    throw new ApiError(400, "stageName is required");
 
   const template = await getTemplateByName(templateName);
   const stageNames = parseJsonField(template.stageNames);
@@ -705,7 +869,7 @@ export async function renameStageInTemplate(templateName, stage, stageName, user
 
   const updated = await prisma.template.update({
     where: { id: template.id },
-    data: { stageNames, modifiedBy: userId }
+    data: { stageNames, modifiedBy: userId },
   });
 
   invalidateTemplate();
@@ -721,12 +885,16 @@ export async function getAllStages(templateName) {
       const stageNames = parseJsonField(template.stageNames);
 
       const stageKeys = Object.keys(stageData)
-        .filter(key => /^stage\d{1,2}$/.test(key))
-        .sort((a, b) => parseInt(a.replace("stage", "")) - parseInt(b.replace("stage", "")));
+        .filter((key) => /^stage\d{1,2}$/.test(key))
+        .sort(
+          (a, b) =>
+            parseInt(a.replace("stage", "")) - parseInt(b.replace("stage", "")),
+        );
 
       const stages = {};
       for (const key of stageKeys) {
-        stages[key] = stageNames[key] || `Phase ${parseInt(key.replace("stage", ""))}`;
+        stages[key] =
+          stageNames[key] || `Phase ${parseInt(key.replace("stage", ""))}`;
       }
       return stages;
     },
@@ -734,11 +902,15 @@ export async function getAllStages(templateName) {
   );
 }
 
-// Defect categories 
+// Defect categories
 
-export async function updateDefectCategories(templateName, defectCategories, userId) {
+export async function updateDefectCategories(
+  templateName,
+  defectCategories,
+  userId,
+) {
   const template = await getTemplateByName(templateName);
-  
+
   const mappedCategories = defectCategories.map((cat) => ({
     _id: cat._id || cat.id || newId(),
     name: cat.name,
@@ -749,14 +921,14 @@ export async function updateDefectCategories(templateName, defectCategories, use
 
   const updated = await prisma.template.update({
     where: { id: template.id },
-    data: { defectCategories: mappedCategories, modifiedBy: userId }
+    data: { defectCategories: mappedCategories, modifiedBy: userId },
   });
 
   invalidateTemplate();
   return updated;
 }
 
-// Seed 
+// Seed
 
 export async function seedSampleTemplates(userId) {
   const existing = await prisma.template.count();
@@ -779,7 +951,7 @@ export async function seedSampleTemplates(userId) {
             checkpoints: [
               { _id: newId(), text: "Geometry imported correctly" },
               { _id: newId(), text: "Material properties defined" },
-              { _id: newId(), text: "Boundary conditions applied" }
+              { _id: newId(), text: "Boundary conditions applied" },
             ],
           },
           {
@@ -789,9 +961,9 @@ export async function seedSampleTemplates(userId) {
             checkpoints: [
               { _id: newId(), text: "Mesh density appropriate" },
               { _id: newId(), text: "Element quality verified" },
-              { _id: newId(), text: "Refinement zones checked" }
+              { _id: newId(), text: "Refinement zones checked" },
             ],
-          }
+          },
         ],
         stage2: [
           {
@@ -801,15 +973,15 @@ export async function seedSampleTemplates(userId) {
             checkpoints: [
               { _id: newId(), text: "Solver parameters verified" },
               { _id: newId(), text: "Convergence criteria set" },
-              { _id: newId(), text: "Run time reasonable" }
+              { _id: newId(), text: "Run time reasonable" },
             ],
-          }
-        ]
+          },
+        ],
       },
       stageNames: {},
       defectCategories: [],
-      modifiedBy: userId
-    }
+      modifiedBy: userId,
+    },
   });
 
   const cfmTemplate = await prisma.template.create({
@@ -827,9 +999,9 @@ export async function seedSampleTemplates(userId) {
             checkpoints: [
               { _id: newId(), text: "Domain geometry defined" },
               { _id: newId(), text: "Inlet/outlet conditions set" },
-              { _id: newId(), text: "Wall properties applied" }
+              { _id: newId(), text: "Wall properties applied" },
             ],
-          }
+          },
         ],
         stage2: [
           {
@@ -839,15 +1011,15 @@ export async function seedSampleTemplates(userId) {
             checkpoints: [
               { _id: newId(), text: "Residuals converged" },
               { _id: newId(), text: "Mass balance verified" },
-              { _id: newId(), text: "Results physically reasonable" }
+              { _id: newId(), text: "Results physically reasonable" },
             ],
-          }
-        ]
+          },
+        ],
       },
       stageNames: {},
       defectCategories: [],
-      modifiedBy: userId
-    }
+      modifiedBy: userId,
+    },
   });
 
   invalidateTemplate();

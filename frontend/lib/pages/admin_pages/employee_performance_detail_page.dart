@@ -189,140 +189,140 @@ class _EmployeePerformanceDetailPageState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header
-                  Text(
-                    'Projects for ${widget.member.name}',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Total: ${_current.length + _completed.length} projects',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Leader Performance Card (if applicable)
-                  if (hasLeaderProjects) ...[
-                    Card(
-                      elevation: 2,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.emoji_events,
-                                  color: _getPerformanceColor(
-                                    overallLeaderPerformance,
-                                  ),
-                                  size: 24,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Team Leader Performance',
-                                  style: Theme.of(context).textTheme.titleLarge
-                                      ?.copyWith(fontWeight: FontWeight.bold),
-                                ),
-                              ],
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Left side: Title and project count
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Projects for ${widget.member.name}',
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 28,
                             ),
-                            const SizedBox(height: 12),
-                            const Divider(),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Overall Defect Rate',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.grey[600],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'TOTAL: ${_current.length + _completed.length} PROJECTS',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                      // Right side: Team Leader Performance box if applicable
+                      if (hasLeaderProjects)
+                        SizedBox(
+                          width: 650,
+                          child: Card(
+                            elevation: 1,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: BorderSide(color: Colors.grey.shade200),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.emoji_events,
+                                    color: _getPerformanceColor(overallLeaderPerformance),
+                                    size: 38,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Text(
+                                          'Team Leader Performance',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.black87,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.baseline,
-                                        textBaseline: TextBaseline.alphabetic,
-                                        children: [
-                                          Text(
-                                            '${overallLeaderPerformance.toStringAsFixed(2)}%',
-                                            style: TextStyle(
-                                              fontSize: 32,
-                                              fontWeight: FontWeight.bold,
-                                              color: _getPerformanceColor(
-                                                overallLeaderPerformance,
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                                          textBaseline: TextBaseline.alphabetic,
+                                          children: [
+                                            Text(
+                                              '${overallLeaderPerformance.toStringAsFixed(2)}%',
+                                              style: TextStyle(
+                                                fontSize: 44,
+                                                fontWeight: FontWeight.bold,
+                                                color: _getPerformanceColor(overallLeaderPerformance),
                                               ),
                                             ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Chip(
-                                            label: Text(
-                                              _getPerformanceLabel(
-                                                overallLeaderPerformance,
+                                            const SizedBox(width: 12),
+                                            Text(
+                                              'Overall Defect Rate',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: Colors.grey[600],
                                               ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue[50],
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.assignment_outlined,
+                                          size: 32,
+                                          color: Colors.blue,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '${_leaderProjects.length}',
                                               style: const TextStyle(
-                                                color: Colors.white,
+                                                fontSize: 28,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.blue,
+                                              ),
+                                            ),
+                                            Text(
+                                              'as Leader',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.blue.shade900,
                                                 fontWeight: FontWeight.w600,
                                               ),
                                             ),
-                                            backgroundColor:
-                                                _getPerformanceColor(
-                                                  overallLeaderPerformance,
-                                                ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue[50],
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(
-                                        Icons.assignment,
-                                        size: 28,
-                                        color: Colors.blue,
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '${_leaderProjects.length}',
-                                        style: const TextStyle(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.blue,
+                                          ],
                                         ),
-                                      ),
-                                      Text(
-                                        'Projects as Leader',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+                    ],
+                  ),
+                  const SizedBox(height: 24),
 
                   // Projects Section
                   LayoutBuilder(
@@ -394,13 +394,14 @@ class _ProjectListSection extends StatelessWidget {
           children: [
             Text(
               title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
             ),
             const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: Colors.blue[100],
                 borderRadius: BorderRadius.circular(12),
@@ -408,7 +409,7 @@ class _ProjectListSection extends StatelessWidget {
               child: Text(
                 '${projects.length}',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 14,
                   fontWeight: FontWeight.bold,
                   color: Colors.blue[900],
                 ),
@@ -469,14 +470,14 @@ class _ProjectCard extends StatelessWidget {
                     project.title,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 15,
+                      fontSize: 18,
                     ),
                   ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
+                    horizontal: 10,
+                    vertical: 6,
                   ),
                   decoration: BoxDecoration(
                     color: _getStatusColor(project.status),
@@ -485,7 +486,7 @@ class _ProjectCard extends StatelessWidget {
                   child: Text(
                     project.status,
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: Colors.white,
                     ),
@@ -501,11 +502,11 @@ class _ProjectCard extends StatelessWidget {
                 children: roles
                     .map(
                       (role) => Chip(
-                        label: Text(role, style: const TextStyle(fontSize: 11)),
+                        label: Text(role, style: const TextStyle(fontSize: 13)),
                         backgroundColor: const Color(0xFFEFF3F7),
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 0,
+                          horizontal: 8,
+                          vertical: 2,
                         ),
                         visualDensity: VisualDensity.compact,
                       ),
@@ -516,24 +517,24 @@ class _ProjectCard extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                Icon(Icons.calendar_today, size: 14, color: Colors.grey[600]),
+                Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
                 const SizedBox(width: 4),
                 Text(
                   'Started: ${project.started.year}-${project.started.month.toString().padLeft(2, '0')}-${project.started.day.toString().padLeft(2, '0')}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 ),
                 const Spacer(),
                 if (project.overallDefectRate != null) ...[
-                  const Icon(Icons.bug_report, size: 14, color: Colors.grey),
+                  const Icon(Icons.bug_report, size: 16, color: Colors.grey),
                   const SizedBox(width: 4),
                   Text(
                     'Defect Rate: ',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                   ),
                   Text(
                     '${project.overallDefectRate!.toStringAsFixed(2)}%',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 19,
                       fontWeight: FontWeight.bold,
                       color: _getDefectRateColor(project.overallDefectRate),
                     ),

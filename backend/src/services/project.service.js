@@ -476,7 +476,6 @@ export async function getProjectStages(projectId) {
         stage_name: stage.stage_name,
         stage_key: stage.stage_key,
         status: stage.status,
-        loopback_count: stage.loopback_count || 0,
         conflict_count: stage.conflict_count || 0,
       }));
     },

@@ -3,7 +3,11 @@ import logger from "../utils/logger.js";
 import { deleteImagesByFileIds } from "../local_storage.js";
 import { ApiError } from "../utils/ApiError.js";
 import { newId } from "../utils/newId.js";
-import { calculateDefectCount, calculateCurrentMismatches, calculateIterationDefectRates } from "./defectUtility.service.js";
+import {
+  calculateDefectCount,
+  calculateCurrentMismatches,
+  calculateIterationDefectRates,
+} from "./defectUtility.service.js";
 
 const parseJsonField = (field) => {
   if (!field) return [];
@@ -17,10 +21,16 @@ export const allowedReviewerStatuses = ["Approved", "Rejected", null];
 // Reset invalid answer/status values to null
 export const sanitizeQuestion = (question) => {
   if (!question) return question;
-  if (question.executorAnswer && !allowedExecutorAnswers.includes(question.executorAnswer)) {
+  if (
+    question.executorAnswer &&
+    !allowedExecutorAnswers.includes(question.executorAnswer)
+  ) {
     question.executorAnswer = null;
   }
-  if (question.reviewerStatus && !allowedReviewerStatuses.includes(question.reviewerStatus)) {
+  if (
+    question.reviewerStatus &&
+    !allowedReviewerStatuses.includes(question.reviewerStatus)
+  ) {
     question.reviewerStatus = null;
   }
   return question;
@@ -29,7 +39,7 @@ export const sanitizeQuestion = (question) => {
 // Sanitize all groups and their sections
 export const sanitizeGroups = (groups) => {
   if (!Array.isArray(groups)) return groups;
-  
+
   return groups.map((group) => {
     if (group.questions && Array.isArray(group.questions)) {
       group.questions = group.questions.map(sanitizeQuestion);
@@ -207,21 +217,21 @@ export const getProjectChecklist = async (projectId, stageId) => {
     stageDoc: { ...stageDoc, _id: stageDoc.id },
   });
 
-  let groups = parseJsonField(checklistObj.groups);
+  let groups = parseJsonField(checklist.groups);
   groups = sanitizeGroups(groups);
 
-  checklistObj.groups = groups.map((group) => {
+  checklist.groups = groups.map((group) => {
     const currentDefects = calculateDefectCount(group);
     return { ...group, currentDefects };
   });
 
-  let iterations = parseJsonField(checklistObj.iterations) || [];
+  let iterations = parseJsonField(checklist.iterations) || [];
   iterations = iterations.map((iteration) => {
     if (iteration.groups) iteration.groups = sanitizeGroups(iteration.groups);
     return iteration;
   });
 
-  return { ...checklistObj, iterations };
+  return { ...checklist, iterations };
 };
 
 export const updateExecutorAnswer = async (
@@ -259,7 +269,10 @@ export const updateExecutorAnswer = async (
 
   if (answer !== undefined) {
     if (!allowedExecutorAnswers.includes(answer)) {
-      throw new ApiError(400, `Invalid executorAnswer: ${answer}. Must be one of: Yes, No, NA, or null`);
+      throw new ApiError(
+        400,
+        `Invalid executorAnswer: ${answer}. Must be one of: Yes, No, NA, or null`,
+      );
     }
     question.executorAnswer = answer;
   }
@@ -326,7 +339,10 @@ export const updateReviewerStatus = async (
   if (answer !== undefined) question.reviewerAnswer = answer;
   if (status !== undefined) {
     if (!allowedReviewerStatuses.includes(status)) {
-      throw new ApiError(400, `Invalid reviewerStatus: ${status}. Must be one of: ${allowedReviewerStatuses.map(s => s === null ? 'null' : s).join(', ')}`);
+      throw new ApiError(
+        400,
+        `Invalid reviewerStatus: ${status}. Must be one of: ${allowedReviewerStatuses.map((s) => (s === null ? "null" : s)).join(", ")}`,
+      );
     }
     question.reviewerStatus = status;
   }
@@ -483,6 +499,7 @@ export const getOverallDefectRate = async (projectId) => {
 
   let projectTotalQuestions = 0;
   let projectTotalDefects = 0;
+  let projectOverallDefectRate = 0;
   const phaseBreakdown = [];
 
   for (const stage of stages) {
@@ -502,12 +519,18 @@ export const getOverallDefectRate = async (projectId) => {
     // Add defects from past iterations
     const iterations = parseJsonField(checklist.iterations);
     const iterationStats = calculateIterationDefectRates(iterations, groups);
+    const stageIterationDefectRate =
+      (iterationStats.iterations || []).reduce(
+        (acc, iteration) => acc + (iteration.defectRate || 0),
+        0,
+      ) + (iterationStats.current?.defectRate || 0);
 
     const totalHistoricalDefectsInPhase = iterationStats.totalCumulativeDefects;
 
     stageTotalDefectsFound =
       totalHistoricalDefectsInPhase + currentMismatches.totalDefects;
     projectTotalDefects += stageTotalDefectsFound;
+    projectOverallDefectRate += stageIterationDefectRate;
 
     const currentQuestionCount = currentMismatches.totalQuestions;
 
@@ -518,6 +541,7 @@ export const getOverallDefectRate = async (projectId) => {
       currentDefects: currentMismatches.totalDefects,
       historicalCumulativeDefects: totalHistoricalDefectsInPhase,
       totalDefectsFoundInPhase: stageTotalDefectsFound,
+      iterationDefectRateSum: parseFloat(stageIterationDefectRate.toFixed(2)),
     });
   }
 
@@ -526,15 +550,7 @@ export const getOverallDefectRate = async (projectId) => {
     0,
   );
 
-  let overallDefectRate =
-    projectTotalQuestions > 0
-      ? parseFloat(
-          ((projectTotalDefects / projectTotalQuestions) * 100).toFixed(2),
-        )
-      : 0;
-
-  // Cap at 100% to handle edge cases with repeated rejections
-  if (overallDefectRate > 100) overallDefectRate = 100;
+  const overallDefectRate = parseFloat(projectOverallDefectRate.toFixed(2));
 
   await prisma.project.update({
     where: { id: projectId },

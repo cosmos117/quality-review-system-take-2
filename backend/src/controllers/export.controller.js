@@ -14,7 +14,7 @@ export const exportMasterExcel = asyncHandler(async (req, res) => {
   );
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="master_export_${new Date().toISOString().split("T")[0]}_${Date.now()}.xlsx"`,
+    `attachment; filename="master_export_${new Date().toISOString().split("T")[0]}.xlsx"`,
   );
   res.setHeader("Content-Length", buffer.length);
 
