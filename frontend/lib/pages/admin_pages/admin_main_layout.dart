@@ -35,7 +35,7 @@ class AdminMainLayout extends StatelessWidget {
             onToggle: () => _isCollapsed.value = !_isCollapsed.value,
             onLogout: () async {
               await Get.find<AuthController>().logout();
-              Get.offAll(() => LoginPage());
+              Get.offAll(() => const LoginPage());
             },
             items: [
               SidebarNavItem(

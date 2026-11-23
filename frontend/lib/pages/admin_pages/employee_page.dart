@@ -379,7 +379,7 @@ class EmployeePage extends StatelessWidget {
         ? '"${m.name}" is currently assigned to ${projectRoles.length} in-progress project(s):\n\n${projectRoles.entries.map((e) => ' ${e.key} (${e.value.join(', ')})').join('\n')}\n\nDeleting this employee may affect these projects. Are you sure you want to proceed?'
         : 'Are you sure you want to delete "${m.name}"? This action cannot be undone.';
 
-    final String deleteButtonText = 'Delete User';
+    const String deleteButtonText = 'Delete User';
 
     final confirmed = await showAdminDialog<bool>(
       context,
@@ -436,7 +436,7 @@ class EmployeePage extends StatelessWidget {
                   ),
                 ),
                 onPressed: () => Navigator.of(context).pop(true),
-                child: Text(deleteButtonText),
+                child: const Text(deleteButtonText),
               ),
             ],
           ),

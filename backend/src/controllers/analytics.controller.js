@@ -9,7 +9,6 @@ import {
   getTeamLeadersList,
   getDefectCategoriesList,
   getProjectsList,
-  getExecutorsList,
 } from "../services/analytics-excel.service.js";
 
 export const getProjectAnalysis = asyncHandler(async (req, res) => {

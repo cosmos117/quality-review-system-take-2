@@ -57,7 +57,6 @@ class ChecklistController extends GetxService {
 
       // Also load submission status
       await _loadSubmissionStatus(projectId, phase, role);
-    } catch (e) {
     } finally {
       _isLoading[key] = false;
     }
@@ -275,11 +274,4 @@ class ChecklistController extends GetxService {
     _submissionCache.refresh();
   }
 
-  /// Clear all cache
-  void clearAllCache() {
-    _cache.clear();
-    _submissionCache.clear();
-    _cache.refresh();
-    _submissionCache.refresh();
-  }
 }

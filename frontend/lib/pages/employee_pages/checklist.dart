@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
@@ -44,34 +43,6 @@ class Question {
     this.checklistId,
     this.defectCount = 0,
   });
-
-  static List<Question> fromChecklist(
-    Map<String, dynamic> checklist,
-    List<Map<String, dynamic>> checkpoints,
-  ) {
-    final checklistId = (checklist['_id'] ?? '').toString();
-    final checklistName = (checklist['checklist_name'] ?? '').toString();
-
-    final checkpointObjs = checkpoints
-        .map(
-          (cp) => {
-            'id': (cp['_id'] ?? '').toString(),
-            'text': (cp['question'] ?? '').toString(),
-            'categoryId': (cp['categoryId'] ?? '').toString(),
-          },
-        )
-        .where((m) => (m['text'] ?? '').isNotEmpty)
-        .cast<Map<String, String>>()
-        .toList();
-
-    return [
-      Question(
-        mainQuestion: checklistName,
-        subQuestions: checkpointObjs,
-        checklistId: checklistId,
-      ),
-    ];
-  }
 
   // New: Create from hierarchical ProjectChecklist group structure
   static List<Question> fromProjectChecklistGroups(List<dynamic> groups) {
@@ -304,7 +275,7 @@ class RoleColumn extends StatelessWidget {
   final Function(String checkpointId, String? categoryId, {String? severity})?
   onCategoryAssigned; // Added: callback for category assignment
 
-  const RoleColumn({
+  const RoleColumn({super.key, 
     required this.role,
     required this.color,
     required this.projectId,
@@ -871,7 +842,7 @@ class _DefectChip extends StatelessWidget {
 
 class ConflictCountBar extends StatelessWidget {
   final int conflictCount;
-  const ConflictCountBar({required this.conflictCount});
+  const ConflictCountBar({super.key, required this.conflictCount});
 
   @override
   Widget build(BuildContext context) {
@@ -923,7 +894,7 @@ class ConflictCountBar extends StatelessWidget {
 
 class ConflictCounterBar extends StatelessWidget {
   final int conflictCount;
-  const ConflictCounterBar({required this.conflictCount});
+  const ConflictCounterBar({super.key, required this.conflictCount});
 
   @override
   Widget build(BuildContext context) {
@@ -969,7 +940,7 @@ class ReviewerSubmissionSummaryCard extends StatelessWidget {
   final Map<String, dynamic> summary;
   final List<Map<String, dynamic>> availableCategories;
 
-  const ReviewerSubmissionSummaryCard({
+  const ReviewerSubmissionSummaryCard({super.key, 
     required this.summary,
     required this.availableCategories,
   });
@@ -1179,7 +1150,6 @@ class _SubmitBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final submitted = submissionInfo?['is_submitted'] == true;
-    final submittedAt = submissionInfo?['submitted_at'];
 
     // Check if executor has submitted (for reviewer to enable revert)
     final executorSubmitted = executorSubmissionInfo?['is_submitted'] == true;
@@ -1202,11 +1172,11 @@ class _SubmitBar extends StatelessWidget {
       child: Row(
         children: [
           if (submitted)
-            Row(
+            const Row(
               children: [
-                const Icon(Icons.check_circle, color: Colors.green, size: 18),
-                const SizedBox(width: 6),
-                const Text('Submitted', style: TextStyle(color: Colors.green)),
+                Icon(Icons.check_circle, color: Colors.green, size: 18),
+                SizedBox(width: 6),
+                Text('Submitted', style: TextStyle(color: Colors.green)),
               ],
             )
           else
@@ -1308,7 +1278,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
   int _currentIteration = 1;
   int _selectedIterationNumber =
       0; // 0 means current, 1+ means viewing past iteration
-  bool _loadingIterations = false;
 
   int _parseIterationNumber(dynamic rawValue) {
     if (rawValue is int) return rawValue;
@@ -1391,7 +1360,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
               .fold(0, (max, v) => v > max ? v : max)
         : 1;
 
-    if (kDebugMode && widget.role == 'reviewer') {}
 
     // Images are already loaded from initialData['images'] which correctly
     // separates executorImages and reviewerImages from ProjectChecklist
@@ -1519,11 +1487,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     }
   }
 
-  // Redundant network fetch removed in favor of shared iterations prop
-  Future<void> _loadIterations() async {
-    return;
-  }
-
   void _viewIteration(int iterationNumber) {
     if (iterationNumber == 0) {
       // View current iteration (reset to current data)
@@ -1560,7 +1523,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     );
 
     if (questionData == null) {
-      if (kDebugMode) {}
       return;
     }
 
@@ -1598,7 +1560,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       }
     });
 
-    if (kDebugMode) {}
   }
 
   @override
@@ -1620,7 +1581,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       answerData['categoryId'] = selectedCategory ?? '';
       answerData['severity'] = selectedSeverity ?? '';
 
-      if (kDebugMode) {}
     }
 
     return widget.onAnswer(answerData);
@@ -1861,51 +1821,30 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
             ),
           ),
         ],
-        Row(
-          children: [
-            Expanded(
-              child: RadioListTile<String>(
-                title: const Text("Yes"),
-                value: "Yes",
-                groupValue: selectedOption,
-                contentPadding: EdgeInsets.zero,
-                onChanged: (widget.editable && _selectedIterationNumber == 0)
-                    ? (val) async {
-                        setState(() => selectedOption = val);
-                        await _updateAnswer();
-                      }
-                    : null,
-              ),
-            ),
-            Expanded(
-              child: RadioListTile<String>(
-                title: const Text("No"),
-                value: "No",
-                groupValue: selectedOption,
-                contentPadding: EdgeInsets.zero,
-                onChanged: (widget.editable && _selectedIterationNumber == 0)
-                    ? (val) async {
-                        setState(() => selectedOption = val);
-                        await _updateAnswer();
-                      }
-                    : null,
-              ),
-            ),
-            Expanded(
-              child: RadioListTile<String>(
-                title: const Text("Not Applicable"),
-                value: "NA",
-                groupValue: selectedOption,
-                contentPadding: EdgeInsets.zero,
-                onChanged: (widget.editable && _selectedIterationNumber == 0)
-                    ? (val) async {
-                        setState(() => selectedOption = val);
-                        await _updateAnswer();
-                      }
-                    : null,
-              ),
-            ),
-          ],
+        RadioGroup<String>(
+          groupValue: selectedOption,
+          onChanged: (val) async {
+            if (!(widget.editable && _selectedIterationNumber == 0)) return;
+            setState(() => selectedOption = val);
+            await _updateAnswer();
+          },
+          child: Row(
+            children: [
+              for (final (value, label) in const [
+                ('Yes', 'Yes'),
+                ('No', 'No'),
+                ('NA', 'Not Applicable'),
+              ])
+                Expanded(
+                  child: RadioListTile<String>(
+                    title: Text(label),
+                    value: value,
+                    contentPadding: EdgeInsets.zero,
+                    enabled: widget.editable && _selectedIterationNumber == 0,
+                  ),
+                ),
+            ],
+          ),
         ),
         // Allow clearing an existing answer when editable
         if (widget.editable &&
@@ -1990,11 +1929,11 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                     border: isSelected
                         ? Border.all(color: Colors.blue.shade900, width: 2)
                         : null,
-                    boxShadow: [
+                    boxShadow: const [
                       BoxShadow(
-                        color: const Color.fromRGBO(33, 150, 243, 0.2),
+                        color: Color.fromRGBO(33, 150, 243, 0.2),
                         blurRadius: 4,
-                        offset: const Offset(0, 2),
+                        offset: Offset(0, 2),
                       ),
                     ],
                   ),
@@ -2029,7 +1968,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: safeCategoryValue,
+                    initialValue: safeCategoryValue,
                     isExpanded: true,
                     decoration: InputDecoration(
                       filled: true,
@@ -2136,7 +2075,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: safeSeverityValue,
+                    initialValue: safeSeverityValue,
                     isExpanded: true,
                     decoration: InputDecoration(
                       filled: true,
@@ -2193,7 +2132,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
               itemBuilder: (context, i) {
                 final img = _images[i];
 
-                if (kDebugMode) {}
 
                 final bytes = img['bytes'] is Uint8List
                     ? img['bytes'] as Uint8List
@@ -2208,10 +2146,10 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                 // Handle both string and ObjectId formats
                 final fileId = (img['fileId'] ?? '').toString();
 
-                if (kDebugMode) {}
 
-                if (bytes == null && fileId.isEmpty)
+                if (bytes == null && fileId.isEmpty) {
                   return const SizedBox.shrink();
+                }
 
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
@@ -2240,8 +2178,9 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                                   fit: BoxFit.cover,
                                   loadingBuilder:
                                       (context, child, loadingProgress) {
-                                        if (loadingProgress == null)
+                                        if (loadingProgress == null) {
                                           return child;
+                                        }
                                         return Container(
                                           width: 100,
                                           height: 100,
@@ -2261,8 +2200,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                                           ),
                                         );
                                       },
-                                  errorBuilder: (_, error, ___) {
-                                    if (kDebugMode) {}
+                                  errorBuilder: (_, error, _) {
                                     return Container(
                                       width: 100,
                                       height: 100,
@@ -2396,7 +2334,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       context: context,
       barrierDismissible: true,
       builder: (ctx) {
-        final media = MediaQuery.of(ctx).size;
+        final media = MediaQuery.sizeOf(ctx);
         final width = media.width;
         final height = media.height;
         Widget image;
@@ -2419,8 +2357,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                 ),
               );
             },
-            errorBuilder: (_, error, ___) {
-              if (kDebugMode) {}
+            errorBuilder: (_, error, _) {
               return Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -2557,11 +2494,11 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
           .split(RegExp(r'\s+'))
           .where((t) => t.isNotEmpty)
           .toList();
-      final kws = [
+      final kws = <dynamic>{
         ...kwFromArray,
         ...aliasArray,
         ...nameTokens,
-      ].toSet().toList();
+      }.toList();
       if (id.isEmpty || kws.isEmpty) continue;
       double matchCount = 0;
       for (final token in normalized) {

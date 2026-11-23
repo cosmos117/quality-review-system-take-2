@@ -82,23 +82,6 @@ class ProjectMembershipService {
     return _fromApi(json['data'] as Map<String, dynamic>);
   }
 
-  /// Update a member's role in a project
-  /// Backend expects: { "project_id": "...", "user_id": "...", "role_id": "..." }
-  Future<ProjectMembership> updateMemberRole({
-    required String projectId,
-    required String userId,
-    required String roleId,
-  }) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/projects/members');
-    final json = await http.putJson(uri, {
-      'project_id': projectId,
-      'user_id': userId,
-      'role_id': roleId,
-    });
-    _cache.clear();
-    return _fromApi(json['data'] as Map<String, dynamic>);
-  }
-
   /// Remove a member from a project
   /// Backend expects: { "project_id": "...", "user_id": "..." }
   Future<void> removeMember({

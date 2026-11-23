@@ -1,9 +1,9 @@
 import 'dart:typed_data';
-import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../services/excel_export_service.dart';
 import '../services/master_excel_export_service.dart';
+import '../services/file_download.dart';
 
 class ExportController extends GetxController {
   final ExcelExportService excelExportService;
@@ -106,19 +106,7 @@ class ExportController extends GetxController {
   /// Download file on web
   void _downloadFileWeb(Uint8List bytes, String filename) {
     try {
-      final blob = html.Blob([bytes]);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-
-      final anchor = html.AnchorElement()
-        ..href = url
-        ..download = filename
-        ..style.display = 'none';
-
-      html.document.body?.append(anchor);
-      anchor.click();
-
-      html.Url.revokeObjectUrl(url);
-      anchor.remove();
+      downloadBytes(bytes, filename);
     } catch (e) {
       throw Exception('Web download failed: $e');
     }

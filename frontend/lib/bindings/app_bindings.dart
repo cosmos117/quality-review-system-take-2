@@ -3,7 +3,6 @@ import '../controllers/analytics_controller.dart';
 import '../controllers/projects_controller.dart';
 import '../controllers/team_controller.dart';
 import '../controllers/admin_dashboard_ui_controller.dart';
-import '../controllers/template_management_controller.dart';
 import '../controllers/notification_controller.dart';
 import '../services/http_client.dart';
 import '../services/project_service.dart';
@@ -14,7 +13,6 @@ import '../services/template_service.dart';
 import '../services/stage_service.dart';
 import '../services/phase_checklist_service.dart';
 import '../services/project_checklist_service.dart';
-import '../services/defect_categorization_service.dart';
 import '../controllers/auth_controller.dart';
 import '../pages/employee_pages/checklist_controller.dart';
 import '../pages/login.dart'; // LoginController
@@ -66,10 +64,6 @@ class AppBindings extends Bindings {
       ProjectChecklistService(Get.find<SimpleHttp>()),
       permanent: true,
     );
-    Get.put<DefectCategorizationService>(
-      DefectCategorizationService(Get.find<SimpleHttp>()),
-      permanent: true,
-    );
 
     // Export services
     Get.put<ExcelExportService>(
@@ -107,10 +101,6 @@ class AppBindings extends Bindings {
     Get.lazyPut<TeamController>(() => TeamController(), fenix: true);
     Get.lazyPut<AdminDashboardUIController>(
       () => AdminDashboardUIController(),
-      fenix: true,
-    );
-    Get.lazyPut<TemplateManagementController>(
-      () => TemplateManagementController(),
       fenix: true,
     );
     Get.lazyPut<NotificationController>(

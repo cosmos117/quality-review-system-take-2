@@ -59,16 +59,6 @@ class ApiCache {
     }
   }
 
-  /// Invalidate a specific cache entry.
-  void invalidate(String key) {
-    _entries.remove(key);
-  }
-
-  /// Invalidate all entries whose key starts with [prefix].
-  void invalidatePrefix(String prefix) {
-    _entries.removeWhere((k, _) => k.startsWith(prefix));
-  }
-
   /// Clear the entire cache.
   void clear() {
     _entries.clear();

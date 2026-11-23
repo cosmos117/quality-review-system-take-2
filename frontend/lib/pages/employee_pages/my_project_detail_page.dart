@@ -299,7 +299,7 @@ class _RoleCard extends StatelessWidget {
                           children: [
                             CircleAvatar(
                               radius: 16,
-                              backgroundColor: color.withOpacity(0.2),
+                              backgroundColor: color.withValues(alpha: 0.2),
                               child: Text(
                                 (member.userName ?? 'U')[0].toUpperCase(),
                                 style: TextStyle(
@@ -347,8 +347,8 @@ class _StartButton extends GetView<MyProjectDetailController> {
                   showDialog(
                     context: context,
                     builder: (ctx) => AlertDialog(
-                      title: Row(
-                        children: const [
+                      title: const Row(
+                        children: [
                           Icon(
                             Icons.play_circle_fill,
                             color: Colors.green,

@@ -43,12 +43,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   final Set<int> executorExpanded = {};
   final Set<int> reviewerExpanded = {};
   String? _errorMessage;
-  bool _editMode = false;
+  final bool _editMode = false;
   late final ChecklistController checklistCtrl;
   late final ApprovalService _approvalService;
   String? _currentStageId;
   bool _isLoadingData = true;
-  bool _isLoadingQuestions = false;
   // Phase numbering: 1, 2, 3... directly maps to stage1, stage2, stage3...
   int _selectedPhase = 1; // Currently selected phase (1 = first phase)
   int _activePhase = 1; // Active phase index (enabled for editing)
@@ -62,7 +61,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   final ScrollController _reviewerScroll = ScrollController();
   final Set<String> _highlightSubs = {};
   List<Question> checklist = []; // Checklist questions for current phase
-  Map<String, String> _checkpointIdMap =
+  final Map<String, String> _checkpointIdMap =
       {}; // Cache: subQuestion text/id -> checkpoint ID (for fast lookup)
 
   // Safety flag to prevent concurrent data loading
@@ -79,7 +78,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   final Map<String, String?> _selectedDefectCategory = {};
   final Map<String, String?> _selectedDefectSeverity = {};
   Map<String, Map<String, dynamic>> _defectCategories = {};
-  String _reviewerSummaryKey = '_meta_reviewer_summary';
 
   // Counters and metrics
   // Store conflict counter per phase (key: phase number, value: conflict count)
@@ -156,8 +154,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           setState(() => _defectCategories = newCategories);
         }
       } catch (e) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print("!!! [Background] Defect Category Load Error: $e");
+        }
       }
     });
   }
@@ -263,14 +262,16 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     if (!mounted) return;
     // If already loading, don't start another one
     if (_isCurrentlyLoadingChecklist) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print(">>> [QuestionsScreen] Already loading, skipping duplicate call");
+      }
       return;
     }
 
     _isCurrentlyLoadingChecklist = true;
-    if (kDebugMode)
+    if (kDebugMode) {
       print(">>> [QuestionsScreen] Starting load for phase $_selectedPhase");
+    }
 
     // Cancel any existing safety timer
     _loadingTimer?.cancel();
@@ -278,17 +279,15 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     // Start a HARD 20-second timer that forces the spinner off no matter what
     // This is more reliable than Future.timeout in Flutter web
     _loadingTimer = Timer(const Duration(seconds: 20), () {
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           "!!! [QuestionsScreen] HARD TIMER FIRED - force dismissing spinner",
         );
+      }
       if (mounted) {
         setState(() {
           _isLoadingData = false;
-          _isLoadingQuestions = false;
-          if (_errorMessage == null) {
-            _errorMessage = "Loading timed out. Tap refresh to try again.";
-          }
+          _errorMessage ??= "Loading timed out. Tap refresh to try again.";
         });
       }
       _isCurrentlyLoadingChecklist = false;
@@ -311,7 +310,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       if (mounted) {
         setState(() {
           _isLoadingData = false;
-          _isLoadingQuestions = false;
         });
       }
       _isCurrentlyLoadingChecklist = false;
@@ -325,7 +323,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
     setState(() {
       _isLoadingData = true;
-      _isLoadingQuestions = true;
       _approvalStatus = null;
       _compareStatus = null;
       _errorMessage = null;
@@ -492,8 +489,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
       // Step 4: Fallback to template
       if (loadedChecklist.isEmpty) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print("--- [QuestionsScreen] Step 4: Fallback to Template");
+        }
         try {
           final templateService = Get.find<TemplateService>();
           final template = await templateService.fetchTemplate(
@@ -517,10 +515,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       }
 
       // Step 5: Only await critical answer loads; kick off non-critical work in background
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           "--- [QuestionsScreen] Step 5: Loading answers + kicking off background tasks",
         );
+      }
 
       // Fire-and-forget the non-critical tasks (they update UI when ready without blocking)
       _loadDefectRates().catchError((_) {});
@@ -569,8 +568,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
     // Step 6: Initial scroll/expand
     if (widget.initialSubQuestion != null && mounted) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print("--- [QuestionsScreen] Step 6: Initial Sub-Question Focus");
+      }
       final target = widget.initialSubQuestion!;
       final idx = checklist.indexWhere(
         (q) =>
@@ -640,8 +640,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           if (iter is! Map<String, dynamic>) continue;
 
           final iterNum = iter['iterationNumber'] as int?;
-          if (iterNum == null || iterNum == 0)
+          if (iterNum == null || iterNum == 0) {
             continue; // Skip invalid iteration numbers
+          }
 
           uniqueIterations[iterNum] = {
             'iterationNumber': iterNum,
@@ -722,7 +723,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     // Add current iteration first if it exists
     if (_currentIterationStats != null) {
       final currentNum = _currentIterationStats!['iterationNumber'] as int;
-      if (currentNum != 0 && currentNum != null) {
+      if (currentNum != 0) {
         iterationMap[currentNum] = 'Current ($currentNum)';
       }
     }
@@ -1049,8 +1050,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       final statuses = await Future.wait(statusFutures).timeout(
         const Duration(seconds: 10),
         onTimeout: () {
-          if (kDebugMode)
+          if (kDebugMode) {
             print('!!! [_computeActivePhase] status fetch timed out');
+          }
           return List<Map<String, dynamic>?>.filled(
             availablePhases.length,
             null,
@@ -1117,7 +1119,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                     phaseNum,
                     forceRefresh: true,
                   )
-                  .then((count) => MapEntry(phaseNum, count as int))
+                  .then((count) => MapEntry(phaseNum, count))
                   .catchError((_) => MapEntry(phaseNum, 0)),
             )
             .toList();
@@ -1366,10 +1368,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         ],
       ),
       body: _isLoadingData
-          ? Stack(
+          ? const Stack(
               children: [
                 // Allow taps to reach the AppBar's back button while loading
-                const Center(
+                Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -2010,12 +2012,12 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                               );
 
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: const Text(
+                                const SnackBar(
+                                  content: Text(
                                     'Review submitted! Phase approved automatically. Next phase is now active.',
                                   ),
                                   backgroundColor: Colors.green,
-                                  duration: const Duration(seconds: 4),
+                                  duration: Duration(seconds: 4),
                                 ),
                               );
                               await _computeActivePhase();

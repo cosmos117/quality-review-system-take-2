@@ -30,7 +30,7 @@ class LoginController extends GetxController {
       final user = await auth.login(email, password);
       final isAdmin = user.role.toLowerCase() == 'admin';
 
-      Get.offAll(() => isAdmin ? AdminMainLayout() : EmployeeMainLayout());
+      Get.offAll(() => isAdmin ? AdminMainLayout() : const EmployeeMainLayout());
 
       // Preload projects for employees after navigation (non-blocking)
       if (!isAdmin) {
@@ -52,7 +52,7 @@ class LoginController extends GetxController {
 
 // ---------- Login Screen ----------
 class LoginPage extends StatefulWidget {
-  LoginPage({super.key});
+  const LoginPage({super.key});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -127,8 +127,7 @@ class _LoginPageState extends State<LoginPage> {
         color: Colors.white,
         child: Center(
           child: Container(
-            height: 520,
-            width: MediaQuery.of(context).size.width / 3.3,
+            width: MediaQuery.sizeOf(context).width / 3.3,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
               boxShadow: [
@@ -141,13 +140,32 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ],
             ),
-            child: Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(30),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 30),
-                  // Title 
+                  // Company logo: full-width banner. The source image is
+                  // square with plain blue above/below the mark, so a 2:1
+                  // centre crop keeps the whole logo and drops the padding.
+                  SizedBox(
+                    width: double.infinity,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: AspectRatio(
+                        aspectRatio: 2.0,
+                        child: Image.asset(
+                          'assets/images/atlas_copco_logo.png',
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
+                          filterQuality: FilterQuality.high,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  // Title
                   const Center(
                     child: Text(
                       "Welcome Back",

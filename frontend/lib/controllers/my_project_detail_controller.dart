@@ -57,12 +57,6 @@ class MyProjectDetailController extends GetxController {
     }
   }
 
-  bool get isChecklistAccessible {
-    final statusLower = project.value.status.toLowerCase();
-    // Only accessible when project is In Progress or Completed
-    return statusLower == 'in progress' || statusLower == 'completed';
-  }
-
   bool get showStartButton {
     if (isLoadingAssignments.value) return false;
     final statusLower = project.value.status.toLowerCase();

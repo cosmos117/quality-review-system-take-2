@@ -2,11 +2,8 @@ import 'dart:async';
 
 import 'package:get/get.dart';
 import '../models/project.dart';
-import '../models/team_member.dart';
 import '../services/project_service.dart';
 import '../services/project_membership_service.dart';
-import '../services/role_service.dart';
-import '../services/user_service.dart';
 import 'auth_controller.dart';
 
 /// Holds cached membership names per project for reactive dashboard display.
@@ -55,15 +52,6 @@ class ProjectsController extends GetxController {
     _refreshTimer?.cancel();
     super.onClose();
   }
-
-  // Find projects where a given employee name is executor
-  List<Project> byExecutor(String name) => projects
-      .where(
-        (p) =>
-            (p.executor?.trim().toLowerCase() ?? '') ==
-            name.trim().toLowerCase(),
-      )
-      .toList();
 
   Project _normalize(Project p) {
     final allowedPriorities = {'Low', 'Medium', 'High'};
@@ -122,11 +110,6 @@ class ProjectsController extends GetxController {
     projects.assignAll(initial.map(_normalize));
   }
 
-  void addProject(Project p) {
-    // optimistic update; backend create can be added later
-    projects.add(_normalize(p));
-  }
-
   void updateProject(String id, Project updated) {
     final idx = projects.indexWhere((e) => e.id == id);
     if (idx != -1) projects[idx] = _normalize(updated);
@@ -142,20 +125,6 @@ class ProjectsController extends GetxController {
       errorMessage.value = e.toString();
     } finally {
       isLoading.value = false;
-    }
-  }
-
-  void deleteProject(String id) {
-    projects.removeWhere((e) => e.id == id);
-  }
-
-  Future<void> removeProjectRemote(String id) async {
-    try {
-      await _service.delete(id);
-      deleteProject(id);
-    } catch (e) {
-      errorMessage.value = e.toString();
-      rethrow;
     }
   }
 
@@ -242,136 +211,6 @@ class ProjectsController extends GetxController {
       errorMessage.value = e.toString();
       isLoading.value = false;
       isRefreshing.value = false;
-      rethrow;
-    }
-  }
-
-  /// Bulk set project assignments (adds/removes memberships remotely then updates local state)
-  Future<void> setProjectAssignments(
-    String projectId,
-    List<String> memberIds,
-  ) async {
-    try {
-      final membershipService = Get.find<ProjectMembershipService>();
-      // Determine a default role to assign
-      String defaultRoleId = '';
-      try {
-        final roleService = Get.find<RoleService>();
-        final roles = await roleService.getAll();
-        if (roles.isNotEmpty) {
-          // Prefer an "Executor" role if present
-          final execRole = roles.firstWhere(
-            (r) => r.roleName.trim().toLowerCase() == 'executor',
-            orElse: () => roles.first,
-          );
-          defaultRoleId = execRole.id;
-        }
-      } catch (_) {
-        // Ignore role fetch errors; will fail if no roleId
-      }
-      if (defaultRoleId.isEmpty) {
-        throw Exception(
-          'No roles available to assign members. Create at least one role first.',
-        );
-      }
-
-      // Fetch fresh user list from backend to ensure valid IDs
-      final userService = Get.isRegistered<UserService>()
-          ? Get.find<UserService>()
-          : null;
-      List<TeamMember> backendUsers = [];
-      if (userService != null) {
-        try {
-          backendUsers = await userService.getAll();
-        } catch (e) {}
-      }
-
-      // Resolve incoming memberIds to valid backend user IDs
-      final normalizedDesired = <String>{};
-      for (final raw in memberIds) {
-        final trimmed = raw.trim();
-        if (trimmed.isEmpty) continue;
-
-        // Try direct ID match first
-        var matched = backendUsers.firstWhere(
-          (u) => u.id == trimmed,
-          orElse: () => TeamMember(
-            id: '',
-            name: '',
-            email: '',
-            role: 'Employee',
-            status: 'Active',
-            dateAdded: '',
-            lastActive: '',
-          ),
-        );
-
-        // If no ID match, try name/email match
-        if (matched.id.isEmpty) {
-          matched = backendUsers.firstWhere(
-            (u) =>
-                u.name.trim().toLowerCase() == trimmed.toLowerCase() ||
-                u.email.trim().toLowerCase() == trimmed.toLowerCase(),
-            orElse: () => TeamMember(
-              id: '',
-              name: '',
-              email: '',
-              role: 'Employee',
-              status: 'Active',
-              dateAdded: '',
-              lastActive: '',
-            ),
-          );
-        }
-
-        if (matched.id.isNotEmpty) {
-          normalizedDesired.add(matched.id);
-        } else {}
-      }
-
-      // Fetch existing memberships from backend
-      final existingMemberships = await membershipService.getProjectMembers(
-        projectId,
-      );
-      final existingIds = existingMemberships.map((m) => m.userId).toSet();
-      final desiredIds = normalizedDesired;
-
-      // Debug logging to trace assignment diff calculations.
-
-      final toAdd = desiredIds.difference(existingIds);
-      final toRemove = existingIds.difference(desiredIds);
-
-      // Apply additions
-      for (final userId in toAdd) {
-        try {
-          await membershipService.addMember(
-            projectId: projectId,
-            userId: userId,
-            roleId: defaultRoleId,
-          );
-        } catch (addError) {
-          rethrow;
-        }
-      }
-
-      // Apply removals
-      for (final userId in toRemove) {
-        await membershipService.removeMember(
-          projectId: projectId,
-          userId: userId,
-        );
-      }
-
-      // Update local project assignedEmployees with final desired IDs
-      final idx = projects.indexWhere((p) => p.id == projectId);
-      if (idx != -1) {
-        final updated = projects[idx].copyWith(
-          assignedEmployees: desiredIds.toList(),
-        );
-        projects[idx] = _normalize(updated);
-      }
-    } catch (e) {
-      errorMessage.value = e.toString();
       rethrow;
     }
   }

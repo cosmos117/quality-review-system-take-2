@@ -189,35 +189,4 @@ class Project {
     );
   }
 
-  Map<String, dynamic> toMap() => {
-    'id': id,
-    'projectNo': projectNo,
-    'internalOrderNo': internalOrderNo,
-    'title': title,
-    'description': description,
-    'started': started.toIso8601String(),
-    'priority': priority,
-    'status': status,
-    'executor': executor,
-    'assignedEmployees': assignedEmployees,
-    'isReviewApplicable': isReviewApplicable,
-    'reviewApplicableRemark': reviewApplicableRemark,
-    'overallDefectRate': overallDefectRate,
-    'userRole': userRole,
-    'templateName': templateName,
-    'groupOrCostCentre': groupOrCostCentre,
-    'actionRequired': actionRequired,
-    'sponsor': sponsor,
-    'competence': competence,
-    'competenceManager': competenceManager,
-    'projectLeader': projectLeader,
-    'projectTeam': projectTeam,
-    'createdBy': createdBy,
-    'creationOn': creationOn?.toIso8601String(),
-    'requiredDeliveryDate': requiredDeliveryDate?.toIso8601String(),
-    'plannedEndDate': plannedEndDate?.toIso8601String(),
-    'actualDeliveryDate': actualDeliveryDate?.toIso8601String(),
-    'plannedEfforts': plannedEfforts,
-    'actualEfforts': actualEfforts,
-  };
 }

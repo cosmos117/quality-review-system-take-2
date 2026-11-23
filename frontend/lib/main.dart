@@ -38,9 +38,9 @@ class _HomeRouter extends StatelessWidget {
     final auth = Get.find<AuthController>();
     return Obx(() {
       final user = auth.currentUser.value;
-      if (user == null) return LoginPage();
+      if (user == null) return const LoginPage();
       final isAdmin = user.role.toLowerCase() == 'admin';
-      return isAdmin ? AdminMainLayout() : EmployeeMainLayout();
+      return isAdmin ? AdminMainLayout() : const EmployeeMainLayout();
     });
   }
 }

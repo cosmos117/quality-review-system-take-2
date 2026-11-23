@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node -r dotenv/config --experimental-json-modules src/index.js",
     "dev": "nodemon -r dotenv/config --experimental-json-modules src/index.js",
-    "postinstall": "npx prisma generate"
+    "postinstall": "npx prisma generate",
+    "seed:demo": "node -r dotenv/config seed-demo.js"
   },
   "keywords": [],
   "author": "",
@@ -20,12 +21,9 @@
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
-    "express-rate-limit": "^8.3.0",
-    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.0.0",
     "node-cache": "^5.1.2",
-    "uuid": "^13.0.0",
     "winston": "^3.19.0"
   },
   "devDependencies": {

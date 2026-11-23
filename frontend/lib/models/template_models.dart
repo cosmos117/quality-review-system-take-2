@@ -1,4 +1,5 @@
 /// Data models for the checklist template system.
+library;
 
 class TemplateQuestion {
   TemplateQuestion({

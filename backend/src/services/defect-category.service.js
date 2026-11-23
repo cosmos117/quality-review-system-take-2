@@ -1,5 +1,4 @@
 import prisma from "../config/prisma.js";
-import { ApiError } from "../utils/ApiError.js";
 import { newId } from "../utils/newId.js";
 
 // In-memory cache to avoid hitting the DB on every checklist open
@@ -118,58 +117,6 @@ function invalidateCache() {
 }
 
 export { invalidateCache };
-
-/**
- * Get all global defect categories
- */
-export async function getGlobalDefectCategories() {
-  // Return cached value if still fresh
-  if (_categoriesCache && Date.now() < _cacheExpiry) {
-    return _categoriesCache.categories;
-  }
-
-  let categories = await prisma.globalDefectCategory.findMany({
-    orderBy: { name: "asc" },
-  });
-
-  // If empty, seed from existing templates (only happens once per server boot)
-  if (categories.length === 0) {
-    await seedGlobalDefectCategories();
-    categories = await prisma.globalDefectCategory.findMany({
-      orderBy: { name: "asc" },
-    });
-  }
-
-  return categories;
-}
-
-/**
- * Get global defect category settings (groups)
- */
-export async function getGlobalDefectSettings() {
-  // Return cached value if still fresh
-  if (_categoriesCache && Date.now() < _cacheExpiry) {
-    return _categoriesCache.settings;
-  }
-
-  let settings = await prisma.globalDefectCategorySettings.findFirst();
-
-  if (!settings) {
-    settings = await prisma.globalDefectCategorySettings.create({
-      data: {
-        id: newId(),
-        defectCategoryGroups: [
-          "General",
-          "Modelling Strategy",
-          "Results & Output",
-          "Meshing",
-        ],
-      },
-    });
-  }
-
-  return settings;
-}
 
 /**
  * Get both categories and settings in a single call (used by controller to avoid 2 round trips)

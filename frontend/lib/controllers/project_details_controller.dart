@@ -39,14 +39,6 @@ class ProjectDetailsController extends GetxController {
     reviewerIds.clear();
   }
 
-  void toggleMember(String id, bool value) {
-    if (value) {
-      selectedMemberIds.add(id);
-    } else {
-      selectedMemberIds.remove(id);
-    }
-  }
-
   void updateMeta({
     String? projectNo,
     String? internalOrderNo,
@@ -116,7 +108,7 @@ class ProjectDetailsController extends GetxController {
         throw Exception('Employee is already assigned as Executor or Reviewer');
       }
       // If trying to add more than 1 TeamLeader, reject it
-      if (teamLeaderIds.length >= 1) {
+      if (teamLeaderIds.isNotEmpty) {
         throw Exception('Only one TeamLeader can be assigned to a project');
       }
       teamLeaderIds.add(id);
@@ -125,12 +117,6 @@ class ProjectDetailsController extends GetxController {
     }
     _rebuildUnion();
   }
-
-  /// Check if TeamLeader limit would be exceeded
-  bool canAddTeamLeader() => teamLeaderIds.length < 1;
-
-  /// Get the count of selected TeamLeaders
-  int getTeamLeaderCount() => teamLeaderIds.length;
 
   void toggleExecutor(String id, bool value) {
     if (value) {

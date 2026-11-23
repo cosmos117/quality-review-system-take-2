@@ -39,9 +39,6 @@ class Debouncer {
     _timer?.cancel();
   }
 
-  /// Whether a debounced action is currently pending.
-  bool get isPending => _timer?.isActive ?? false;
-
   /// Clean up the timer.
   void dispose() {
     _timer?.cancel();

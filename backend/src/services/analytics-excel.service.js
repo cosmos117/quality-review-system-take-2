@@ -299,11 +299,3 @@ export function getProjectsList(summaryRows) {
     name: r.projectName, no: r.projectNumber, id: r.projectName || r.projectNumber,
   }));
 }
-
-export function getExecutorsList(detailRows) {
-  const set = new Set();
-  for (const r of detailRows) {
-    if (r.executor && r.executor.trim()) set.add(r.executor);
-  }
-  return [...set].sort();
-}

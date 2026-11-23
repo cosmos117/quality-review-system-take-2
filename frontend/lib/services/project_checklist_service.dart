@@ -35,49 +35,6 @@ class ProjectChecklistService {
     }, forceRefresh: forceRefresh);
   }
 
-  Future<Map<String, dynamic>> updateExecutor(
-    String projectId,
-    String stageId,
-    String groupId,
-    String questionId, {
-    required String? answer,
-    String? remark,
-  }) async {
-    _ensureToken();
-    final uri = Uri.parse(
-      '${ApiConfig.checklistBaseUrl}/projects/$projectId/stages/$stageId/checklist/groups/$groupId/questions/$questionId/executor',
-    );
-    final payload = {'answer': answer, if (remark != null) 'remark': remark};
-    final json = await http.patchJson(uri, payload);
-    _cache.clear();
-    return (json['data'] as Map<String, dynamic>? ?? {});
-  }
-
-  Future<Map<String, dynamic>> updateReviewer(
-    String projectId,
-    String stageId,
-    String groupId,
-    String questionId, {
-    required String? status,
-    String? remark,
-    String? categoryId,
-    String? severity,
-  }) async {
-    _ensureToken();
-    final uri = Uri.parse(
-      '${ApiConfig.checklistBaseUrl}/projects/$projectId/stages/$stageId/checklist/groups/$groupId/questions/$questionId/reviewer',
-    );
-    final payload = {
-      'status': status,
-      if (remark != null) 'remark': remark,
-      if (categoryId != null && categoryId.isNotEmpty) 'categoryId': categoryId,
-      if (severity != null && severity.isNotEmpty) 'severity': severity,
-    };
-    final json = await http.patchJson(uri, payload);
-    _cache.clear();
-    return (json['data'] as Map<String, dynamic>? ?? {});
-  }
-
   Future<Map<String, dynamic>> getDefectRatesPerIteration(
     String projectId,
     int phase, {

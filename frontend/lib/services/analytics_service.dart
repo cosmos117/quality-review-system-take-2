@@ -145,8 +145,9 @@ class AnalyticsService {
     String? search,
   }) {
     final p = <String, String>{};
-    if (teamLeader != null && teamLeader.isNotEmpty)
+    if (teamLeader != null && teamLeader.isNotEmpty) {
       p['teamLeader'] = teamLeader;
+    }
     if (project != null && project.isNotEmpty) p['project'] = project;
     if (defectCategory != null && defectCategory.isNotEmpty) {
       p['defectCategory'] = defectCategory;

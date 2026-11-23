@@ -1,4 +1,3 @@
-import logger from "../utils/logger.js";
 
 const parseJsonField = (field) => {
     if (!field) return [];

@@ -50,7 +50,7 @@ class AppSidebar extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
             offset: const Offset(2, 0),
           ),
@@ -93,14 +93,72 @@ class AppSidebar extends StatelessWidget {
     );
   }
 
+  // Atlas Copco brand blue
+  static const Color _brandBlue = Color(0xFF0099CC);
+
+  // Collapsed sidebar: compact "AC" monogram badge.
+  Widget _buildMonogram(double size) {
+    return Container(
+      height: size,
+      width: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: _brandBlue,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Text(
+        'AC',
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+          fontSize: 18,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  // Expanded sidebar: text wordmark with product subtitle.
+  Widget _buildWordmark() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: _brandBlue,
+            fontWeight: FontWeight.w800,
+            fontSize: 22,
+            letterSpacing: -0.3,
+            height: 1.1,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'QUALITY REVIEW SYSTEM',
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: Colors.grey.shade600,
+            fontWeight: FontWeight.w600,
+            fontSize: 10.5,
+            letterSpacing: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildHeader(Color primaryColor, bool showExpanded) {
+    final expandedHeader = showExpanded && !isCollapsed;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       height: 80,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Icon only (for collapsed state or when width is low)
+          // Monogram only (for collapsed state or when width is low)
           AnimatedOpacity(
             opacity: isCollapsed ? 1.0 : 0.0,
             duration: const Duration(milliseconds: 200),
@@ -109,62 +167,19 @@ class AppSidebar extends StatelessWidget {
               child: Center(
                 child: InkWell(
                   onTap: onToggle,
-                  child: Container(
-                    height: 48,
-                    width: 48,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [primaryColor, primaryColor.withOpacity(0.8)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.insights, color: Colors.white, size: 24),
-                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  child: _buildMonogram(48),
                 ),
               ),
             ),
           ),
 
           // Full Header (only rendered when width is sufficient)
-          if (showExpanded && !isCollapsed)
+          if (expandedHeader)
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Flexible(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        height: 40,
-                        width: 40,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [primaryColor, primaryColor.withOpacity(0.8)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.insights, color: Colors.white, size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                      const Flexible(
-                        child: Text(
-                          "Atlas Copco",
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 18,
-                            letterSpacing: -0.5,
-                            color: Color(0xFF1A1D1E),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                Expanded(child: _buildWordmark()),
+                const SizedBox(width: 8),
                 IconButton(
                   onPressed: onToggle,
                   icon: const Icon(Icons.chevron_left, color: Colors.grey),
@@ -195,7 +210,7 @@ class AppSidebar extends StatelessWidget {
           child: Container(
             height: 48,
             decoration: BoxDecoration(
-              color: isActive ? primaryColor.withOpacity(0.08) : Colors.transparent,
+              color: isActive ? primaryColor.withValues(alpha: 0.08) : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Stack(
@@ -362,10 +377,10 @@ class AppSidebar extends StatelessWidget {
                               backgroundColor: Colors.red.shade50,
                               foregroundColor: Colors.red,
                               elevation: 0,
-                              padding: EdgeInsets.all(0),
+                              padding: const EdgeInsets.all(0),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                side: BorderSide(color: Colors.red.withOpacity(0.1)),
+                                side: BorderSide(color: Colors.red.withValues(alpha: 0.1)),
                               ),
                             ),
                             child: const Text(

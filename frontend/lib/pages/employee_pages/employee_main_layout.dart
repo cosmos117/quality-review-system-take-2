@@ -19,7 +19,7 @@ class _EmployeeMainLayoutState extends State<EmployeeMainLayout> {
   final RxInt _selectedIndex = 0.obs;
   final RxBool _isCollapsed = false.obs;
 
-  final pages = [EmployeeDashboard(), Myproject(), LeaderPerformance()];
+  final pages = [const EmployeeDashboard(), const Myproject(), const LeaderPerformance()];
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +37,7 @@ class _EmployeeMainLayoutState extends State<EmployeeMainLayout> {
               onToggle: () => _isCollapsed.value = !_isCollapsed.value,
               onLogout: () async {
                 await Get.find<AuthController>().logout();
-                Get.offAll(() => LoginPage());
+                Get.offAll(() => const LoginPage());
               },
               items: [
                 SidebarNavItem(

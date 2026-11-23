@@ -326,16 +326,6 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
     super.dispose();
   }
 
-  List<String> _executorNames() {
-    final names = _teamCtrl.members
-        .map((m) => m.name)
-        .where((e) => e.trim().isNotEmpty)
-        .toSet()
-        .toList();
-    names.sort();
-    return names;
-  }
-
   Future<void> _showEditDialog(
     BuildContext context,
     ProjectDetailsController detailsCtrl,
@@ -673,8 +663,8 @@ class _AdminProjectDetailsPageState extends State<AdminProjectDetailsPage> {
                         ),
                         decoration: BoxDecoration(
                           color: details.project.isReviewApplicable == 'yes'
-                              ? Colors.green.withOpacity(0.1)
-                              : Colors.red.withOpacity(0.1),
+                              ? Colors.green.withValues(alpha: 0.1)
+                              : Colors.red.withValues(alpha: 0.1),
                           border: Border.all(
                             color: details.project.isReviewApplicable == 'yes'
                                 ? Colors.green
@@ -900,7 +890,7 @@ class _RoleCard extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.12),
+                    color: color.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${members.length}'),
@@ -933,7 +923,7 @@ class _RoleCard extends StatelessWidget {
                           children: [
                             CircleAvatar(
                               radius: 14,
-                              backgroundColor: color.withOpacity(0.14),
+                              backgroundColor: color.withValues(alpha: 0.14),
                               child: Text(
                                 (m.userName ?? 'U')
                                     .trim()
@@ -1203,7 +1193,6 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
                 : SizedBox(
                     height: 300,
                     child: ListView.builder(
-                      shrinkWrap: true,
                       itemCount: filtered.length,
                       itemBuilder: (context, i) {
                         final m = filtered[i];
@@ -1214,7 +1203,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
                             // For TeamLeader role, validate that only 1 is selected
                             if (isTeamLeader &&
                                 v == true &&
-                                selected.length >= 1) {
+                                selected.isNotEmpty) {
                               await _showTeamLeaderLimitWarning();
                               return;
                             }
@@ -1261,7 +1250,7 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
   Widget build(BuildContext context) {
     final d = widget.details;
     // Responsive: if width is small (< 900), fall back to vertical layout
-    final width = MediaQuery.of(context).size.width;
+    final width = MediaQuery.sizeOf(context).width;
     if (width < 900) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1380,8 +1369,8 @@ class _DashedDivider extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12.0),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final dashWidth = 6.0;
-          final dashHeight = 1.0;
+          const dashWidth = 6.0;
+          const dashHeight = 1.0;
           final dashCount = (constraints.maxWidth / (dashWidth * 2)).floor();
           return Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1409,8 +1398,8 @@ class _VerticalDashedDivider extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           // Use fixed height based on parent Row children's intrinsic height, so just build many dashes.
-          final dashHeight = 6.0;
-          final dashWidth = 1.0;
+          const dashHeight = 6.0;
+          const dashWidth = 1.0;
           // Approximate available height by using 400 if unconstrained.
           final h = constraints.maxHeight.isFinite
               ? constraints.maxHeight

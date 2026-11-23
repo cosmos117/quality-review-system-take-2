@@ -377,9 +377,9 @@ class _MyprojectState extends State<Myproject> {
                                       ),
                                       child: Row(
                                         children: [
-                                          Expanded(
+                                          const Expanded(
                                             flex: 3,
-                                            child: const Text(
+                                            child: Text(
                                               'Project No.',
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
@@ -442,9 +442,9 @@ class _MyprojectState extends State<Myproject> {
                                               showIcon: false,
                                             ),
                                           ),
-                                          Expanded(
+                                          const Expanded(
                                             flex: 2,
-                                            child: const Text(
+                                            child: Text(
                                               'Working As',
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(

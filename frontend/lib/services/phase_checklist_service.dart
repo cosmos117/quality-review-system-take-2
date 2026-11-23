@@ -41,7 +41,7 @@ class PhaseChecklistService {
     );
     final body = {
       'checklist_name': name,
-      if (description != null) 'description': description,
+      'description': ?description,
       'status': status,
     };
     final json = await http.postJson(uri, body);
@@ -123,8 +123,9 @@ class PhaseChecklistService {
 
     if (executorResponse != null) body['executorResponse'] = executorResponse;
     if (reviewerResponse != null) body['reviewerResponse'] = reviewerResponse;
-    if (categoryId != null && categoryId.isNotEmpty)
+    if (categoryId != null && categoryId.isNotEmpty) {
       body['categoryId'] = categoryId;
+    }
     if (severity != null && severity.isNotEmpty) body['severity'] = severity;
 
     final json = await http.patchJson(uri, body);
@@ -136,23 +137,6 @@ class PhaseChecklistService {
     _ensureToken();
     final uri = Uri.parse('${ApiConfig.baseUrl}/checkpoints/$checkpointId');
     await http.delete(uri);
-  }
-
-  // Assign defect category to a checkpoint
-  Future<void> assignDefectCategory(
-    String checkpointId,
-    String categoryId, {
-    String? severity,
-  }) async {
-    _ensureToken();
-    final uri = Uri.parse(
-      '${ApiConfig.baseUrl}/checkpoints/$checkpointId/defect-category',
-    );
-    final body = {
-      'categoryId': categoryId,
-      if (severity != null) 'severity': severity,
-    };
-    await http.patchJson(uri, body);
   }
 
   // Submit/approve/request-changes
@@ -174,21 +158,4 @@ class PhaseChecklistService {
     await http.postJson(uri, {'user_id': 'self'});
   }
 
-  Future<void> requestChanges(String id, String message) async {
-    _ensureToken();
-    final uri = Uri.parse(
-      '${ApiConfig.checklistBaseUrl}/checklists/$id/request-changes',
-    );
-    await http.postJson(uri, {'user_id': 'self', 'message': message});
-  }
-
-  // Get defect statistics for a checklist based on history
-  Future<Map<String, dynamic>> getDefectStats(String checklistId) async {
-    _ensureToken();
-    final uri = Uri.parse(
-      '${ApiConfig.baseUrl}/checklists/$checklistId/defect-stats',
-    );
-    final json = await http.getJson(uri);
-    return (json['data'] as Map<String, dynamic>?) ?? {};
-  }
 }

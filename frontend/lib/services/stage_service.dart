@@ -48,38 +48,5 @@ class StageService {
     }, forceRefresh: forceRefresh);
   }
 
-  Future<Map<String, dynamic>> createStage(
-    String projectId, {
-    required String name,
-    String? description,
-    String status = 'pending',
-  }) async {
-    _ensureToken();
-    final uri = Uri.parse(
-      '${ApiConfig.checklistBaseUrl}/projects/$projectId/stages',
-    );
-    final body = {
-      'stage_name': name,
-      if (description != null) 'description': description,
-      'status': status,
-    };
-    final json = await http.postJson(uri, body);
-    _cache.clear();
-    return (json['data'] as Map<String, dynamic>);
-  }
-
-  /// Fetch a single stage by ID
-  Future<Map<String, dynamic>> getStageById(
-    String stageId, {
-    bool forceRefresh = false,
-  }) async {
-    return _cache.get('stage:$stageId', () async {
-      _ensureToken();
-      final uri = Uri.parse('${ApiConfig.baseUrl}/stages/$stageId');
-      final response = await http.getJson(uri);
-      return response['data'] as Map<String, dynamic>? ?? response;
-    }, forceRefresh: forceRefresh);
-  }
-
   void clearCache() => _cache.clear();
 }

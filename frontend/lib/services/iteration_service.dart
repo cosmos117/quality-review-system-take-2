@@ -1,64 +1,5 @@
-import 'dart:convert';
-import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'package:get/get.dart';
-import '../config/api_config.dart';
-import '../controllers/auth_controller.dart';
-
-/// Service for fetching checklist iteration history
+/// Helpers for reading question data out of checklist iteration snapshots.
 class IterationService {
-  /// Fetch all iterations for a specific project and stage
-  /// Returns: { iterations: [], currentIteration: N, totalIterations: N }
-  Future<Map<String, dynamic>> getIterations(
-    String projectId,
-    String stageId,
-  ) async {
-    try {
-      if (kDebugMode) {
-      }
-
-      // Get auth token from AuthController
-      final auth = Get.find<AuthController>();
-      final token = auth.currentUser.value?.token;
-      if (token == null || token.isEmpty) {
-        throw Exception('Not authenticated');
-      }
-
-      final url = Uri.parse(
-        '${ApiConfig.baseUrl}/projects/$projectId/stages/$stageId/project-checklist/iterations',
-      );
-
-      final response = await http.get(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-
-      if (kDebugMode) {
-      }
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success'] == true && data['data'] != null) {
-          final result = data['data'];
-          if (kDebugMode) {
-          }
-          return result;
-        }
-      }
-
-      if (kDebugMode) {
-      }
-      return {'iterations': [], 'currentIteration': 1, 'totalIterations': 0};
-    } catch (e) {
-      if (kDebugMode) {
-      }
-      return {'iterations': [], 'currentIteration': 1, 'totalIterations': 0};
-    }
-  }
-
   /// Find answer for a specific question in a specific iteration
   /// Returns the full question data including answer, remark, images, etc.
   Map<String, dynamic>? findQuestionInIteration(
@@ -93,9 +34,8 @@ class IterationService {
           }
         }
       }
-    } catch (e) {
-      if (kDebugMode) {
-      }
+    } catch (_) {
+      // Malformed iteration data: treat as not found.
     }
     return null;
   }

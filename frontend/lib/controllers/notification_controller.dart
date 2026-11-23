@@ -27,11 +27,6 @@ class NotificationController extends GetxController {
   // Count of executor-only (revert) notifications
   final executorNotificationCount = 0.obs;
 
-  /// Check if a project has any pending actions for the current user
-  bool hasNotification(String projectId) {
-    return _projectNotifications[projectId]?.hasPendingAction ?? false;
-  }
-
   /// Get notification info for a project
   ProjectNotification? getNotification(String projectId) {
     return _projectNotifications[projectId];
@@ -159,18 +154,6 @@ class NotificationController extends GetxController {
   void onClose() {
     _debouncer.dispose();
     super.onClose();
-  }
-
-  /// Clear notification for a project
-  void clearProjectNotification(String projectId) {
-    _projectNotifications.remove(projectId);
-    _updateNotificationCount();
-  }
-
-  /// Clear all notifications
-  void clearAll() {
-    _projectNotifications.clear();
-    notificationCount.value = 0;
   }
 
   void _updateNotificationCount() {

@@ -27,14 +27,6 @@ const _kGreenSoft = Color(0xFF166534);
 const _kSlate = Color(0xFF64748B);
 const _kStone = Color(0xFF94A3B8);
 
-const List<Color> _kChartColors = [
-  _kDeepTeal,
-  _kTealMid,
-  _kGreenSoft,
-  _kSlate,
-  _kStone,
-];
-
 const List<Color> _kDefectCategoryPalette = [
   _kDeepTeal,
   _kTealMid,
@@ -45,7 +37,7 @@ const List<Color> _kDefectCategoryPalette = [
 
 List<Color> _distinctCategoryColors(int count) {
   if (count <= 0) return const [];
-  final seed = _kDefectCategoryPalette;
+  const seed = _kDefectCategoryPalette;
   return List.generate(count, (i) {
     if (i < seed.length) return seed[i];
     final hue = (i * 137.508) % 360;
@@ -1133,8 +1125,8 @@ class _DefectDetailsTableState extends State<_DefectDetailsTable> {
                           color: Colors.grey[100],
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Row(
-                          children: const [
+                        child: const Row(
+                          children: [
                             _FixedHeaderCell('Project No.', width: 160),
                             _FixedHeaderCell('Project Name', width: 320),
                             _FixedHeaderCell('Team Leader', width: 150),

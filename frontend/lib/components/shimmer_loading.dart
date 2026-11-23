@@ -205,10 +205,10 @@ class SkeletonStatisticsCard extends StatelessWidget {
   }
 
   Widget _buildStatSkeleton() {
-    return Expanded(
+    return const Expanded(
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
+        children: [
           SkeletonBox(width: 36, height: 24, borderRadius: 4),
           SizedBox(width: 6),
           SkeletonBox(width: 70, height: 14),
@@ -279,19 +279,19 @@ class SkeletonChecklistGroups extends StatelessWidget {
     return ShimmerLoading(
       child: Column(
         children: List.generate(groupCount, (_) {
-          return Card(
-            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          return const Card(
+            margin: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16),
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: SkeletonBox(width: double.infinity, height: 16),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   SkeletonBox(width: 90, height: 28, borderRadius: 12),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.expand_more, color: Colors.grey),
+                  SizedBox(width: 8),
+                  Icon(Icons.expand_more, color: Colors.grey),
                 ],
               ),
             ),
@@ -321,8 +321,8 @@ class SkeletonMemberCards extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: const [
+                          const Row(
+                            children: [
                               SkeletonBox(
                                 width: 20,
                                 height: 20,
@@ -349,8 +349,8 @@ class SkeletonMemberCards extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(color: Colors.grey[200]!),
                                 ),
-                                child: Row(
-                                  children: const [
+                                child: const Row(
+                                  children: [
                                     SkeletonBox(
                                       width: 32,
                                       height: 32,

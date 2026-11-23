@@ -18,16 +18,16 @@ class AdminChecklistTemplatePage
       body: SafeArea(
         child: Obx(() {
           if (c.isLoading.value) {
-            return Padding(
-              padding: const EdgeInsets.all(24),
+            return const Padding(
+              padding: EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const ShimmerLoading(
+                  ShimmerLoading(
                     child: SkeletonBox(width: 200, height: 24),
                   ),
-                  const SizedBox(height: 16),
-                  const SkeletonChecklistGroups(groupCount: 5),
+                  SizedBox(height: 16),
+                  SkeletonChecklistGroups(groupCount: 5),
                 ],
               ),
             );
@@ -1880,14 +1880,14 @@ class _DefectCategoryManagerState extends State<_DefectCategoryManager>
                     decoration: InputDecoration(
                       labelText: 'Category name',
                       hintText: 'e.g. Incorrect Meshing',
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
                       isDense: true,
                       errorText: nameValidationError,
                     ),
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: groups.contains(currentGroup)
+                    initialValue: groups.contains(currentGroup)
                         ? currentGroup
                         : (groups.isNotEmpty ? groups.first : 'General'),
                     decoration: const InputDecoration(
@@ -2209,7 +2209,7 @@ class _DefectCategoryManagerState extends State<_DefectCategoryManager>
                 )
               : ListView.separated(
                   itemCount: filtered.length,
-                  separatorBuilder: (_, __) =>
+                  separatorBuilder: (_, _) =>
                       const Divider(height: 1, color: _divider),
                   itemBuilder: (_, i) {
                     final cat = filtered[i];
@@ -2416,8 +2416,9 @@ class _DefectCategoryManagerState extends State<_DefectCategoryManager>
                                         }
                                         _pendingEmptyGroups.remove(g);
                                         _pendingEmptyGroups.remove(newName);
-                                        if (_selectedGroup == g)
+                                        if (_selectedGroup == g) {
                                           _selectedGroup = newName;
+                                        }
                                       });
                                     }
                                   } else if (action == 'delete') {
@@ -2471,8 +2472,9 @@ class _DefectCategoryManagerState extends State<_DefectCategoryManager>
                                           if (c.group == g) c.group = 'General';
                                         }
                                         _pendingEmptyGroups.remove(g);
-                                        if (_selectedGroup == g)
+                                        if (_selectedGroup == g) {
                                           _selectedGroup = null;
+                                        }
                                       });
                                     } else if (deleteAction == 'delete') {
                                       setState(() {
@@ -2480,8 +2482,9 @@ class _DefectCategoryManagerState extends State<_DefectCategoryManager>
                                           (c) => c.group == g,
                                         );
                                         _pendingEmptyGroups.remove(g);
-                                        if (_selectedGroup == g)
+                                        if (_selectedGroup == g) {
                                           _selectedGroup = null;
+                                        }
                                       });
                                     }
                                   }
@@ -2582,7 +2585,7 @@ class _DefectCategoryManagerState extends State<_DefectCategoryManager>
                 )
               : ListView.separated(
                   itemCount: inGroup.length,
-                  separatorBuilder: (_, __) =>
+                  separatorBuilder: (_, _) =>
                       const Divider(height: 1, color: _divider),
                   itemBuilder: (_, i) {
                     final cat = inGroup[i];

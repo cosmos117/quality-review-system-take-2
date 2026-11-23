@@ -20,7 +20,7 @@ class EmployeeDashboard extends StatefulWidget {
 class _AdminDashboardPageState extends State<EmployeeDashboard> {
   late final ProjectsController _ctrl;
   final TextEditingController _searchCtrl = TextEditingController();
-  String _searchQuery = '';
+  final String _searchQuery = '';
   String _sortKey = 'started';
   bool _ascending = false;
   final Set<String> _selectedStatuses = {};
@@ -98,7 +98,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
   Widget _buildFilterChip(String status) {
     return Builder(
       builder: (context) {
-        final screenWidth = MediaQuery.of(context).size.width;
+        final screenWidth = MediaQuery.sizeOf(context).width;
         double responsiveFontSize(double baseFontSize) =>
             screenWidth * (baseFontSize / 1920) + 8;
         double responsivePadding(double basePadding) =>
@@ -140,7 +140,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
   @override
   Widget build(BuildContext context) {
     // Get screen dimensions for responsive sizing
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
 
     // Responsive sizing helpers
     double responsiveWidth(double baseWidth) =>
@@ -247,7 +247,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
                           ? SizedBox(
                               width: responsiveFontSize(8),
                               height: responsiveFontSize(8),
-                              child: CircularProgressIndicator(
+                              child: const CircularProgressIndicator(
                                 strokeWidth: 2,
                                 valueColor: AlwaysStoppedAnimation<Color>(
                                   Colors.white,
@@ -509,7 +509,7 @@ class _AdminDashboardPageState extends State<EmployeeDashboard> {
     int totalPages,
     BuildContext context,
   ) {
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     double responsiveFontSize(double baseFontSize) =>
         screenWidth * (baseFontSize / 1920) + 8;
     double responsivePadding(double basePadding) =>
@@ -569,7 +569,7 @@ class _EmployeeProjectCard extends StatelessWidget {
   }) : super(key: key);
 
   Widget _priorityChip(String p) {
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     double responsiveFontSize(double baseFontSize) =>
         screenWidth * (baseFontSize / 1920) + 8;
 
@@ -584,7 +584,7 @@ class _EmployeeProjectCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext buildContext) {
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     double responsiveWidth(double baseWidth) =>
         screenWidth * (baseWidth / 1920);
     double responsiveFontSize(double baseFontSize) =>

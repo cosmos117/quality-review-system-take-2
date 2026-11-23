@@ -17,7 +17,7 @@ Future<T?> showAdminDialog<T>(
     barrierColor: barrierColor,
     barrierLabel: barrierLabel,
     transitionDuration: transitionDuration,
-    pageBuilder: (_, __, ___) => const SizedBox.shrink(),
+    pageBuilder: (_, _, _) => const SizedBox.shrink(),
     transitionBuilder: (context, animation, secondary, childWidget) {
       return Center(
         child: Shortcuts(

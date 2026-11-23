@@ -212,20 +212,20 @@ class _LeaderPerformanceState extends State<LeaderPerformance> {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      performanceColor.withOpacity(0.1),
-                      performanceColor.withOpacity(0.05),
+                      performanceColor.withValues(alpha: 0.1),
+                      performanceColor.withValues(alpha: 0.05),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: performanceColor.withOpacity(0.3),
+                    color: performanceColor.withValues(alpha: 0.3),
                     width: 2,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: performanceColor.withOpacity(0.2),
+                      color: performanceColor.withValues(alpha: 0.2),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -462,9 +462,9 @@ class _LeaderPerformanceState extends State<LeaderPerformance> {
                                   ),
                                   child: Row(
                                     children: [
-                                      Expanded(
+                                      const Expanded(
                                         flex: 3,
-                                        child: const Text(
+                                        child: Text(
                                           'Project No.',
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
@@ -474,9 +474,9 @@ class _LeaderPerformanceState extends State<LeaderPerformance> {
                                           ),
                                         ),
                                       ),
-                                      Expanded(
+                                      const Expanded(
                                         flex: 4,
-                                        child: const Text(
+                                        child: Text(
                                           'Project Title',
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
@@ -486,9 +486,9 @@ class _LeaderPerformanceState extends State<LeaderPerformance> {
                                           ),
                                         ),
                                       ),
-                                      Expanded(
+                                      const Expanded(
                                         flex: 2,
-                                        child: const Text(
+                                        child: Text(
                                           'Started',
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
@@ -498,9 +498,9 @@ class _LeaderPerformanceState extends State<LeaderPerformance> {
                                           ),
                                         ),
                                       ),
-                                      Expanded(
+                                      const Expanded(
                                         flex: 2,
-                                        child: const Text(
+                                        child: Text(
                                           'Status',
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
@@ -672,10 +672,10 @@ class _ProjectCardState extends State<_ProjectCard> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: defectRateColor.withOpacity(0.15),
+                  color: defectRateColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(
-                    color: defectRateColor.withOpacity(0.4),
+                    color: defectRateColor.withValues(alpha: 0.4),
                     width: 1,
                   ),
                 ),

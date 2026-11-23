@@ -47,66 +47,6 @@ class TemplateService {
     }
   }
 
-  Future<Map<String, dynamic>> updateNamedTemplateMetadata({
-    required String templateName,
-    String? name,
-    String? description,
-    bool? isActive,
-    Map<String, dynamic>? stageNames,
-  }) async {
-    try {
-      _ensureToken();
-      final body = <String, dynamic>{};
-      if (name != null) body['name'] = name;
-      if (description != null) body['description'] = description;
-      if (isActive != null) body['isActive'] = isActive;
-      if (stageNames != null) body['stageNames'] = stageNames;
-
-      final root = _templateRoot(templateName);
-      final response = await http.patchJson(Uri.parse(root), body);
-      _cache.clear();
-      return response['data'] as Map<String, dynamic>? ?? response;
-    } catch (e) {
-      throw Exception('Error updating template metadata: $e');
-    }
-  }
-
-  Future<Map<String, dynamic>> renameStage({
-    required String stage,
-    required String stageName,
-    String? templateName,
-  }) async {
-    try {
-      _ensureToken();
-      if (!_isValidStage(stage)) {
-        throw Exception('Invalid stage format');
-      }
-      if (stageName.trim().isEmpty) {
-        throw Exception('Stage name is required');
-      }
-
-      if (templateName != null && templateName.trim().isNotEmpty) {
-        final current = await fetchTemplate(templateName: templateName);
-        final currentStageNames =
-            (current['stageNames'] as Map<String, dynamic>?) ?? {};
-        final merged = {...currentStageNames, stage: stageName.trim()};
-        return updateNamedTemplateMetadata(
-          templateName: templateName,
-          stageNames: merged,
-        );
-      }
-
-      final response = await http.patchJson(
-        Uri.parse('$_baseUrl/stages/$stage/name'),
-        {'stageName': stageName.trim()},
-      );
-      _cache.clear();
-      return response['data'] as Map<String, dynamic>? ?? response;
-    } catch (e) {
-      throw Exception('Error renaming stage: $e');
-    }
-  }
-
   /// Get all saved template names for dropdown.
   Future<List<Map<String, dynamic>>> fetchTemplateNames({
     bool forceRefresh = false,
@@ -625,31 +565,6 @@ class TemplateService {
     } catch (e) {
       throw Exception('Error deleting stage: $e');
     }
-  }
-
-  /// Get all stages with their names from the template
-  Future<Map<String, String>> getStages({
-    String? templateName,
-    bool forceRefresh = false,
-  }) async {
-    final cacheKey = templateName != null
-        ? 'template:named:$templateName:stages'
-        : 'template:stages';
-
-    return _cache.get(cacheKey, () async {
-      try {
-        _ensureToken();
-        final root = _templateRoot(templateName);
-        final response = await http.getJson(Uri.parse('$root/stages'));
-        final stagesData = response['data'] as Map<String, dynamic>? ?? {};
-
-        return stagesData.map((key, value) {
-          return MapEntry(key.toString(), value.toString());
-        });
-      } catch (e) {
-        throw Exception('Error fetching stages: $e');
-      }
-    }, forceRefresh: forceRefresh);
   }
 
   void clearCache() => _cache.clear();

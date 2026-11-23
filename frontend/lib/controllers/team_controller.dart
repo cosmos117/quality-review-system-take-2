@@ -40,12 +40,6 @@ class TeamController extends GetxController {
   }
 
   void addMember(TeamMember m) => members.insert(0, _normalize(m));
-  void updateMember(String id, TeamMember updated) {
-    final idx = members.indexWhere((e) => e.id == id);
-    if (idx != -1) members[idx] = _normalize(updated);
-  }
-
-  void deleteMember(String id) => members.removeWhere((e) => e.id == id);
 
   // Backend-powered CRUD helpers
   Future<void> createMember(TeamMember m) async {
@@ -119,11 +113,6 @@ class TeamController extends GetxController {
     selectedRoles.clear();
     selectedStatuses.clear();
     searchQuery.value = '';
-  }
-
-  TeamMember? findById(String id) {
-    final idx = members.indexWhere((m) => m.id == id);
-    return idx == -1 ? null : members[idx];
   }
 
   Future<void> fetchFromBackend(

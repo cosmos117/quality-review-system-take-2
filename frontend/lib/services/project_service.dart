@@ -15,9 +15,11 @@ class ProjectService {
     final internalOrderNo = j['internal_order_no']?.toString();
     final title = (j['project_name'] ?? '').toString();
     final statusRaw = (j['status'] ?? '').toString();
-    final status = switch (statusRaw) {
-      'pending' => 'Not Started',
-      'in_progress' => 'In Progress',
+    // Backend stores snake_case, but some backend paths (e.g.
+    // updateProjectStatusToInProgress) write the display form, so accept both.
+    final status = switch (statusRaw.trim().toLowerCase()) {
+      'pending' || 'not started' => 'Not Started',
+      'in_progress' || 'in progress' => 'In Progress',
       'completed' => 'Completed',
       _ => 'Not Started',
     };
@@ -128,7 +130,7 @@ class ProjectService {
       'status': status,
       'priority': priority,
       'start_date': p.started.toIso8601String(),
-      if (userId != null) 'created_by': userId,
+      'created_by': ?userId,
       if (p.isReviewApplicable != null)
         'isReviewApplicable': p.isReviewApplicable,
       if (p.reviewApplicableRemark != null)

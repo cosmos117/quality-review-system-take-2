@@ -153,12 +153,6 @@ class _EmployeePerformanceDetailPageState
     return Colors.red;
   }
 
-  String _getPerformanceLabel(double performance) {
-    if (performance <= 5.0) return 'Excellent';
-    if (performance <= 20.0) return 'Good';
-    return 'Needs Improvement';
-  }
-
   @override
   Widget build(BuildContext context) {
     final overallLeaderPerformance = _calculateOverallLeaderPerformance();

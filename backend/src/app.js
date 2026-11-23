@@ -1,7 +1,6 @@
 import express from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import helmet from "helmet";
 import path from "path";
 import { fileURLToPath } from "url";
 import authMiddleware from "./middleware/auth.Middleware.js";

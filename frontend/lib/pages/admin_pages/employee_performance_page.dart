@@ -25,20 +25,21 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
     _loadData();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadData({bool forceRefresh = false}) async {
     setState(() => _isLoading = true);
     try {
       final projectsCtrl = Get.find<ProjectsController>();
       final teamCtrl = Get.find<TeamController>();
       final membershipService = Get.find<ProjectMembershipService>();
 
-      // Ensure members are loaded
-      if (teamCtrl.members.isEmpty) {
-        await teamCtrl.refreshMembers();
+      // Ensure members are loaded (force on manual refresh so stale user ids
+      // from a cached list don't turn into "User not found" / zero stats)
+      if (forceRefresh || teamCtrl.members.isEmpty) {
+        await teamCtrl.refreshMembers(forceRefresh: forceRefresh);
       }
 
       // Load all projects
-      await projectsCtrl.refreshProjects();
+      await projectsCtrl.refreshProjects(forceRefresh: forceRefresh);
 
       // Calculate and store employee stats using project memberships
       final stats = <String, Map<String, int>>{};
@@ -48,6 +49,7 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
           // Get all projects for this employee through their memberships
           final userProjectsData = await membershipService.getUserProjects(
             employee.id,
+            forceRefresh: forceRefresh,
           );
 
           // Extract project IDs from membership data
@@ -148,7 +150,7 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
                         const Spacer(),
                         IconButton(
                           icon: const Icon(Icons.refresh),
-                          onPressed: _loadData,
+                          onPressed: () => _loadData(forceRefresh: true),
                           tooltip: 'Refresh',
                         ),
                       ],
@@ -166,7 +168,7 @@ class _EmployeePerformancePageState extends State<EmployeePerformancePage> {
                                   scrollDirection: Axis.horizontal,
                                   child: DataTable(
                                     showCheckboxColumn: false,
-                                    headingRowColor: MaterialStateProperty.all(
+                                    headingRowColor: WidgetStateProperty.all(
                                       Colors.grey[100],
                                     ),
                                     dataRowMinHeight: 60,
