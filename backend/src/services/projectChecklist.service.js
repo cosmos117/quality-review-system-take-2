@@ -2,6 +2,7 @@ import prisma from "../config/prisma.js";
 import { deleteImagesByFileIds } from "../local_storage.js";
 import { ApiError } from "../utils/ApiError.js";
 import { newId } from "../utils/newId.js";
+import { invalidateProjects } from "../utils/cache.js";
 import {
   calculateDefectCount,
   calculateCurrentMismatches,
@@ -12,6 +13,45 @@ const parseJsonField = (field) => {
   if (!field) return [];
   if (typeof field === "string") return JSON.parse(field);
   return field;
+};
+
+const MAX_GROUP_WRITE_ATTEMPTS = 5;
+
+/**
+ * Read-modify-write a checklist's `groups` JSON without losing concurrent
+ * edits. The whole blob is rewritten on every save, so two users saving
+ * different questions at the same time used to overwrite each other. The
+ * write only applies if `updatedAt` is unchanged since the read; otherwise
+ * the row is re-read and `mutate` runs again on fresh data.
+ *
+ * @param {object} where   unique selector for prisma.projectChecklist
+ * @param {(groups: any[], checklist: object) => any} mutate  edits `groups`
+ *        in place; may throw to abort without writing. Its return value is
+ *        passed back as `result`.
+ * @returns {Promise<{checklist: object, groups: any[], result: any} | null>}
+ *          null when the checklist does not exist.
+ */
+export const updateChecklistGroups = async (where, mutate) => {
+  for (let attempt = 1; ; attempt++) {
+    const checklist = await prisma.projectChecklist.findUnique({ where });
+    if (!checklist) return null;
+
+    const groups = parseJsonField(checklist.groups);
+    const result = await mutate(groups, checklist);
+
+    const { count } = await prisma.projectChecklist.updateMany({
+      where: { id: checklist.id, updatedAt: checklist.updatedAt },
+      data: { groups },
+    });
+    if (count === 1) return { checklist, groups, result };
+
+    if (attempt >= MAX_GROUP_WRITE_ATTEMPTS) {
+      throw new ApiError(
+        409,
+        "The checklist was changed by someone else at the same time. Please retry.",
+      );
+    }
+  }
 };
 
 export const allowedExecutorAnswers = ["Yes", "No", "NA", null];
@@ -56,22 +96,12 @@ export const sanitizeGroups = (groups) => {
 };
 
 export const updateProjectStatusToInProgress = async (projectId) => {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { status: true },
+  // One conditional write instead of read-then-write on every answer save.
+  const { count } = await prisma.project.updateMany({
+    where: { id: projectId, status: "Not Started" },
+    data: { status: "In Progress" },
   });
-
-  if (project && project.status === "Not Started") {
-    await prisma.project.update({
-      where: { id: projectId },
-      data: { status: "In Progress" },
-    });
-    import("../utils/cache.js")
-      .then((cache) => {
-        if (cache.invalidateProjects) cache.invalidateProjects();
-      })
-      .catch(() => {});
-  }
+  if (count > 0) invalidateProjects();
 };
 
 export const inferStageKey = (stageName = "") => {
@@ -149,7 +179,8 @@ export const ensureProjectChecklist = async ({ projectId, stageDoc }) => {
 
   if (!template) {
     template = await prisma.template.findFirst({
-      where: { OR: [{ templateName: null }, { templateName: "" }] },
+      // templateName is required; a null filter is a Prisma validation error.
+      where: { templateName: "" },
       orderBy: { createdAt: "asc" },
     });
   }
@@ -187,6 +218,15 @@ export const ensureProjectChecklist = async ({ projectId, stageDoc }) => {
   });
 
   return created;
+};
+
+// Groups are matched by _id, or by their array index for older clients.
+const findGroup = (groups, groupId) => {
+  const index = groups.findIndex(
+    (g, i) => g._id === groupId || i.toString() === groupId,
+  );
+  if (index === -1) throw new ApiError(404, "Checklist group not found");
+  return groups[index];
 };
 
 const findQuestionInGroup = (group, questionId) => {
@@ -241,56 +281,49 @@ export const updateExecutorAnswer = async (
   { answer, remark, images, categoryId, severity },
   userId,
 ) => {
-  const checklist = await prisma.projectChecklist.findUnique({
-    where: { projectId_stageId: { projectId, stageId } },
-  });
-
-  if (!checklist) {
-    throw new ApiError(404, "Checklist not found");
+  if (answer !== undefined && !allowedExecutorAnswers.includes(answer)) {
+    throw new ApiError(
+      400,
+      `Invalid executorAnswer: ${answer}. Must be one of: Yes, No, NA, or null`,
+    );
   }
 
-  const groups = parseJsonField(checklist.groups);
-  const group = groups.find(
-    (g) => g._id === groupId || groups.indexOf(g).toString() === groupId,
+  const saved = await updateChecklistGroups(
+    { projectId_stageId: { projectId, stageId } },
+    (groups) => {
+      const group = findGroup(groups, groupId);
+      const { question } = findQuestionInGroup(group, questionId);
+      if (!question)
+        throw new ApiError(404, "Question not found in this group");
+
+      let imagesToDelete = [];
+      if (images !== undefined) {
+        const newImages = Array.isArray(images) ? images : [];
+        const oldImages = question.executorImages || [];
+        imagesToDelete = oldImages.filter(
+          (oldImg) => !newImages.includes(oldImg),
+        );
+      }
+
+      if (answer !== undefined) question.executorAnswer = answer;
+      if (remark !== undefined) question.executorRemark = remark || "";
+      if (images !== undefined)
+        question.executorImages = Array.isArray(images) ? images : [];
+      if (categoryId !== undefined) question.categoryId = categoryId || "";
+      if (severity !== undefined) question.severity = severity || "";
+
+      if (!question.answeredBy) question.answeredBy = {};
+      if (!question.answeredAt) question.answeredAt = {};
+
+      question.answeredBy.executor = userId;
+      question.answeredAt.executor = new Date().toISOString();
+
+      return { group, imagesToDelete };
+    },
   );
 
-  if (!group) throw new ApiError(404, "Checklist group not found");
-
-  const { question } = findQuestionInGroup(group, questionId);
-  if (!question) throw new ApiError(404, "Question not found in this group");
-
-  let imagesToDelete = [];
-  if (images !== undefined) {
-    const newImages = Array.isArray(images) ? images : [];
-    const oldImages = question.executorImages || [];
-    imagesToDelete = oldImages.filter((oldImg) => !newImages.includes(oldImg));
-  }
-
-  if (answer !== undefined) {
-    if (!allowedExecutorAnswers.includes(answer)) {
-      throw new ApiError(
-        400,
-        `Invalid executorAnswer: ${answer}. Must be one of: Yes, No, NA, or null`,
-      );
-    }
-    question.executorAnswer = answer;
-  }
-  if (remark !== undefined) question.executorRemark = remark || "";
-  if (images !== undefined)
-    question.executorImages = Array.isArray(images) ? images : [];
-  if (categoryId !== undefined) question.categoryId = categoryId || "";
-  if (severity !== undefined) question.severity = severity || "";
-
-  if (!question.answeredBy) question.answeredBy = {};
-  if (!question.answeredAt) question.answeredAt = {};
-
-  question.answeredBy.executor = userId;
-  question.answeredAt.executor = new Date().toISOString();
-
-  await prisma.projectChecklist.update({
-    where: { id: checklist.id },
-    data: { groups },
-  });
+  if (!saved) throw new ApiError(404, "Checklist not found");
+  const { group, imagesToDelete } = saved.result;
 
   if (imagesToDelete.length > 0) {
     try {
@@ -312,55 +345,50 @@ export const updateReviewerStatus = async (
   { answer, status, remark, images, categoryId, severity },
   userId,
 ) => {
-  const checklist = await prisma.projectChecklist.findUnique({
-    where: { projectId_stageId: { projectId, stageId } },
-  });
+  if (status !== undefined && !allowedReviewerStatuses.includes(status)) {
+    throw new ApiError(
+      400,
+      `Invalid reviewerStatus: ${status}. Must be one of: ${allowedReviewerStatuses.map((s) => (s === null ? "null" : s)).join(", ")}`,
+    );
+  }
 
-  if (!checklist) throw new ApiError(404, "Checklist not found");
+  const saved = await updateChecklistGroups(
+    { projectId_stageId: { projectId, stageId } },
+    (groups) => {
+      const group = findGroup(groups, groupId);
+      const { question } = findQuestionInGroup(group, questionId);
+      if (!question)
+        throw new ApiError(404, "Question not found in this group");
 
-  const groups = parseJsonField(checklist.groups);
-  const group = groups.find(
-    (g) => g._id === groupId || groups.indexOf(g).toString() === groupId,
+      let imagesToDelete = [];
+      if (images !== undefined) {
+        const newImages = Array.isArray(images) ? images : [];
+        const oldImages = question.reviewerImages || [];
+        imagesToDelete = oldImages.filter(
+          (oldImg) => !newImages.includes(oldImg),
+        );
+      }
+
+      if (answer !== undefined) question.reviewerAnswer = answer;
+      if (status !== undefined) question.reviewerStatus = status;
+      if (remark !== undefined) question.reviewerRemark = remark || "";
+      if (images !== undefined)
+        question.reviewerImages = Array.isArray(images) ? images : [];
+      if (categoryId !== undefined) question.categoryId = categoryId || "";
+      if (severity !== undefined) question.severity = severity || "";
+
+      if (!question.answeredBy) question.answeredBy = {};
+      if (!question.answeredAt) question.answeredAt = {};
+
+      question.answeredBy.reviewer = userId;
+      question.answeredAt.reviewer = new Date().toISOString();
+
+      return { group, imagesToDelete };
+    },
   );
 
-  if (!group) throw new ApiError(404, "Checklist group not found");
-
-  const { question } = findQuestionInGroup(group, questionId);
-  if (!question) throw new ApiError(404, "Question not found in this group");
-
-  let imagesToDelete = [];
-  if (images !== undefined) {
-    const newImages = Array.isArray(images) ? images : [];
-    const oldImages = question.reviewerImages || [];
-    imagesToDelete = oldImages.filter((oldImg) => !newImages.includes(oldImg));
-  }
-
-  if (answer !== undefined) question.reviewerAnswer = answer;
-  if (status !== undefined) {
-    if (!allowedReviewerStatuses.includes(status)) {
-      throw new ApiError(
-        400,
-        `Invalid reviewerStatus: ${status}. Must be one of: ${allowedReviewerStatuses.map((s) => (s === null ? "null" : s)).join(", ")}`,
-      );
-    }
-    question.reviewerStatus = status;
-  }
-  if (remark !== undefined) question.reviewerRemark = remark || "";
-  if (images !== undefined)
-    question.reviewerImages = Array.isArray(images) ? images : [];
-  if (categoryId !== undefined) question.categoryId = categoryId || "";
-  if (severity !== undefined) question.severity = severity || "";
-
-  if (!question.answeredBy) question.answeredBy = {};
-  if (!question.answeredAt) question.answeredAt = {};
-
-  question.answeredBy.reviewer = userId;
-  question.answeredAt.reviewer = new Date().toISOString();
-
-  await prisma.projectChecklist.update({
-    where: { id: checklist.id },
-    data: { groups },
-  });
+  if (!saved) throw new ApiError(404, "Checklist not found");
+  const { group, imagesToDelete } = saved.result;
 
   if (imagesToDelete.length > 0) {
     try {
@@ -474,6 +502,25 @@ export const getDefectRatesPerIteration = async (projectId, phaseNum) => {
   };
 };
 
+const DEFECT_RATE_REFRESH_DELAY_MS = 1500;
+const pendingDefectRateRefresh = new Map();
+
+/**
+ * Recompute a project's stored overall defect rate in the background.
+ * Autosave calls this after every save; calls for the same project within
+ * the delay are coalesced into one recompute instead of one per keystroke.
+ */
+export const scheduleOverallDefectRateRefresh = (projectId, onError) => {
+  if (!projectId) return;
+  clearTimeout(pendingDefectRateRefresh.get(projectId));
+  const timer = setTimeout(() => {
+    pendingDefectRateRefresh.delete(projectId);
+    getOverallDefectRate(projectId).catch((err) => onError?.(err));
+  }, DEFECT_RATE_REFRESH_DELAY_MS);
+  timer.unref?.();
+  pendingDefectRateRefresh.set(projectId, timer);
+};
+
 export const getOverallDefectRate = async (projectId) => {
   const stages = await prisma.stage.findMany({
     where: { project_id: projectId },
@@ -551,8 +598,16 @@ export const getOverallDefectRate = async (projectId) => {
 
   const overallDefectRate = parseFloat(projectOverallDefectRate.toFixed(2));
 
-  await prisma.project.update({
-    where: { id: projectId },
+  // Only write when the value actually changed: this runs on GETs and after
+  // every answer save, and an unconditional UPDATE locks the project row.
+  await prisma.project.updateMany({
+    where: {
+      id: projectId,
+      OR: [
+        { overallDefectRate: null },
+        { overallDefectRate: { not: overallDefectRate } },
+      ],
+    },
     data: { overallDefectRate },
   });
 

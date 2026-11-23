@@ -70,6 +70,18 @@ const updateUser = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
 
+    // Admins may edit any account. Anyone else may only edit their own, and
+    // may not change their role (no self-promotion to admin).
+    const isAdmin = req.user?.role === "admin";
+    if (!isAdmin) {
+      if (req.user?.id !== req.params.id) {
+        return res.status(403).json({ success: false, message: "You can only update your own account" });
+      }
+      if (role && role !== req.user.role) {
+        return res.status(403).json({ success: false, message: "Only an admin can change roles" });
+      }
+    }
+
     if (role && !["user", "admin"].includes(role)) {
       return res.status(400).json({ success: false, message: 'Role must be either "user" or "admin"' });
     }

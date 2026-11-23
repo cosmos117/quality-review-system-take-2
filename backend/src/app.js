@@ -57,12 +57,19 @@ app.use(
   }),
 );
 
-app.use(express.json({ limit: "16kb" }));
-app.use(express.urlencoded({ extended: true, limit: "16kb" }));
+// Full template payloads ("Save Template" / "Save As New Template") and
+// checklist answer batches are far larger than 16kb; that limit made those
+// requests fail with 413. Image uploads go through multer, not this parser.
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(cookieParser(process.env.COOKIE_SECRET));
 
 // Public URL for uploaded checklist images.
-app.use("/uploads", express.static(uploadsRoot));
+// Upload filenames are unique (timestamp + random), so content never changes.
+app.use(
+  "/uploads",
+  express.static(uploadsRoot, { maxAge: "7d", immutable: true, index: false }),
+);
 
 app.use(requestLogger);
 

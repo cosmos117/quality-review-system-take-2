@@ -11,6 +11,7 @@ import {
 } from "../utils/cache.js";
 import { clearAnalyticsCache } from "./analytics-excel.service.js";
 import { newId } from "../utils/newId.js";
+import logger from "../utils/logger.js";
 
 // Internal helpers
 
@@ -31,10 +32,10 @@ async function resolveTemplateForProject(projectOrTemplateName) {
     return named;
   }
 
+  // templateName is a required column: filtering on null is a Prisma
+  // validation error, so only the empty-string legacy case can exist.
   const legacy = await prisma.template.findFirst({
-    where: {
-      OR: [{ templateName: null }, { templateName: "" }],
-    },
+    where: { templateName: "" },
     orderBy: { createdAt: "asc" },
   });
 
@@ -210,7 +211,10 @@ async function syncCheckpointsWithTemplate(projectId) {
       }
     }
   } catch (error) {
-    // Silent failure
+    // Best-effort sync: don't fail the request, but don't hide the cause.
+    logger.error(
+      `Failed to sync checkpoint categories for project ${projectId}: ${error.message}`,
+    );
   }
 }
 
@@ -227,35 +231,41 @@ async function createStagesAndChecklistsFromTemplate(projectId, templateName) {
           parseInt(a.replace("stage", "")) - parseInt(b.replace("stage", "")),
       );
 
-    for (const stageKey of stageKeys) {
-      const stageNum = parseInt(stageKey.replace("stage", ""));
-      const stageName = stageNames[stageKey] || `Phase ${stageNum}`;
-
-      const stage = await prisma.stage.create({
-        data: {
-          id: newId(),
-          project_id: projectId,
-          stage_name: stageName,
-          stage_key: stageKey,
-          status: "pending",
-        },
-      });
-
-      const templateGroups = stageData[stageKey] || [];
-      const groups = mapTemplateGroups(templateGroups);
-
-      await prisma.projectChecklist.create({
-        data: {
-          id: newId(),
-          projectId,
-          stageId: stage.id,
-          stage: stageKey,
-          groups,
-        },
-      });
-    }
+    // One transaction, one nested create per stage: either every phase and
+    // its checklist exists or none do. A partial set would also block the
+    // retry in updateProject, which only runs when the project has no stages.
+    // Stages are listed ordered by createdAt, so give each a distinct,
+    // increasing timestamp (statements in one transaction can share a ms).
+    const baseTime = Date.now();
+    await prisma.$transaction(
+      stageKeys.map((stageKey, index) => {
+        const stageNum = parseInt(stageKey.replace("stage", ""));
+        return prisma.stage.create({
+          data: {
+            id: newId(),
+            createdAt: new Date(baseTime + index),
+            project_id: projectId,
+            stage_name: stageNames[stageKey] || `Phase ${stageNum}`,
+            stage_key: stageKey,
+            status: "pending",
+            projectChecklists: {
+              create: {
+                id: newId(),
+                projectId,
+                stage: stageKey,
+                groups: mapTemplateGroups(stageData[stageKey] || []),
+              },
+            },
+          },
+          select: { id: true },
+        });
+      }),
+    );
   } catch (error) {
-    // Silent failure
+    // Project creation/update still succeeds; stages can be created later.
+    logger.error(
+      `Failed to create stages from template for project ${projectId}: ${error.message}`,
+    );
   }
 }
 
@@ -387,14 +397,6 @@ export async function updateProject(projectId, data, requestingUserId) {
   if (!existing) throw new ApiError(404, "Project not found");
 
   const prevStatus = existing.status;
-  const requestedStatus =
-    typeof data.status === "string" ? data.status : existing.status;
-
-  if (isInactiveStatus(prevStatus) && isActiveStatus(requestedStatus)) {
-    const assigned = await prisma.projectMembership.findFirst({
-      where: { project_id: projectId, user_id: requestingUserId },
-    });
-  }
 
   const updateData = {};
   if (data.project_no !== undefined) updateData.project_no = data.project_no;

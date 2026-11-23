@@ -186,11 +186,19 @@ export async function saveTemplatePayload(
     }));
   }
 
+  // Template model has no display-name column; templateName is the name.
+  const resolvedDescription =
+    description !== undefined && description !== null
+      ? String(description).trim()
+      : typeof templateData.description === "string"
+        ? templateData.description
+        : "";
+
   const template = await prisma.template.create({
     data: {
       id: newId(),
       templateName: normalizedTemplateName,
-      name: (displayName || normalizedTemplateName).trim(),
+      description: resolvedDescription,
       isActive: true,
       modifiedBy: userId,
       stageData,

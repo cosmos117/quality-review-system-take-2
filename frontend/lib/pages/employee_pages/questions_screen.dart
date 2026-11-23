@@ -121,6 +121,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     _loadingTimer = null;
     // Reset loading guard
     _isCurrentlyLoadingChecklist = false;
+    _executorScroll.dispose();
+    _reviewerScroll.dispose();
     super.dispose();
   }
 

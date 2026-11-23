@@ -39,29 +39,39 @@ class ApiCache {
     // Add a safety timeout so we never deadlock on a stuck loader
     if (_inFlight.containsKey(key)) {
       return await _inFlight[key]!.future.timeout(
-        const Duration(seconds: 20),
-        onTimeout: () => throw Exception('Cache in-flight request timed out: $key'),
-      ) as T;
+            const Duration(seconds: 20),
+            onTimeout: () =>
+                throw Exception('Cache in-flight request timed out: $key'),
+          )
+          as T;
     }
 
     final completer = Completer<T>();
     _inFlight[key] = completer;
     try {
       final result = await loader();
-      _entries[key] = _CacheEntry(result, ttl ?? defaultTtl);
+      // Only cache if this is still the current request for the key: a
+      // forceRefresh (or clear) started meanwhile supersedes it, and a slow
+      // older response must not overwrite the newer data.
+      if (identical(_inFlight[key], completer)) {
+        _entries[key] = _CacheEntry(result, ttl ?? defaultTtl);
+      }
       completer.complete(result);
       return result;
     } catch (e) {
       completer.completeError(e);
       rethrow;
     } finally {
-      _inFlight.remove(key);
+      if (identical(_inFlight[key], completer)) _inFlight.remove(key);
     }
   }
 
   /// Clear the entire cache.
   void clear() {
     _entries.clear();
+    // Requests started before the clear (e.g. before a mutation) would
+    // otherwise re-cache pre-mutation data when they finish.
+    _inFlight.clear();
   }
 }
 

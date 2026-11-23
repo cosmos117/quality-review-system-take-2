@@ -10,18 +10,17 @@ export async function getProjectMembers(projectId, query) {
 
   const { page, limit, skip } = parsePagination(query);
   
-  const total = await prisma.projectMembership.count({
-    where: { project_id: projectId },
-  });
-
-  const members = await prisma.projectMembership.findMany({
-    where: { project_id: projectId },
-    include: {
-      user: { select: { id: true, name: true, email: true, role: true } },
-      role: { select: { id: true, role_name: true, description: true } },
-    },
-    ...(limit ? { skip, take: limit } : {}),
-  });
+  const [total, members] = await Promise.all([
+    prisma.projectMembership.count({ where: { project_id: projectId } }),
+    prisma.projectMembership.findMany({
+      where: { project_id: projectId },
+      include: {
+        user: { select: { id: true, name: true, email: true, role: true } },
+        role: { select: { id: true, role_name: true, description: true } },
+      },
+      ...(limit ? { skip, take: limit } : {}),
+    }),
+  ]);
 
   // Re-map to match previous Mongoose format
   const formattedMembers = members.map((m) => ({
@@ -38,13 +37,15 @@ export async function getProjectMembers(projectId, query) {
 }
 
 export async function addProjectMember(projectId, userId, roleId) {
-  const project = await prisma.project.findUnique({ where: { id: projectId } });
+  // Independent existence checks: one parallel round-trip instead of three
+  // sequential ones (and only the id column, not whole rows).
+  const [project, user, role] = await Promise.all([
+    prisma.project.findUnique({ where: { id: projectId }, select: { id: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { id: true } }),
+    prisma.role.findUnique({ where: { id: roleId }, select: { id: true } }),
+  ]);
   if (!project) return { error: 404, message: "Project not found" };
-
-  const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { error: 404, message: "User not found" };
-
-  const role = await prisma.role.findUnique({ where: { id: roleId } });
   if (!role) return { error: 404, message: "Role not found" };
 
   const membership = await prisma.projectMembership.create({
@@ -59,12 +60,14 @@ export async function addProjectMember(projectId, userId, roleId) {
 }
 
 export async function updateProjectMember(projectId, userId, roleId) {
-  const role = await prisma.role.findUnique({ where: { id: roleId } });
+  const [role, existingMembership] = await Promise.all([
+    prisma.role.findUnique({ where: { id: roleId }, select: { id: true } }),
+    prisma.projectMembership.findFirst({
+      where: { project_id: projectId, user_id: userId },
+      select: { id: true },
+    }),
+  ]);
   if (!role) return { error: 404, message: "Role not found" };
-
-  const existingMembership = await prisma.projectMembership.findFirst({
-    where: { project_id: projectId, user_id: userId },
-  });
 
   if (!existingMembership) return { error: 404, message: "Project membership not found" };
 

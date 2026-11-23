@@ -76,7 +76,29 @@ class AdminChecklistTemplateController extends GetxController {
 
   Future<void> saveCurrentTemplateAs(String rawTemplateName) async {
     final templateName = rawTemplateName.trim();
-    if (templateName.isEmpty) return;
+    if (templateName.isEmpty) {
+      Get.snackbar(
+        'Info',
+        'Please enter a template name',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    final exists = templateOptions.any(
+      (t) =>
+          (t['templateName'] ?? '').toString().trim().toLowerCase() ==
+          templateName.toLowerCase(),
+    );
+    if (exists) {
+      Get.snackbar(
+        'Error',
+        'A template named "$templateName" already exists',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
 
     isLoading.value = true;
     try {

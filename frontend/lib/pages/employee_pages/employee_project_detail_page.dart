@@ -37,7 +37,7 @@ class _EmployeeProjectDetailsPageState
   List<ProjectMembership> _teamLeaders = [];
   List<ProjectMembership> _executors = [];
   List<ProjectMembership> _reviewers = [];
-  
+
   // Defect metrics
   double _overallDefectRate = 0.0;
   bool _loadingMetrics = true;
@@ -122,11 +122,14 @@ class _EmployeeProjectDetailsPageState
     setState(() => _loadingMetrics = true);
     try {
       final checklistService = Get.find<ProjectChecklistService>();
-      final overallData = await checklistService.getOverallDefectRate(widget.project.id);
-      
+      final overallData = await checklistService.getOverallDefectRate(
+        widget.project.id,
+      );
+
       if (mounted) {
         setState(() {
-          _overallDefectRate = (overallData['overallDefectRate'] ?? 0.0).toDouble();
+          _overallDefectRate = (overallData['overallDefectRate'] ?? 0.0)
+              .toDouble();
         });
       }
     } catch (e) {
@@ -231,7 +234,10 @@ class _EmployeeProjectDetailsPageState
                             ),
                             _row(
                               'Checklist\nTemplate',
-                              (details.project.templateName?.trim().isNotEmpty ?? false)
+                              (details.project.templateName
+                                          ?.trim()
+                                          .isNotEmpty ??
+                                      false)
                                   ? details.project.templateName!.trim()
                                   : 'None Assigned',
                             ),
@@ -564,7 +570,13 @@ class _EmployeeProjectDetailsPageState
     );
   }
 
-  Widget _buildMetricBox(String label, String value, Color bgColor, Color iconColor, IconData icon) {
+  Widget _buildMetricBox(
+    String label,
+    String value,
+    Color bgColor,
+    Color iconColor,
+    IconData icon,
+  ) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -777,6 +789,14 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
   final TextEditingController _searchExecutor = TextEditingController();
   final TextEditingController _searchReviewer = TextEditingController();
   bool _saving = false;
+
+  @override
+  void dispose() {
+    _searchLeader.dispose();
+    _searchExecutor.dispose();
+    _searchReviewer.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {

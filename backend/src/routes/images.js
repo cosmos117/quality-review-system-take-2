@@ -255,6 +255,10 @@ router.get("/images/file/:fileId", async (req, res) => {
     const contentType = fileDoc.contentType || "application/octet-stream";
     res.setHeader("Content-Type", contentType);
     res.setHeader("Content-Length", fileDoc.length);
+    // A file id always maps to the same bytes (re-uploads get a new id), so
+    // let the browser keep it instead of re-downloading on every rebuild.
+    // "private": the response is per-user (authenticated), not for proxies.
+    res.setHeader("Cache-Control", "private, max-age=604800, immutable");
 
     const stream = await downloadImageById(req.params.fileId);
     stream.on("error", (err) => {

@@ -18,12 +18,13 @@ export async function getRawAnalyticsData() {
   const cached = _rawCache.get(RAW_CACHE_KEY);
   if (cached) return cached;
 
-  const [projects, stages, memberships, templates, projectChecklists] = await Promise.all([
+  const [projects, stages, memberships, templates, projectChecklists, globalCategories] = await Promise.all([
     prisma.project.findMany(),
     prisma.stage.findMany({ select: { id: true, project_id: true, stage_name: true, stage_key: true, status: true, conflict_count: true } }),
     prisma.projectMembership.findMany({ include: { user: { select: { id: true, name: true, email: true } }, role: { select: { role_name: true } } } }),
     prisma.template.findMany({ select: { defectCategories: true } }),
-    prisma.projectChecklist.findMany()
+    prisma.projectChecklist.findMany(),
+    prisma.globalDefectCategory.findMany({ select: { id: true, name: true } }),
   ]);
 
   const categoryMap = new Map();
@@ -34,6 +35,11 @@ export async function getRawAnalyticsData() {
         categoryMap.set(cat._id.toString(), cat.name);
       }
     }
+  }
+  // Checklists are tagged from the global category list; categories added
+  // there never existed in any template, so resolve their names too.
+  for (const cat of globalCategories) {
+    if (cat.id && cat.name) categoryMap.set(cat.id, cat.name);
   }
 
   const tlMap = new Map();
@@ -85,6 +91,21 @@ export async function getRawAnalyticsData() {
     };
   });
 
+  // Group once instead of filtering every stage/checklist per project
+  // (that was O(projects x rows) on every cache miss).
+  const stagesByProject = new Map();
+  for (const stage of stages) {
+    if (!stagesByProject.has(stage.project_id)) stagesByProject.set(stage.project_id, []);
+    stagesByProject.get(stage.project_id).push(stage);
+  }
+  const checklistsByProject = new Map();
+  for (const pc of projectChecklists) {
+    if (!checklistsByProject.has(pc.projectId)) checklistsByProject.set(pc.projectId, new Map());
+    const byStage = checklistsByProject.get(pc.projectId);
+    // Keep the first match per stage, as Array.find did.
+    if (!byStage.has(pc.stageId)) byStage.set(pc.stageId, pc);
+  }
+
   const detailRows = [];
 
   for (const project of projects) {
@@ -94,17 +115,17 @@ export async function getRawAnalyticsData() {
     const teamLeader = (tlMap.get(pid) ?? []).join(", ");
     const projectExecutors = (execMap.get(pid) ?? []).join(", ");
 
-    const projectStages = stages.filter((s) => s.project_id === pid);
-    const checklistDocs = projectChecklists.filter((pc) => pc.projectId === pid);
-    
-    if (!checklistDocs.length) continue;
+    const projectStages = stagesByProject.get(pid) ?? [];
+    const checklistDocs = checklistsByProject.get(pid);
+
+    if (!checklistDocs) continue;
 
     for (const stage of projectStages) {
       const sid = stage.id;
       const phaseMatch = stage.stage_name?.match(/\d+/);
       const phaseNumber = phaseMatch ? parseInt(phaseMatch[0], 10) : 0;
 
-      const checklistDoc = checklistDocs.find((pc) => pc.stageId === sid);
+      const checklistDoc = checklistDocs.get(sid);
       if (!checklistDoc) continue;
 
       const groups = parseJsonField(checklistDoc.groups);

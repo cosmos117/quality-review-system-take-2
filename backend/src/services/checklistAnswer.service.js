@@ -2,6 +2,8 @@ import prisma from "../config/prisma.js";
 import {
   ensureProjectChecklist,
   getOverallDefectRate,
+  scheduleOverallDefectRateRefresh,
+  updateChecklistGroups,
 } from "./projectChecklist.service.js";
 import { accumulateDefectsForChecklistGroups } from "./defectUtility.service.js";
 import { ApiError } from "../utils/ApiError.js";
@@ -46,6 +48,31 @@ async function resolveProjectChecklist(projectId, phaseNum) {
   }
 
   return { stage, checklist };
+}
+
+/**
+ * Map each question's id and text to the question, in document order
+ * (group questions, then that group's sections). The first question to
+ * claim a key wins, which matches the old linear search: the first question
+ * whose id or text equals the submitted key.
+ */
+function buildQuestionIndex(groups) {
+  const index = new Map();
+  const add = (question) => {
+    const key = question._id ? question._id.toString() : question.text;
+    if (key !== undefined && !index.has(key)) index.set(key, question);
+    if (question.text !== undefined && !index.has(question.text)) {
+      index.set(question.text, question);
+    }
+  };
+
+  for (const group of groups || []) {
+    for (const question of group.questions || []) add(question);
+    for (const section of group.sections || []) {
+      for (const question of section.questions || []) add(question);
+    }
+  }
+  return index;
 }
 
 function upsertRoleAnswer(question, role, answerData, userId) {
@@ -159,57 +186,31 @@ export async function saveChecklistAnswers(
   if (!stage) throw new ApiError(404, "Stage not found for this phase");
   if (!checklist) throw new ApiError(404, "Checklist not found for this phase");
 
-  const groups = parseJsonField(checklist.groups);
   const entries = Object.entries(answers || {});
 
-  let savedCount = 0;
+  const saved = await updateChecklistGroups({ id: checklist.id }, (groups) => {
+    const questionIndex = buildQuestionIndex(groups);
+    let savedCount = 0;
 
-  for (const [subQuestion, answerData] of entries) {
-    if (!answerData || typeof answerData !== "object") continue;
-
-    let found = false;
-
-    for (const group of groups || []) {
-      for (const question of group.questions || []) {
-        const key = question._id ? question._id.toString() : question.text;
-        if (subQuestion === key || subQuestion === question.text) {
-          upsertRoleAnswer(question, role, answerData, userId);
-          savedCount += 1;
-          found = true;
-          break;
-        }
-      }
-      if (found) break;
-
-      for (const section of group.sections || []) {
-        for (const question of section.questions || []) {
-          const key = question._id ? question._id.toString() : question.text;
-          if (subQuestion === key || subQuestion === question.text) {
-            upsertRoleAnswer(question, role, answerData, userId);
-            savedCount += 1;
-            found = true;
-            break;
-          }
-        }
-        if (found) break;
-      }
-      if (found) break;
+    for (const [subQuestion, answerData] of entries) {
+      if (!answerData || typeof answerData !== "object") continue;
+      const question = questionIndex.get(subQuestion);
+      if (!question) continue;
+      upsertRoleAnswer(question, role, answerData, userId);
+      savedCount += 1;
     }
-  }
-
-  await prisma.projectChecklist.update({
-    where: { id: checklist.id },
-    data: { groups },
+    return savedCount;
   });
+  if (!saved) throw new ApiError(404, "Checklist not found for this phase");
 
-  getOverallDefectRate(projectId).catch((err) => {
+  scheduleOverallDefectRateRefresh(projectId, (err) => {
     logger.error(
       `Failed to refresh overall defect rate for project ${projectId}: ${err.message}`,
     );
   });
 
   return {
-    saved_count: savedCount,
+    saved_count: saved.result,
     total_attempted: entries.length,
   };
 }
@@ -229,7 +230,6 @@ export async function submitChecklistAnswers(projectId, phaseNum, role) {
   let totalNewDefects = 0;
 
   if (checklist) {
-    const groups = parseJsonField(checklist.groups);
     let shouldAccumulate = false;
 
     if (role === "reviewer") {
@@ -239,12 +239,10 @@ export async function submitChecklistAnswers(projectId, phaseNum, role) {
     }
 
     if (shouldAccumulate) {
-      totalNewDefects = accumulateDefectsForChecklistGroups(groups);
-
-      await prisma.projectChecklist.update({
-        where: { id: checklist.id },
-        data: { groups },
-      });
+      const saved = await updateChecklistGroups({ id: checklist.id }, (groups) =>
+        accumulateDefectsForChecklistGroups(groups),
+      );
+      totalNewDefects = saved?.result ?? 0;
 
       logger.info(
         `${role.charAt(0).toUpperCase() + role.slice(1)} submission: Added ${totalNewDefects} new defects to phase ${phaseNum}`,

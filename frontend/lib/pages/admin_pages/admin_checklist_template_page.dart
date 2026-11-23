@@ -23,9 +23,7 @@ class AdminChecklistTemplatePage
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ShimmerLoading(
-                    child: SkeletonBox(width: 200, height: 24),
-                  ),
+                  ShimmerLoading(child: SkeletonBox(width: 200, height: 24)),
                   SizedBox(height: 16),
                   SkeletonChecklistGroups(groupCount: 5),
                 ],

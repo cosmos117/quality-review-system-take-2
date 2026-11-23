@@ -108,7 +108,9 @@ export const requestApproval = async (projectId, phaseNum, notes) => {
 };
 
 export const approve = async (projectId, phaseNum, userId) => {
-  const record = await prisma.checklistApproval.upsert({
+  // All-or-nothing: approval record, stage statuses and project completion.
+  return prisma.$transaction(async (tx) => {
+  const record = await tx.checklistApproval.upsert({
     where: { project_id_phase: { project_id: projectId, phase: phaseNum } },
     update: {
       status: "approved",
@@ -126,36 +128,39 @@ export const approve = async (projectId, phaseNum, userId) => {
   });
 
   const currentStageKey = `stage${phaseNum}`;
-  await prisma.stage.updateMany({
+  await tx.stage.updateMany({
     where: { project_id: projectId, stage_key: currentStageKey },
     data: { status: "completed" }
   });
 
   const nextPhaseNum = phaseNum + 1;
   const nextStageKey = `stage${nextPhaseNum}`;
-  const nextStage = await prisma.stage.findFirst({
+  const nextStage = await tx.stage.findFirst({
     where: { project_id: projectId, stage_key: nextStageKey },
     select: { id: true }
   });
 
   if (nextStage) {
-    await prisma.stage.update({
+    await tx.stage.update({
       where: { id: nextStage.id },
       data: { status: "in_progress" }
     });
   } else {
-    await prisma.project.update({
+    await tx.project.update({
       where: { id: projectId },
       data: { status: "completed" }
     });
   }
 
   return record;
+  }, { timeout: 15000 });
 };
 
 export const revertToExecutor = async (projectId, phaseNum, notes, userId) => {
+  // All-or-nothing: iteration snapshot, approval record and conflict counter.
+  return prisma.$transaction(async (tx) => {
   const stageKey = `stage${phaseNum}`;
-  const stage = await prisma.stage.findFirst({
+  const stage = await tx.stage.findFirst({
     where: { project_id: projectId, stage_key: stageKey },
     select: { id: true, conflict_count: true }
   });
@@ -164,7 +169,7 @@ export const revertToExecutor = async (projectId, phaseNum, notes, userId) => {
     throw new ApiError(404, `Stage not found for project ${projectId}, phase ${phaseNum}`);
   }
 
-  const checklist = await prisma.projectChecklist.findUnique({
+  const checklist = await tx.projectChecklist.findUnique({
     where: { projectId_stageId: { projectId, stageId: stage.id } }
   });
 
@@ -179,7 +184,7 @@ export const revertToExecutor = async (projectId, phaseNum, notes, userId) => {
 
     logger.info(`Reviewer revert: Added ${totalNewDefects} new defects to phase ${phaseNum}`);
 
-    const approvalRecord = await prisma.checklistApproval.findUnique({
+    const approvalRecord = await tx.checklistApproval.findUnique({
       where: { project_id_phase: { project_id: projectId, phase: phaseNum } }
     });
 
@@ -199,10 +204,15 @@ export const revertToExecutor = async (projectId, phaseNum, notes, userId) => {
     const updatedCurrentIteration = (checklist.currentIteration || 1) + 1;
     iterationSaved = checklist.currentIteration;
 
-    await prisma.projectChecklist.update({
-      where: { id: checklist.id },
+    // Abort (and roll back) if an answer save landed after our read, rather
+    // than snapshotting and overwriting stale groups.
+    const { count } = await tx.projectChecklist.updateMany({
+      where: { id: checklist.id, updatedAt: checklist.updatedAt },
       data: { groups, iterations, currentIteration: updatedCurrentIteration }
     });
+    if (count !== 1) {
+      throw new ApiError(409, "The checklist was changed while reverting. Please retry.");
+    }
   }
 
   const updateFields = {
@@ -214,7 +224,7 @@ export const revertToExecutor = async (projectId, phaseNum, notes, userId) => {
     executor_submitted_at: null,
   };
 
-  const record = await prisma.checklistApproval.upsert({
+  const record = await tx.checklistApproval.upsert({
     where: { project_id_phase: { project_id: projectId, phase: phaseNum } },
     update: { ...updateFields, revertCount: { increment: 1 } },
     create: {
@@ -226,7 +236,7 @@ export const revertToExecutor = async (projectId, phaseNum, notes, userId) => {
     }
   });
 
-  const updatedStage = await prisma.stage.update({
+  const updatedStage = await tx.stage.update({
     where: { id: stage.id },
     data: { conflict_count: { increment: 1 } }
   });
@@ -237,6 +247,7 @@ export const revertToExecutor = async (projectId, phaseNum, notes, userId) => {
     iteration_saved: iterationSaved,
     defects_added: totalNewDefects,
   };
+  }, { timeout: 15000 });
 };
 
 export const getApprovalStatus = async (projectId, phaseNum) => {

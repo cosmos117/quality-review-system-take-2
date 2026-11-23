@@ -5,6 +5,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { parsePagination, paginatedResponse } from "../utils/paginate.js";
 import { newId } from "../utils/newId.js";
 import { clearAnalyticsCache } from "./analytics-excel.service.js";
+import { invalidateUserSession } from "../middleware/auth.Middleware.js";
 
 export async function registerUser({ name, email, password, role }) {
   const existingUser = await prisma.user.findUnique({
@@ -56,6 +57,8 @@ export async function loginUser({ email, password }) {
     where: { id: user.id },
     data: { accessToken },
   });
+  // A new login replaces the previous session token.
+  invalidateUserSession(user.id);
 
   const { password: _pw, accessToken: _at, ...loggedUser } = user;
   return { ...loggedUser, token: accessToken };
@@ -66,13 +69,14 @@ export async function logoutUser(userId) {
     where: { id: userId },
     data: { accessToken: null },
   });
+  invalidateUserSession(userId);
 }
 
 export async function getAllUsers(query) {
   const { page, limit, skip } = parsePagination(query);
-  const total = await prisma.user.count();
-
-  const users = await prisma.user.findMany({
+  const [total, users] = await Promise.all([
+    prisma.user.count(),
+    prisma.user.findMany({
     select: {
       id: true,
       name: true,
@@ -84,7 +88,8 @@ export async function getAllUsers(query) {
     },
     orderBy: { createdAt: "desc" },
     ...(limit ? { skip, take: limit } : {}),
-  });
+    }),
+  ]);
 
   return paginatedResponse(users, total, { page, limit });
 }
@@ -107,7 +112,7 @@ export async function updateUser(userId, { name, email, password, role }) {
   if (role) data.role = role;
   if (password) data.password = await bcrypt.hash(password, 10);
 
-  return prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id: userId },
     data,
     select: {
@@ -120,6 +125,9 @@ export async function updateUser(userId, { name, email, password, role }) {
       updatedAt: true,
     },
   });
+  // Name/email/role changes must take effect on the user's next request.
+  invalidateUserSession(userId);
+  return updated;
 }
 
 export async function deleteUser(userId) {
@@ -134,6 +142,7 @@ export async function deleteUser(userId) {
   });
 
   await prisma.user.delete({ where: { id: userId } });
+  invalidateUserSession(userId);
 
   clearAnalyticsCache();
   return { deletedMemberships };

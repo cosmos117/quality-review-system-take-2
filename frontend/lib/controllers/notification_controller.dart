@@ -70,51 +70,60 @@ class NotificationController extends GetxController {
       int? phaseNumber;
       String? stageName;
 
-      // Get stage information to retrieve stage names
-      List<Map<String, dynamic>> stages = [];
-      try {
-        stages = await _stageService.listStages(project.id);
-      } catch (e) {
-        // Stage fetch failed, continue with empty stages
-      }
-
-      // Check all phases (1 to 7 typically)
-      for (int phase = 1; phase <= 7; phase++) {
+      // Only executors and reviewers can ever get a notification below, so
+      // for anyone else skip the stage + 7 approval-status requests.
+      if (isExecutor || isReviewer) {
+        // Get stage information to retrieve stage names
+        List<Map<String, dynamic>> stages = [];
         try {
-          final approval = await _approvalService.getStatus(project.id, phase);
-
-          final status = _normalizeStatus(
-            approval?['status'] ??
-                approval?['state'] ??
-                approval?['approvalStatus'],
-          );
-
-          // Executor needs to act if reverted (ONLY for executors, not reviewers/teamleaders)
-          if (isExecutor &&
-              !isReviewer &&
-              !isTeamLeader &&
-              _isRevertedStatus(status)) {
-            hasPendingAction = true;
-            actionType = 'revert';
-            phaseNumber = phase;
-            stageName = _getStageName(stages, phase);
-            break;
-          }
-
-          // Reviewer needs to act if submitted by executor (ONLY for reviewers, not executors/teamleaders)
-          if (isReviewer &&
-              !isExecutor &&
-              !isTeamLeader &&
-              _isPendingReviewStatus(status)) {
-            hasPendingAction = true;
-            actionType = 'pending_review';
-            phaseNumber = phase;
-            stageName = _getStageName(stages, phase);
-            break;
-          }
+          stages = await _stageService.listStages(project.id);
         } catch (e) {
-          // Phase doesn't exist or error, continue
-          continue;
+          // Stage fetch failed, continue with empty stages
+        }
+
+        // Check every phase the project has (at most 7). Phases beyond the
+        // last stage have no approval record, so asking for them is wasted.
+        final lastPhase = _lastPhaseNumber(stages);
+        for (int phase = 1; phase <= lastPhase; phase++) {
+          try {
+            final approval = await _approvalService.getStatus(
+              project.id,
+              phase,
+            );
+
+            final status = _normalizeStatus(
+              approval?['status'] ??
+                  approval?['state'] ??
+                  approval?['approvalStatus'],
+            );
+
+            // Executor needs to act if reverted (ONLY for executors, not reviewers/teamleaders)
+            if (isExecutor &&
+                !isReviewer &&
+                !isTeamLeader &&
+                _isRevertedStatus(status)) {
+              hasPendingAction = true;
+              actionType = 'revert';
+              phaseNumber = phase;
+              stageName = _getStageName(stages, phase);
+              break;
+            }
+
+            // Reviewer needs to act if submitted by executor (ONLY for reviewers, not executors/teamleaders)
+            if (isReviewer &&
+                !isExecutor &&
+                !isTeamLeader &&
+                _isPendingReviewStatus(status)) {
+              hasPendingAction = true;
+              actionType = 'pending_review';
+              phaseNumber = phase;
+              stageName = _getStageName(stages, phase);
+              break;
+            }
+          } catch (e) {
+            // Phase doesn't exist or error, continue
+            continue;
+          }
         }
       }
 
@@ -187,6 +196,22 @@ class NotificationController extends GetxController {
         status == 'pending_review' ||
         status == 'submitted_for_reviewer' ||
         (status.contains('submitted') && status.contains('review'));
+  }
+
+  /// Highest phase number to check: the largest `stageN` key, capped at 7.
+  /// Falls back to 7 when stage keys are unknown (e.g. the fetch failed).
+  int _lastPhaseNumber(List<Map<String, dynamic>> stages) {
+    const maxPhases = 7;
+    var last = 0;
+    for (final stage in stages) {
+      final match = RegExp(
+        r'^stage(\d+)$',
+      ).firstMatch((stage['stage_key'] ?? '').toString());
+      final n = match == null ? null : int.tryParse(match.group(1)!);
+      if (n != null && n > last) last = n;
+    }
+    if (last == 0) return maxPhases;
+    return last > maxPhases ? maxPhases : last;
   }
 
   String _getStageName(List<Map<String, dynamic>> stages, int phaseNumber) {

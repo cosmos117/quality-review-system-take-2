@@ -131,25 +131,24 @@ async function uploadImage(
   if (!qidRaw) throw new Error("questionId is required");
 
   const projectId = toStringOrEmpty(metadata.projectId) || null;
-  const resolvedChecklistId = await resolveChecklistId(
-    projectId,
-    metadata.checklistId,
-  );
   const defectId = toStringOrEmpty(metadata.defectId) || null;
   const uploadedBy = toStringOrEmpty(metadata.userId) || null;
   const normalizedRole = normalizeRole(role);
 
+  // The project name and the checklist id don't depend on each other: look
+  // them up in parallel (they were sequential round-trips on every upload).
+  const [resolvedChecklistId, project] = await Promise.all([
+    resolveChecklistId(projectId, metadata.checklistId),
+    projectId
+      ? prisma.project.findUnique({
+          where: { id: projectId },
+          select: { project_name: true },
+        })
+      : null,
+  ]);
+
   // Resolve real names of project and checklist/stage for a cleaner folder structure
-  let projectName = projectId;
-  if (projectId) {
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      select: { project_name: true },
-    });
-    if (project && project.project_name) {
-      projectName = project.project_name;
-    }
-  }
+  const projectName = project?.project_name || projectId;
 
   let checklistName = resolvedChecklistId;
   if (resolvedChecklistId) {
@@ -288,8 +287,30 @@ async function deleteImagesByFileIds(fileIds) {
     ? [...new Set(fileIds.map((id) => extractFileId(id)).filter(Boolean))]
     : [];
 
-  const promises = safeIds.map((id) => deleteImageById(id));
-  return Promise.allSettled(promises);
+  if (safeIds.length === 0) return [];
+
+  // Two queries total instead of a lookup + delete per image (deleting a
+  // project with hundreds of images used to take hundreds of round-trips).
+  const records = await prisma.checklistImage.findMany({
+    where: { id: { in: safeIds } },
+    select: { id: true, image_path: true },
+  });
+  if (records.length > 0) {
+    await prisma.checklistImage.deleteMany({
+      where: { id: { in: records.map((r) => r.id) } },
+    });
+  }
+
+  // Same result shape as before: one settled entry per requested id, and a
+  // rejection ("File not found") for ids that had no record.
+  const found = new Map(records.map((r) => [r.id, r]));
+  return Promise.allSettled(
+    safeIds.map(async (id) => {
+      const record = found.get(id);
+      if (!record) throw new Error("File not found");
+      await fs.unlink(toAbsolutePath(record.image_path)).catch(() => {});
+    }),
+  );
 }
 
 export {

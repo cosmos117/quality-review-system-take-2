@@ -981,6 +981,14 @@ class _RoleAssignmentSectionsState extends State<_RoleAssignmentSections> {
   bool _saving = false;
 
   @override
+  void dispose() {
+    _searchLeader.dispose();
+    _searchExecutor.dispose();
+    _searchReviewer.dispose();
+    super.dispose();
+  }
+
+  @override
   void initState() {
     super.initState();
     _hydrateMemberships();

@@ -1,11 +1,20 @@
 import { Router } from "express";
 import authMiddleware from "../middleware/auth.Middleware.js";
+import { requireAdmin } from "../middleware/role.middleware.js";
 import * as templateController from "../controllers/template.multi.controller.js";
 
 const router = Router();
 
 // Apply auth middleware to all routes
 router.use(authMiddleware);
+
+// Everyone signed in can read templates (employee checklist screens do).
+// Creating, changing or deleting templates is admin-only, matching the
+// legacy /templates routes.
+router.use((req, res, next) => {
+  if (req.method === "GET" || req.method === "HEAD") return next();
+  return requireAdmin(req, res, next);
+});
 
 // Template management
 

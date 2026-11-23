@@ -1,4 +1,5 @@
 import prisma from "../config/prisma.js";
+import logger from "../utils/logger.js";
 import { ApiError } from "../utils/ApiError.js";
 import { paginatedResponse } from "../utils/paginate.js";
 import { getOrSet, keys, TTL, invalidateStages } from "../utils/cache.js";
@@ -136,6 +137,18 @@ async function cloneTemplateToProject(projectId, userId) {
 
 async function ensureProjectChecklistsForStages(stages, projectId) {
   try {
+    if (stages.length === 0) return;
+
+    // One query for all stages; the (large) template is only loaded if a
+    // checklist is actually missing, which is rare after project setup.
+    const existing = await prisma.projectChecklist.findMany({
+      where: { projectId, stageId: { in: stages.map((s) => s.id) } },
+      select: { stageId: true },
+    });
+    const haveChecklist = new Set(existing.map((pc) => pc.stageId));
+    const missing = stages.filter((stage) => !haveChecklist.has(stage.id));
+    if (missing.length === 0) return;
+
     const template = await prisma.template.findFirst();
     const stageData = template?.stageData
       ? typeof template.stageData === "string"
@@ -143,30 +156,25 @@ async function ensureProjectChecklistsForStages(stages, projectId) {
         : template.stageData
       : {};
 
-    for (const stage of stages) {
+    for (const stage of missing) {
       let stageKey = stage.stage_key;
       if (!stageKey) stageKey = deriveStageKey(stage.stage_name);
 
       const stageTemplate = stageKey ? stageData[stageKey] || [] : [];
-      const groups = mapTemplateGroups(stageTemplate);
-
-      const existingPC = await prisma.projectChecklist.findFirst({
-        where: { projectId, stageId: stage.id },
+      await prisma.projectChecklist.create({
+        data: {
+          id: newId(),
+          projectId,
+          stageId: stage.id,
+          stage: stage.stage_name,
+          groups: mapTemplateGroups(stageTemplate),
+        },
       });
-      if (!existingPC) {
-        await prisma.projectChecklist.create({
-          data: {
-            id: newId(),
-            projectId,
-            stageId: stage.id,
-            stage: stage.stage_name,
-            groups,
-          },
-        });
-      }
     }
-  } catch {
-    // Silent failure
+  } catch (error) {
+    logger.error(
+      `Failed to ensure checklists for project ${projectId}: ${error.message}`,
+    );
   }
 }
 

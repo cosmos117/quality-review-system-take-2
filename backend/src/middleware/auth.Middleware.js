@@ -2,6 +2,23 @@ import jwt from "jsonwebtoken";
 import prisma from "../config/prisma.js";
 import { ApiError } from "../utils/ApiError.js";
 import { setDatabaseReady } from "../config/db.js";
+import NodeCache from "node-cache";
+
+// Verified sessions, keyed by user id. Saves one database round-trip on
+// almost every request. Entries are dropped whenever the user logs in or
+// out, is updated or is deleted (see invalidateUserSession), and expire
+// after SESSION_CACHE_SECONDS regardless, which bounds staleness for changes
+// made outside this process (seed scripts, a second server instance).
+const SESSION_CACHE_SECONDS = 30;
+const sessionCache = new NodeCache({
+  stdTTL: SESSION_CACHE_SECONDS,
+  checkperiod: 60,
+  useClones: false,
+});
+
+export const invalidateUserSession = (userId) => {
+  if (userId) sessionCache.del(String(userId));
+};
 
 const isPrismaConnectionError = (error) => {
   if (!error) return false;
@@ -18,6 +35,11 @@ const isPrismaConnectionError = (error) => {
 };
 
 const authMiddleware = async (req, _, next) => {
+  // Routers are mounted on overlapping prefixes (and some routes add this
+  // middleware again), so one request can pass through here several times.
+  // The user is already verified for this request: skip the repeat DB lookup.
+  if (req.user) return next();
+
   try {
     const token =
       req.cookies?.token || req.header("Authorization")?.replace("Bearer ", "");
@@ -29,6 +51,12 @@ const authMiddleware = async (req, _, next) => {
     const userId = decoded?._id || decoded?.id;
 
     if (!userId) throw new ApiError(401, "Invalid token payload");
+
+    const cached = sessionCache.get(String(userId));
+    if (cached && cached.token === token) {
+      req.user = { ...cached.user };
+      return next();
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -51,6 +79,7 @@ const authMiddleware = async (req, _, next) => {
     // ensure _id is present for backward compatibility with Mongoose code
     userWithoutToken._id = userWithoutToken.id;
 
+    sessionCache.set(String(userId), { token, user: { ...userWithoutToken } });
     req.user = userWithoutToken;
     next();
   } catch (error) {

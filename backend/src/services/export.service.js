@@ -14,7 +14,7 @@ const safeValue = (val, defaultVal = "") => {
 };
 
 export const generateMasterExcel = async () => {
-  const [users, projects, stages, roles, memberships, templates, projectChecklists] = await Promise.all([
+  const [users, projects, stages, roles, memberships, templates, projectChecklists, globalCategories] = await Promise.all([
     prisma.user.findMany({ select: { id: true, name: true, email: true } }),
     prisma.project.findMany({ include: { creator: { select: { name: true, email: true } } } }),
     prisma.stage.findMany({ select: { id: true, project_id: true, stage_name: true, stage_key: true, status: true, conflict_count: true } }),
@@ -22,6 +22,7 @@ export const generateMasterExcel = async () => {
     prisma.projectMembership.findMany({ include: { user: { select: { id: true, name: true, email: true } }, role: { select: { role_name: true } } } }),
     prisma.template.findMany({ select: { defectCategories: true } }),
     prisma.projectChecklist.findMany(),
+    prisma.globalDefectCategory.findMany({ select: { id: true, name: true } }),
   ]);
 
   const categoryMap = new Map();
@@ -35,6 +36,11 @@ export const generateMasterExcel = async () => {
       });
     });
   }
+  // Checklists are tagged from the global category list; categories added
+  // there never existed in any template, so resolve their names too.
+  globalCategories.forEach((cat) => {
+    if (cat.id && cat.name) categoryMap.set(cat.id, cat.name);
+  });
 
   const projectExecutorsMap = new Map();
   const projectReviewersMap = new Map();
